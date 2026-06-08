@@ -6,6 +6,7 @@ import { useCurrentAccount, useSuiClientContext } from "@mysten/dapp-kit";
 
 import { WalletButton } from "@/components/wallet/WalletButton";
 import { StreamCreator } from "./StreamCreator";
+import { LiveEarnings } from "./LiveEarnings";
 import { RoleSelect, type Role } from "./RoleSelect";
 
 const PAYER_TABS = [
@@ -84,7 +85,7 @@ export function AppShell() {
 
           {tab === "create" && <StreamCreator />}
           {tab === "dashboard" && <ComingSoon title="Client dashboard" />}
-          {tab === "earn" && <ComingSoon title="Live earnings" />}
+          {tab === "earn" && <LiveEarnings />}
           {tab === "collateral" && <ComingSoon title="Collateral panel" />}
         </div>
       )}
