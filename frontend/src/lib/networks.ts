@@ -1,4 +1,3 @@
-import { getFullnodeUrl } from "@mysten/sui/client";
 import { createNetworkConfig } from "@mysten/dapp-kit";
 
 /**
@@ -22,6 +21,13 @@ export const USDC_TYPE = {
   devnet: "0x2::sui::SUI",
 } as const;
 
+/** Standard Sui fullnode endpoints (getFullnodeUrl was removed in Sui SDK v2). */
+export const FULLNODE_URLS = {
+  mainnet: "https://fullnode.mainnet.sui.io:443",
+  testnet: "https://fullnode.testnet.sui.io:443",
+  devnet: "https://fullnode.devnet.sui.io:443",
+} as const;
+
 export type NetworkName = keyof typeof PACKAGE_IDS;
 
 export const DEFAULT_NETWORK: NetworkName =
@@ -30,15 +36,18 @@ export const DEFAULT_NETWORK: NetworkName =
 export const { networkConfig, useNetworkVariable, useNetworkVariables } =
   createNetworkConfig({
     mainnet: {
-      url: getFullnodeUrl("mainnet"),
+      network: "mainnet",
+      url: FULLNODE_URLS.mainnet,
       variables: { packageId: PACKAGE_IDS.mainnet, usdcType: USDC_TYPE.mainnet },
     },
     testnet: {
-      url: getFullnodeUrl("testnet"),
+      network: "testnet",
+      url: FULLNODE_URLS.testnet,
       variables: { packageId: PACKAGE_IDS.testnet, usdcType: USDC_TYPE.testnet },
     },
     devnet: {
-      url: getFullnodeUrl("devnet"),
+      network: "devnet",
+      url: FULLNODE_URLS.devnet,
       variables: { packageId: PACKAGE_IDS.devnet, usdcType: USDC_TYPE.devnet },
     },
   });
