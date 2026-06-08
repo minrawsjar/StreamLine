@@ -6,23 +6,34 @@ import { useCurrentAccount, useSuiClientContext } from "@mysten/dapp-kit";
 
 import { WalletButton } from "@/components/wallet/WalletButton";
 import { StreamCreator } from "./StreamCreator";
+import { RoleSelect, type Role } from "./RoleSelect";
 
-type Tab = "create" | "streams" | "earn";
-
-const TABS: { id: Tab; label: string }[] = [
+const PAYER_TABS = [
   { id: "create", label: "Create stream" },
-  { id: "streams", label: "Client dashboard" },
-  { id: "earn", label: "Freelancer view" },
-];
+  { id: "dashboard", label: "Client dashboard" },
+] as const;
+
+const RECEIVER_TABS = [
+  { id: "earn", label: "Live earnings" },
+  { id: "collateral", label: "Collateral" },
+] as const;
 
 /**
- * The /app workspace. Gates on a connected wallet/zkLogin session; once
- * connected it shows the tabbed workspace (create, client dashboard, earn).
+ * The /app workspace. Gates on a connected wallet, then shows the role-select
+ * console (payer vs receiver). Picking a role opens that side's workspace.
  */
 export function AppShell() {
   const account = useCurrentAccount();
   const { network } = useSuiClientContext();
-  const [tab, setTab] = useState<Tab>("create");
+  const [role, setRole] = useState<Role | null>(null);
+  const [tab, setTab] = useState<string>("create");
+
+  const selectRole = (r: Role) => {
+    setRole(r);
+    setTab(r === "payer" ? "create" : "earn");
+  };
+
+  const tabs = role === "payer" ? PAYER_TABS : RECEIVER_TABS;
 
   return (
     <main className="min-h-[100dvh] w-full bg-[#f1efe9] text-[#2b2a5e]">
@@ -34,6 +45,14 @@ export function AppShell() {
           <Link href="/" className="text-[15px] font-bold tracking-[-0.02em]">
             StreamLine
           </Link>
+          {role && (
+            <button
+              onClick={() => setRole(null)}
+              className="border border-[#2b2a5e]/20 px-2.5 py-1 text-[10px] uppercase tracking-[0.14em] text-[#2b2a5e]/60 hover:border-[#5b54e6]"
+            >
+              ← change role
+            </button>
+          )}
           <span className="hidden border border-[#2b2a5e]/20 px-2 py-1 text-[10px] uppercase tracking-[0.16em] text-[#2b2a5e]/60 sm:inline">
             {network}
           </span>
@@ -43,10 +62,12 @@ export function AppShell() {
 
       {!account ? (
         <ConnectPrompt />
+      ) : !role ? (
+        <RoleSelect onSelect={selectRole} />
       ) : (
         <div className="mx-auto max-w-[1100px] px-6 py-10">
           <nav className="mb-10 flex flex-wrap gap-2">
-            {TABS.map((t) => (
+            {tabs.map((t) => (
               <button
                 key={t.id}
                 onClick={() => setTab(t.id)}
@@ -62,8 +83,9 @@ export function AppShell() {
           </nav>
 
           {tab === "create" && <StreamCreator />}
-          {tab === "streams" && <ComingSoon title="Client dashboard" />}
-          {tab === "earn" && <ComingSoon title="Freelancer view" />}
+          {tab === "dashboard" && <ComingSoon title="Client dashboard" />}
+          {tab === "earn" && <ComingSoon title="Live earnings" />}
+          {tab === "collateral" && <ComingSoon title="Collateral panel" />}
         </div>
       )}
     </main>
@@ -81,7 +103,7 @@ function ConnectPrompt() {
       </h1>
       <p className="max-w-md text-[13px] leading-relaxed text-[#2b2a5e]/60">
         Use the connect button up top — a Sui wallet, or Google via zkLogin (no
-        seed phrase). Then create your first gasless milestone stream.
+        seed phrase). Then choose whether you&rsquo;re paying or getting paid.
       </p>
     </div>
   );
