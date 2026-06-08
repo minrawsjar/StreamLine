@@ -1,0 +1,10 @@
+[package]
+name = "streamline"
+edition = "2024.beta"
+version = "0.1.0"
+
+# The Sui / MoveStdlib framework dependencies are managed automatically by the
+# Sui CLI, pinned to the active environment's framework version.
+
+[addresses]
+streamline = "0x0"
