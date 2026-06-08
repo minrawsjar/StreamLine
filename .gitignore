@@ -7,6 +7,14 @@ node_modules/
 dist/
 build/
 .vite/
+out/
+
+# Next.js
+.next/
+next-env.d.ts
+*.tsbuildinfo
+.vercel
+.turbo
 
 # Env
 .env
