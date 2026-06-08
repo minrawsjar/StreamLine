@@ -42,6 +42,11 @@ pnpm-debug.log*
 # Move build artifacts
 contracts/**/build/
 
+# Rust
+target/
+**/*.rs.bk
+Cargo.lock.bak
+
 # Postgres / local data
 *.sqlite
 data/
