@@ -27,15 +27,15 @@ export function HeroSection() {
 
       <div className="pointer-events-none relative z-20 h-full min-h-0 w-full px-4 sm:px-6 lg:px-8">
         <div className="relative mx-auto h-full max-w-7xl">
-          <p className="sl-hero-tagline absolute bottom-44 left-0 max-w-[min(100%,30rem)] text-[clamp(16px,4.2vw,24px)] font-light leading-snug text-white md:bottom-auto md:left-auto md:right-0 md:top-1/2 md:w-[min(40%,34rem)] md:max-w-none md:-translate-y-1/2 md:text-right">
+          <p className="sl-hero-tagline absolute bottom-44 left-0 max-w-[min(100%,32rem)] text-[clamp(18px,4.6vw,28px)] font-light leading-snug text-white md:bottom-auto md:left-auto md:right-0 md:top-1/2 md:w-[min(42%,36rem)] md:max-w-none md:-translate-y-1/2 md:text-right">
             <span className="block">Gasless, milestone-gated payment</span>
             <span className="block">streams. Money that drips as you work.</span>
           </p>
 
-          <h1 className="absolute bottom-0 left-0 max-w-[95vw] pb-8 font-black text-white [text-shadow:0_18px_52px_rgba(0,0,0,0.22)] md:max-w-[78%] md:pb-14">
-            <div className="tracking-[-0.03em] [font-size:clamp(72px,13vw,200px)] leading-[0.9]">
+          <h1 className="absolute bottom-0 left-0 max-w-[97vw] pb-8 font-black text-white [text-shadow:0_18px_52px_rgba(0,0,0,0.22)] md:max-w-[92%] md:pb-14">
+            <div className="tracking-[-0.04em] [font-size:clamp(88px,17vw,260px)] leading-[0.88]">
               <span className="sl-hero-line block">StreamLine</span>
-              <span className="sl-hero-line sl-hero-line--2 mt-[0.12em] block text-[0.16em] font-black uppercase leading-[1.08] tracking-[0.02em]">
+              <span className="sl-hero-line sl-hero-line--2 mt-[0.1em] block text-[0.165em] font-black uppercase leading-[1.05] tracking-[0.02em]">
                 Programmable Micropayments on Sui
               </span>
             </div>
