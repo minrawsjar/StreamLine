@@ -5,7 +5,6 @@ import {
   useCurrentAccount,
   useSignAndExecuteTransaction,
 } from "@mysten/dapp-kit";
-import { Transaction } from "@mysten/sui/transactions";
 
 import { useNetworkVariable } from "@/lib/networks";
 import {
@@ -17,6 +16,7 @@ import {
   toBaseUnits,
   type DurationUnit,
 } from "@/lib/stream-math";
+import { buildCreateStream, splitMilestoneAmounts } from "@/lib/streamline-tx";
 
 type SplitRow = { label: string; address: string; pct: number; yield: boolean };
 
@@ -28,6 +28,7 @@ const DEFAULT_SPLITS: SplitRow[] = [
 export function StreamCreator() {
   const account = useCurrentAccount();
   const packageId = useNetworkVariable("packageId");
+  const usdcType = useNetworkVariable("usdcType");
   const { mutate: signAndExecute, isPending } = useSignAndExecuteTransaction();
 
   const [freelancer, setFreelancer] = useState("");
@@ -75,21 +76,21 @@ export function StreamCreator() {
       );
       return;
     }
-    const tx = new Transaction();
-    // Real impl: redeem USDC from the sender's Address Balance, then build the
-    // shared Stream object with milestones + split config. Placeholder shape:
-    tx.moveCall({
-      target: `${packageId}::stream::create_stream`,
-      arguments: [
-        tx.pure.address(freelancer),
-        tx.pure.u64(toBaseUnits(amount)),
-        tx.pure.u64(BigInt(durationMs)),
-      ],
+    const totalBase = toBaseUnits(amount);
+    const tx = buildCreateStream({
+      packageId,
+      usdcType,
+      freelancer,
+      milestoneNames: milestones,
+      milestoneAmountsBase: splitMilestoneAmounts(totalBase, milestones.length),
+      totalBase,
+      durationMs,
     });
+    setStatus("Awaiting wallet signature…");
     signAndExecute(
       { transaction: tx },
       {
-        onSuccess: (r) => setStatus(`Stream created — digest ${r.digest}`),
+        onSuccess: (r) => setStatus(`Stream created — locked ${formatUsd(amount)}. Digest ${r.digest}`),
         onError: (e) => setStatus(e.message),
       }
     );
