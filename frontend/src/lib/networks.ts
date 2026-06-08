@@ -4,9 +4,13 @@ import { createNetworkConfig } from "@mysten/dapp-kit";
  * StreamLine targets Sui mainnet (gasless stablecoin transfers via Address
  * Balances launched on mainnet in May 2026). Testnet stays wired for dev.
  */
+// Deployed StreamLine package on testnet (see contracts/deployment.testnet.json).
+const TESTNET_PACKAGE =
+  "0x9d6e7815d5e11424a68f827e26499078fead7648328f44fdbdeff6d34ed0b3a8";
+
 export const PACKAGE_IDS = {
   mainnet: process.env.NEXT_PUBLIC_PACKAGE_ID_MAINNET ?? "0x0",
-  testnet: process.env.NEXT_PUBLIC_PACKAGE_ID_TESTNET ?? "0x0",
+  testnet: process.env.NEXT_PUBLIC_PACKAGE_ID_TESTNET ?? TESTNET_PACKAGE,
   devnet: "0x0",
 } as const;
 
