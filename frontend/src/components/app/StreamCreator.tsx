@@ -112,9 +112,12 @@ export function StreamCreator() {
           <Field label="Total amount (USDC)">
             <input
               type="number"
-              value={amount}
+              value={amount === 0 ? "" : amount}
               min={0}
-              onChange={(e) => setAmount(Number(e.target.value))}
+              placeholder="800"
+              onChange={(e) =>
+                setAmount(e.target.value === "" ? 0 : Number(e.target.value))
+              }
               className="w-full border border-[#2b2a5e]/20 bg-white px-3 py-2.5 text-[14px] outline-none focus:border-[#5b54e6]"
             />
           </Field>
@@ -122,9 +125,14 @@ export function StreamCreator() {
             <div className="flex gap-2">
               <input
                 type="number"
-                value={durationValue}
+                value={durationValue === 0 ? "" : durationValue}
                 min={0}
-                onChange={(e) => setDurationValue(Number(e.target.value))}
+                placeholder="14"
+                onChange={(e) =>
+                  setDurationValue(
+                    e.target.value === "" ? 0 : Number(e.target.value)
+                  )
+                }
                 className="w-full border border-[#2b2a5e]/20 bg-white px-3 py-2.5 text-[14px] outline-none focus:border-[#5b54e6]"
               />
               <select
@@ -183,8 +191,13 @@ export function StreamCreator() {
                 />
                 <input
                   type="number"
-                  value={r.pct}
-                  onChange={(e) => updateSplit(i, { pct: Number(e.target.value) })}
+                  value={r.pct === 0 ? "" : r.pct}
+                  placeholder="0"
+                  onChange={(e) =>
+                    updateSplit(i, {
+                      pct: e.target.value === "" ? 0 : Number(e.target.value),
+                    })
+                  }
                   className="w-20 border border-[#2b2a5e]/20 bg-white px-3 py-2 text-[13px] outline-none focus:border-[#5b54e6]"
                 />
                 <span className="text-[12px] text-[#2b2a5e]/50">%</span>
