@@ -4,7 +4,7 @@
   "private": true,
   "description": "StreamLine — programmable micropayments on Sui (frontend)",
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev --turbopack",
     "build": "next build",
     "start": "next start",
     "lint": "next lint"
