@@ -14,14 +14,25 @@ export const PACKAGE_IDS = {
   devnet: "0x0",
 } as const;
 
-/** USDC is the primary streamed asset. */
+/**
+ * Mintable test USDC deployed for the demo (6 decimals, symbol "USDC"). The
+ * TreasuryCap is shared, so the faucet is permissionless on testnet.
+ */
+export const TEST_USDC = {
+  packageId:
+    "0xf6ce32fe48338464f3947b9d15cd4a0befa0fe9b3926fd9daf6cee3658482ed3",
+  treasuryId:
+    "0xa7cb971f4f93e5713c5703f63f3bc17fdf0f6bf1f9795dc010ac164827715330",
+  coinType:
+    "0xf6ce32fe48338464f3947b9d15cd4a0befa0fe9b3926fd9daf6cee3658482ed3::mock_usdc::MOCK_USDC",
+} as const;
+
+/** USDC is the primary streamed asset. Testnet uses our mintable test USDC. */
 export const USDC_TYPE = {
   mainnet:
     process.env.NEXT_PUBLIC_USDC_TYPE_MAINNET ??
     "0xdba34672e30cb065b1f93e3ab55318768fd6fef66c15942c9f7cb846e2f900e7::usdc::USDC",
-  testnet:
-    process.env.NEXT_PUBLIC_USDC_TYPE_TESTNET ??
-    "0xa1ec7fc00a6f40db9693ad1415d0c193ad3906494428cf252621037bd7117e29::usdc::USDC",
+  testnet: process.env.NEXT_PUBLIC_USDC_TYPE_TESTNET ?? TEST_USDC.coinType,
   devnet: "0x2::sui::SUI",
 } as const;
 

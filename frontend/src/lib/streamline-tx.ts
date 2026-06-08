@@ -132,6 +132,20 @@ export function buildCollateralize(
   return tx;
 }
 
+/** Mint test USDC from the shared faucet treasury to the signer. */
+export function buildMintTestUsdc(a: {
+  packageId: string;
+  treasuryId: string;
+  amountBase: bigint;
+}): Transaction {
+  const tx = new Transaction();
+  tx.moveCall({
+    target: `${a.packageId}::mock_usdc::faucet`,
+    arguments: [tx.object(a.treasuryId), tx.pure.u64(a.amountBase)],
+  });
+  return tx;
+}
+
 /**
  * Split a total into N per-milestone base-unit amounts that sum exactly to the
  * total (the remainder lands on the last milestone).

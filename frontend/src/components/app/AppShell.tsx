@@ -5,6 +5,7 @@ import { useState } from "react";
 import { useCurrentAccount, useSuiClientContext } from "@mysten/dapp-kit";
 
 import { WalletButton } from "@/components/wallet/WalletButton";
+import { FaucetButton } from "@/components/wallet/FaucetButton";
 import { StreamCreator } from "./StreamCreator";
 import { LiveEarnings } from "./LiveEarnings";
 import { ClientDashboard } from "./ClientDashboard";
@@ -59,7 +60,10 @@ export function AppShell() {
             {network}
           </span>
         </div>
-        <WalletButton />
+        <div className="flex items-center gap-2">
+          {account && <FaucetButton amount={1000} />}
+          <WalletButton />
+        </div>
       </header>
 
       {!account ? (
