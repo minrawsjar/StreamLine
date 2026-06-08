@@ -1,5 +1,4 @@
 @import "tailwindcss";
-@import "@mysten/dapp-kit/dist/index.css";
 
 /* StreamLine palette — indigo/purple flow on warm paper.
    Mirrors the Sui Overflow deck (ink #2b2a5e, brand #7f77dd, flow #1d9e75). */
