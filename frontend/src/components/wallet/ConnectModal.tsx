@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { useWallets, useConnectWallet } from "@mysten/dapp-kit";
 import type { WalletWithRequiredFeatures } from "@mysten/wallet-standard";
 
@@ -44,7 +45,11 @@ export function ConnectModal({ open, onClose }: Props) {
     );
   };
 
-  return (
+  if (typeof document === "undefined") return null;
+
+  // Portal to <body> so the modal escapes the header's backdrop-filter, which
+  // would otherwise become the containing block for this fixed element.
+  return createPortal(
     <div
       className="fixed inset-0 z-[300] flex items-center justify-center p-4"
       data-sl-cursor="on-light"
@@ -111,11 +116,12 @@ export function ConnectModal({ open, onClose }: Props) {
           )}
 
           <p className="text-[11px] leading-relaxed text-[#2b2a5e]/50">
-            New here? zkLogin creates a Sui wallet from your Google account — no
-            seed phrase, no extension. Gasless from the first drip.
+            Connect a Sui wallet to create and watch streams on testnet. Make
+            sure your wallet network is set to <strong>Testnet</strong>.
           </p>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

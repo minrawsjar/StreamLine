@@ -108,8 +108,8 @@ function ConnectPrompt() {
         Connect to create and watch streams.
       </h1>
       <p className="max-w-md text-[13px] leading-relaxed text-[#2b2a5e]/60">
-        Use the connect button up top — a Sui wallet, or Google via zkLogin (no
-        seed phrase). Then choose whether you&rsquo;re paying or getting paid.
+        Use the connect button up top — connect a Sui wallet (set to Testnet).
+        Then choose whether you&rsquo;re paying or getting paid.
       </p>
     </div>
   );
