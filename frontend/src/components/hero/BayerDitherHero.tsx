@@ -40,6 +40,7 @@ const fragmentShader = `
   uniform sampler2D uBayer;
   uniform sampler2D uWater;
   uniform vec2 uResolution;
+  uniform vec2 uTexSize;
   uniform float uDotSizePx;
   uniform vec3 uColorDark;
   uniform vec3 uColorBright;
@@ -52,6 +53,17 @@ const fragmentShader = `
     return dot(c, vec3(0.299, 0.587, 0.114));
   }
 
+  /** CSS object-fit: cover — sample source without stretching (image or video) */
+  vec2 coverPhotoUv(vec2 cellUv) {
+    if (uTexSize.x < 1.0 || uTexSize.y < 1.0) return cellUv;
+    vec2 viewPx = cellUv * uResolution;
+    float scale = max(uResolution.x / uTexSize.x, uResolution.y / uTexSize.y);
+    vec2 scaled = uTexSize * scale;
+    vec2 off = (uResolution - scaled) * 0.5;
+    vec2 uv = (viewPx - off) / scaled;
+    return clamp(uv, vec2(0.0), vec2(1.0));
+  }
+
   void main() {
     vec2 px = vUv * uResolution;
     float cell = max(uDotSizePx, 1.0);
@@ -59,7 +71,7 @@ const fragmentShader = `
     vec2 cellCenter = cellId * cell + 0.5 * cell;
     vec2 cellUv = cellCenter / uResolution;
 
-    vec3 photo = texture2D(uPhoto, cellUv).rgb;
+    vec3 photo = texture2D(uPhoto, coverPhotoUv(cellUv)).rgb;
     float lum = luma(photo);
 
     float layer = clamp(floor(lum * 4.0), 0.0, 3.0);
@@ -260,11 +272,18 @@ function copyHeightsToRGBA(src: Float32Array, dst: Float32Array, len: number): v
 }
 
 export type BayerDitherHeroProps = {
+  /** Still image source — also used as fallback if a video fails to load. */
   imageSrc: string;
+  /** Optional looping video source (mp4/webm). Frames feed the dither live. */
+  videoSrc?: string;
   className?: string;
 };
 
-export function BayerDitherHero({ imageSrc, className }: BayerDitherHeroProps) {
+export function BayerDitherHero({
+  imageSrc,
+  videoSrc,
+  className,
+}: BayerDitherHeroProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const rafRef = useRef<number>(0);
 
@@ -299,6 +318,8 @@ export function BayerDitherHero({ imageSrc, className }: BayerDitherHeroProps) {
 
     let material: THREE.ShaderMaterial | null = null;
     let photoTex: THREE.Texture | null = null;
+    let videoEl: HTMLVideoElement | null = null;
+    let disposed = false;
 
     let buf0: Float32Array | null = null;
     let buf1: Float32Array | null = null;
@@ -397,45 +418,98 @@ export function BayerDitherHero({ imageSrc, className }: BayerDitherHeroProps) {
 
     const startTime = performance.now();
 
-    loader.load(
-      imageSrc,
-      (tex) => {
-        tex.generateMipmaps = false;
+    /** Build the dither material once a source texture (image or video) is ready. */
+    const buildMaterial = (tex: THREE.Texture, texW: number, texH: number) => {
+      if (disposed) return;
+      allocWave();
+
+      material = new THREE.ShaderMaterial({
+        uniforms: {
+          uPhoto: { value: tex },
+          uBayer: { value: bayerTex },
+          uWater: { value: waterTex },
+          uResolution: { value: new THREE.Vector2(0, 0) },
+          uTexSize: { value: new THREE.Vector2(texW, texH) },
+          uDotSizePx: { value: DOT_SIZE_CSS },
+          uColorDark: { value: COL_DARK.clone() },
+          uColorBright: { value: COL_LIGHT.clone() },
+          uTime: { value: 0 },
+          uWaterGridFull: { value: new THREE.Vector2(fullGridW, fullGridH) },
+        },
+        vertexShader,
+        fragmentShader,
+        depthTest: false,
+        depthWrite: false,
+      });
+
+      const geo = new THREE.PlaneGeometry(2, 2);
+      const mesh = new THREE.Mesh(geo, material);
+      scene.add(mesh);
+      resize();
+    };
+
+    const loadImage = () => {
+      loader.load(
+        imageSrc,
+        (tex) => {
+          if (disposed) {
+            tex.dispose();
+            return;
+          }
+          tex.generateMipmaps = false;
+          tex.minFilter = THREE.NearestFilter;
+          tex.magFilter = THREE.NearestFilter;
+          tex.wrapS = THREE.ClampToEdgeWrapping;
+          tex.wrapT = THREE.ClampToEdgeWrapping;
+          tex.colorSpace = THREE.SRGBColorSpace;
+          photoTex = tex;
+          buildMaterial(tex, tex.image.width, tex.image.height);
+        },
+        undefined,
+        (err) => console.error("[BayerDitherHero] image load failed", err)
+      );
+    };
+
+    if (videoSrc) {
+      // Looping video → VideoTexture. Muted + playsInline so autoplay is allowed;
+      // falls back to the still image if the video can't load/decode/play.
+      const video = document.createElement("video");
+      video.src = videoSrc;
+      video.loop = true;
+      video.muted = true;
+      video.defaultMuted = true;
+      video.playsInline = true;
+      video.autoplay = true;
+      video.crossOrigin = "anonymous";
+      video.preload = "auto";
+      videoEl = video;
+
+      let started = false;
+      const startVideo = () => {
+        if (started || disposed) return;
+        started = true;
+        const tex = new THREE.VideoTexture(video);
         tex.minFilter = THREE.NearestFilter;
         tex.magFilter = THREE.NearestFilter;
         tex.wrapS = THREE.ClampToEdgeWrapping;
         tex.wrapT = THREE.ClampToEdgeWrapping;
         tex.colorSpace = THREE.SRGBColorSpace;
         photoTex = tex;
-
-        allocWave();
-
-        material = new THREE.ShaderMaterial({
-          uniforms: {
-            uPhoto: { value: tex },
-            uBayer: { value: bayerTex },
-            uWater: { value: waterTex },
-            uResolution: { value: new THREE.Vector2(0, 0) },
-            uDotSizePx: { value: DOT_SIZE_CSS },
-            uColorDark: { value: COL_DARK.clone() },
-            uColorBright: { value: COL_LIGHT.clone() },
-            uTime: { value: 0 },
-            uWaterGridFull: { value: new THREE.Vector2(fullGridW, fullGridH) },
-          },
-          vertexShader,
-          fragmentShader,
-          depthTest: false,
-          depthWrite: false,
+        buildMaterial(tex, video.videoWidth || 16, video.videoHeight || 9);
+        video.play().catch(() => {
+          /* autoplay blocked — frames still update once playback starts */
         });
+      };
 
-        const geo = new THREE.PlaneGeometry(2, 2);
-        const mesh = new THREE.Mesh(geo, material);
-        scene.add(mesh);
-        resize();
-      },
-      undefined,
-      (err) => console.error("[BayerDitherHero] texture load failed", err)
-    );
+      video.addEventListener("loadeddata", startVideo, { once: true });
+      video.addEventListener("error", () => {
+        console.warn("[BayerDitherHero] video failed, falling back to image");
+        if (!started) loadImage();
+      });
+      video.load();
+    } else {
+      loadImage();
+    }
 
     const ro = new ResizeObserver(() => resize());
     ro.observe(container);
@@ -501,6 +575,7 @@ export function BayerDitherHero({ imageSrc, className }: BayerDitherHeroProps) {
     window.addEventListener("blur", onWindowBlur);
 
     return () => {
+      disposed = true;
       ro.disconnect();
       cancelAnimationFrame(rafRef.current);
       window.removeEventListener("resize", resize);
@@ -509,13 +584,19 @@ export function BayerDitherHero({ imageSrc, className }: BayerDitherHeroProps) {
       if (canvas.parentNode === container) {
         container.removeChild(canvas);
       }
+      if (videoEl) {
+        videoEl.pause();
+        videoEl.removeAttribute("src");
+        videoEl.load();
+        videoEl = null;
+      }
       renderer.dispose();
       bayerTex.dispose();
       if (waterTex) waterTex.dispose();
       if (photoTex) photoTex.dispose();
       if (material) material.dispose();
     };
-  }, [imageSrc]);
+  }, [imageSrc, videoSrc]);
 
   return (
     <div

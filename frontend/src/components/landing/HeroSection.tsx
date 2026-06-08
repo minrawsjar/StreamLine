@@ -1,7 +1,9 @@
 import { BayerDitherHero } from "@/components/hero/BayerDitherHero";
 
 // Flowing water — the dither resolves it into StreamLine's indigo dot field,
-// and cursor movement sends ripples through it (money "flowing").
+// and cursor movement sends ripples through it (money "flowing"). A looping
+// ocean clip drives live motion; the still image is the fallback.
+const HERO_VIDEO = "/hero/waves.mp4";
 const HERO_IMAGE =
   "https://images.unsplash.com/photo-1505144808419-1957a94ca61e?fm=jpg&q=60&w=3000&auto=format&fit=crop";
 
@@ -16,7 +18,11 @@ export function HeroSection() {
         data-sl-cursor="on-dark"
         className="absolute bottom-[2.5dvh] left-1/2 top-[8dvh] z-0 w-[min(108vw,1440px)] -translate-x-1/2"
       >
-        <BayerDitherHero imageSrc={HERO_IMAGE} className="h-full w-full" />
+        <BayerDitherHero
+          videoSrc={HERO_VIDEO}
+          imageSrc={HERO_IMAGE}
+          className="h-full w-full"
+        />
       </div>
 
       <div className="pointer-events-none relative z-20 h-full min-h-0 w-full px-4 sm:px-6 lg:px-8">
