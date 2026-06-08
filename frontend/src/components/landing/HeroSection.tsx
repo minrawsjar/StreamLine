@@ -16,7 +16,7 @@ export function HeroSection() {
     >
       <div
         data-sl-cursor="on-dark"
-        className="absolute bottom-[2.5dvh] left-1/2 top-[8dvh] z-0 w-[min(108vw,1440px)] -translate-x-1/2"
+        className="absolute inset-x-0 bottom-0 top-[7dvh] z-0"
       >
         <BayerDitherHero
           videoSrc={HERO_VIDEO}
@@ -32,10 +32,10 @@ export function HeroSection() {
             <span className="block">streams. Money that drips as you work.</span>
           </p>
 
-          <h1 className="absolute bottom-0 left-0 max-w-[97vw] pb-8 font-black text-white [text-shadow:0_18px_52px_rgba(0,0,0,0.22)] md:max-w-[92%] md:pb-14">
-            <div className="tracking-[-0.04em] [font-size:clamp(88px,17vw,260px)] leading-[0.88]">
+          <h1 className="absolute bottom-0 left-0 max-w-[97vw] pb-8 font-black text-white [text-shadow:0_18px_52px_rgba(0,0,0,0.22)] md:pb-14">
+            <div className="tracking-[-0.03em] [font-size:clamp(48px,9vw,150px)] leading-[0.9]">
               <span className="sl-hero-line block">StreamLine</span>
-              <span className="sl-hero-line sl-hero-line--2 mt-[0.1em] block text-[0.165em] font-black uppercase leading-[1.05] tracking-[0.02em]">
+              <span className="sl-hero-line sl-hero-line--2 mt-[0.12em] block text-[0.2em] font-black uppercase leading-[1.05] tracking-[0.04em]">
                 Programmable Micropayments on Sui
               </span>
             </div>
