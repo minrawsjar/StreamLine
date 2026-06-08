@@ -37,7 +37,7 @@ export function CustomCursor() {
 
   return (
     <div
-      className="pointer-events-none fixed left-0 top-0 z-[200]"
+      className="pointer-events-none fixed left-0 top-0 z-[9999]"
       style={{ transform: `translate(${pos.x}px, ${pos.y}px)` }}
       aria-hidden
     >
