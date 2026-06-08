@@ -14,6 +14,8 @@ export const DEFAULT_DISPUTE_WINDOW_MS = 48 * 60 * 60 * 1000;
 export type CreateStreamArgs = {
   packageId: string;
   usdcType: string;
+  /** Client address — required so `coinWithBalance` can pick the USDC coins. */
+  sender: string;
   freelancer: string;
   milestoneNames: string[];
   /** Per-milestone amounts in base units; must sum to `totalBase`. */
@@ -27,6 +29,9 @@ export type CreateStreamArgs = {
 /** Lock USDC and create a milestone stream (client signs). */
 export function buildCreateStream(a: CreateStreamArgs): Transaction {
   const tx = new Transaction();
+  // coinWithBalance resolves the signer's coins at build time, so the sender
+  // must be set before that happens (dApp Kit only sets it at sign time).
+  tx.setSenderIfNotSet(a.sender);
   tx.moveCall({
     target: `${a.packageId}::stream::create_stream`,
     typeArguments: [a.usdcType],

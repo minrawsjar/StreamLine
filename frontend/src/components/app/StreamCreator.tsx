@@ -80,6 +80,7 @@ export function StreamCreator() {
     const tx = buildCreateStream({
       packageId,
       usdcType,
+      sender: account.address,
       freelancer,
       milestoneNames: milestones,
       milestoneAmountsBase: splitMilestoneAmounts(totalBase, milestones.length),
