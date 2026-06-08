@@ -1,0 +1,114 @@
+@import "tailwindcss";
+@import "@mysten/dapp-kit/dist/index.css";
+
+/* StreamLine palette — indigo/purple flow on warm paper.
+   Mirrors the Sui Overflow deck (ink #2b2a5e, brand #7f77dd, flow #1d9e75). */
+:root {
+  --sl-ink: #2b2a5e;
+  --sl-ink-800: #34337a;
+  --sl-brand: #7f77dd;
+  --sl-brand-strong: #5b54e6;
+  --sl-flow: #1d9e75;
+  --sl-hero-bg: #34337a;
+  --sl-footer: #1d1c44;
+  --sl-paper: #f1efe9;
+}
+
+@theme inline {
+  --font-sans: var(--font-geist-mono), ui-monospace, "SF Mono", monospace;
+  --color-ink: #2b2a5e;
+  --color-brand: #7f77dd;
+  --color-flow: #1d9e75;
+  --color-paper: #f1efe9;
+}
+
+html {
+  scroll-behavior: smooth;
+  cursor: none;
+  margin: 0;
+  width: 100%;
+  overflow-x: hidden;
+}
+
+body {
+  margin: 0;
+  min-height: 100%;
+  width: 100%;
+  overflow-x: hidden;
+  background: var(--sl-paper);
+  color: var(--sl-ink);
+  font-family: var(--font-geist-mono), ui-monospace, monospace;
+}
+
+a,
+button,
+[role="button"],
+input,
+textarea,
+select,
+label[for] {
+  cursor: none;
+}
+
+/* Sharp corners site-wide — matches the SAIL/brutalist aesthetic */
+*,
+*::before,
+*::after {
+  border-radius: 0 !important;
+}
+
+/* Hero entrance — CSS only */
+@keyframes sl-hero-slide {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes sl-hero-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.sl-hero-line {
+  opacity: 0;
+  animation: sl-hero-slide 0.85s ease forwards;
+}
+
+.sl-hero-line--2 {
+  animation-delay: 0.15s;
+}
+
+.sl-hero-tagline {
+  opacity: 0;
+  animation: sl-hero-fade 0.9s ease 1s forwards;
+}
+
+/* Tabular numerals so the live earn counter doesn't jitter as digits tick. */
+.tabular {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+}
+
+/* Marquee for the stablecoin / primitive ticker strip */
+@keyframes sl-marquee {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+.sl-marquee {
+  animation: sl-marquee 28s linear infinite;
+  will-change: transform;
+}
