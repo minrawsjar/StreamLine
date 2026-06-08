@@ -51,17 +51,14 @@ export const DEFAULT_NETWORK: NetworkName =
 export const { networkConfig, useNetworkVariable, useNetworkVariables } =
   createNetworkConfig({
     mainnet: {
-      network: "mainnet",
       url: FULLNODE_URLS.mainnet,
       variables: { packageId: PACKAGE_IDS.mainnet, usdcType: USDC_TYPE.mainnet },
     },
     testnet: {
-      network: "testnet",
       url: FULLNODE_URLS.testnet,
       variables: { packageId: PACKAGE_IDS.testnet, usdcType: USDC_TYPE.testnet },
     },
     devnet: {
-      network: "devnet",
       url: FULLNODE_URLS.devnet,
       variables: { packageId: PACKAGE_IDS.devnet, usdcType: USDC_TYPE.devnet },
     },

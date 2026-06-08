@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import { useWallets, useConnectWallet } from "@mysten/dapp-kit";
-import { isEnokiWallet, type EnokiWallet, type AuthProvider } from "@mysten/enoki";
 import type { WalletWithRequiredFeatures } from "@mysten/wallet-standard";
 
 type Props = {
@@ -10,16 +9,10 @@ type Props = {
   onClose: () => void;
 };
 
-const PROVIDER_LABEL: Partial<Record<AuthProvider, string>> = {
-  google: "Continue with Google",
-  facebook: "Continue with Facebook",
-  twitch: "Continue with Twitch",
-};
-
 /**
- * StreamLine's own connect modal. Splits zkLogin social logins (seedless, the
- * "sign up with Gmail" path) from browser-extension wallets, and connects via
+ * StreamLine's own connect modal — lists detected Sui wallets and connects via
  * dApp Kit. Sharp corners + mono to match the brutalist landing aesthetic.
+ * (zkLogin/Enoki social logins are temporarily disabled, see RegisterEnokiWallets.)
  */
 export function ConnectModal({ open, onClose }: Props) {
   const wallets = useWallets();
@@ -36,10 +29,7 @@ export function ConnectModal({ open, onClose }: Props) {
 
   if (!open) return null;
 
-  const enokiWallets = wallets.filter(isEnokiWallet) as EnokiWallet[];
-  const standardWallets = wallets.filter(
-    (w) => !isEnokiWallet(w)
-  ) as WalletWithRequiredFeatures[];
+  const standardWallets = wallets as WalletWithRequiredFeatures[];
 
   const onConnect = (wallet: WalletWithRequiredFeatures) => {
     setError(null);
@@ -80,33 +70,6 @@ export function ConnectModal({ open, onClose }: Props) {
         </div>
 
         <div className="flex flex-col gap-5 p-5">
-          {enokiWallets.length > 0 && (
-            <div className="flex flex-col gap-2">
-              <p className="text-[10px] uppercase tracking-[0.18em] text-[#2b2a5e]/50">
-                Seedless · zkLogin
-              </p>
-              {enokiWallets.map((w) => (
-                <button
-                  key={w.name}
-                  disabled={isPending}
-                  onClick={() => onConnect(w)}
-                  className="flex items-center gap-3 border border-[#2b2a5e]/20 bg-white px-4 py-3 text-left text-[13px] transition-colors hover:border-[#5b54e6] disabled:opacity-50"
-                >
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={w.icon} alt="" className="h-5 w-5" />
-                  <span className="font-medium">
-                    {PROVIDER_LABEL[w.provider] ?? w.name}
-                  </span>
-                  {pendingName === w.name && (
-                    <span className="ml-auto text-[11px] text-[#2b2a5e]/50">
-                      …
-                    </span>
-                  )}
-                </button>
-              ))}
-            </div>
-          )}
-
           <div className="flex flex-col gap-2">
             <p className="text-[10px] uppercase tracking-[0.18em] text-[#2b2a5e]/50">
               Sui wallets
