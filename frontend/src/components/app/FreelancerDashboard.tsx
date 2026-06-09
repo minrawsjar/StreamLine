@@ -26,7 +26,12 @@ function earnedBase(s: StreamRecord, nowMs: number): number {
   if (s.state !== "dripping" || s.duration_ms <= 0) return paid;
   const rate = s.total / s.duration_ms; // base units per ms
   const accrued = Math.max(0, (nowMs - s.last_drip_ms) * rate);
-  return Math.min(paid + accrued, s.total);
+  // Cap live estimate at the current milestone ceiling (equal-split streams).
+  const milestoneCeiling =
+    s.n_milestones > 0
+      ? Math.ceil(((s.current_milestone + 1) * s.total) / s.n_milestones)
+      : s.total;
+  return Math.min(paid + accrued, milestoneCeiling, s.total);
 }
 
 const usd = (base: number) => (base / USDC_BASE).toFixed(2);

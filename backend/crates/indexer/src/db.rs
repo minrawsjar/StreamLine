@@ -159,6 +159,37 @@ pub async fn set_dripping(pool: &PgPool, ev: &MilestoneApproved) -> Result<()> {
     Ok(())
 }
 
+pub async fn set_stream_state(
+    pool: &PgPool,
+    id: &str,
+    state: &str,
+    current_milestone: i64,
+) -> Result<()> {
+    sqlx::query(
+        r#"UPDATE streams
+           SET state = $2, current_milestone = $3, updated_at = now()
+           WHERE id = $1"#,
+    )
+    .bind(id)
+    .bind(state)
+    .bind(current_milestone)
+    .execute(pool)
+    .await?;
+    Ok(())
+}
+
+/// Active streams whose DB state may lag chain (e.g. still "dripping" after a
+/// milestone fully paid out inside the last `drip` tx).
+pub async fn streams_needing_state_sync(pool: &PgPool) -> Result<Vec<String>> {
+    let rows: Vec<(String,)> = sqlx::query_as(
+        r#"SELECT id FROM streams WHERE state IN ('dripping', 'pending_review', 'locked')
+           AND state <> 'done' LIMIT 50"#,
+    )
+    .fetch_all(pool)
+    .await?;
+    Ok(rows.into_iter().map(|(id,)| id).collect())
+}
+
 pub async fn apply_drip(
     pool: &PgPool,
     ev: &StreamDripped,

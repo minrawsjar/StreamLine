@@ -14,8 +14,19 @@ use crate::{db, state::AppState, state::LiveUpdate};
 fn u64_field(v: &Value, key: &str) -> u64 {
     match v.get(key) {
         Some(Value::String(s)) => s.parse().unwrap_or(0),
-        Some(Value::Number(n)) => n.as_u64().unwrap_or(0),
+        Some(Value::Number(n)) => n.as_u64().or_else(|| n.as_f64().map(|f| f as u64)).unwrap_or(0),
         _ => 0,
+    }
+}
+
+fn state_label(code: u64) -> &'static str {
+    match code {
+        0 => "locked",
+        1 => "pending_review",
+        2 => "dripping",
+        3 => "paused",
+        4 => "done",
+        _ => "locked",
     }
 }
 
@@ -49,6 +60,11 @@ async fn backfill_missing(state: &AppState, client: &SuiClient) -> anyhow::Resul
     for id in db::streams_missing_meta(&state.pool).await? {
         if let Err(e) = backfill_meta(state, client, &id).await {
             tracing::warn!("backfill meta for {id} failed: {e:#}");
+        }
+    }
+    for id in db::streams_needing_state_sync(&state.pool).await? {
+        if let Err(e) = sync_stream_state(state, client, &id).await {
+            tracing::warn!("state sync for {id} failed: {e:#}");
         }
     }
     Ok(())
@@ -139,6 +155,11 @@ async fn process_event(
                 timestamp_ms: u64_field(j, "timestamp_ms").max(now as u64),
             };
             db::apply_drip(&state.pool, &e, &ev.id.tx_digest).await?;
+            // Milestone completion (→ locked + bump index) happens inside `drip`
+            // with no separate event — re-read the object to stay in sync.
+            if let Err(err) = sync_stream_state(state, client, &e.stream_id).await {
+                tracing::warn!("state sync after drip {}: {err:#}", e.stream_id);
+            }
             state.publish(LiveUpdate::Drip {
                 stream_id: e.stream_id,
                 amount: e.amount as i64,
@@ -177,6 +198,26 @@ async fn backfill_meta(
 
     db::set_stream_meta(&state.pool, stream_id, &coin_type, duration_ms, drip_interval_ms)
         .await?;
+    Ok(())
+}
+
+/// Read `state` + `current_milestone` from chain and persist. Needed because
+/// milestone completion happens inside `drip` without its own event.
+async fn sync_stream_state(
+    state: &AppState,
+    client: &SuiClient,
+    stream_id: &str,
+) -> anyhow::Result<()> {
+    let obj = client.get_object(stream_id).await?;
+    let fields = &obj["data"]["content"]["fields"];
+    let code = u64_field(fields, "state");
+    let milestone = u64_field(fields, "current_milestone") as i64;
+    let label = state_label(code);
+    db::set_stream_state(&state.pool, stream_id, label, milestone).await?;
+    state.publish(LiveUpdate::State {
+        stream_id: stream_id.into(),
+        state: label.into(),
+    });
     Ok(())
 }
 
