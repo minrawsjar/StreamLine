@@ -175,15 +175,11 @@ export function FreelancerDashboard() {
               <Stat label="Remaining" value={`$${usd(active.remaining)}`} />
             </div>
 
-            {active.state === "locked" && (
-              <button
-                onClick={onRaise}
-                disabled={isPending}
-                className="mt-6 self-start bg-[#5b54e6] px-6 py-3 text-[12px] uppercase tracking-[0.1em] text-white transition-opacity hover:opacity-90 disabled:opacity-40"
-              >
-                {isPending ? "raising…" : "raise milestone complete — gasless"}
-              </button>
-            )}
+            <MilestoneAction
+              stream={active}
+              isPending={isPending}
+              onRaise={onRaise}
+            />
             {status && (
               <p className="mt-4 text-[11px] text-[#2b2a5e]/70">{status}</p>
             )}
@@ -224,6 +220,84 @@ export function FreelancerDashboard() {
           </Card>
         </aside>
       </div>
+    </div>
+  );
+}
+
+function MilestoneAction({
+  stream,
+  isPending,
+  onRaise,
+}: {
+  stream: StreamRecord;
+  isPending: boolean;
+  onRaise: () => void;
+}) {
+  const total = stream.n_milestones;
+  const done = stream.current_milestone; // milestones fully paid out
+  const no = Math.min(stream.current_milestone + 1, total); // 1-based current
+
+  return (
+    <div className="mt-6">
+      {/* Per-milestone tracker so every milestone is visible */}
+      <div className="mb-4 flex flex-wrap gap-1.5">
+        {Array.from({ length: total }).map((_, i) => {
+          const isDone = i < done;
+          const isCurrent = i === done && stream.state !== "done";
+          return (
+            <span
+              key={i}
+              title={`Milestone ${i + 1} of ${total}`}
+              className={`flex h-6 min-w-6 items-center justify-center px-2 text-[10px] font-semibold tabular ${
+                isDone
+                  ? "bg-[#1d9e75] text-white"
+                  : isCurrent
+                    ? "border border-[#5b54e6] text-[#5b54e6]"
+                    : "border border-[#2b2a5e]/20 text-[#2b2a5e]/40"
+              }`}
+            >
+              {i + 1}
+            </span>
+          );
+        })}
+      </div>
+
+      {stream.state === "locked" && (
+        <button
+          onClick={onRaise}
+          disabled={isPending}
+          className="self-start bg-[#5b54e6] px-6 py-3 text-[12px] uppercase tracking-[0.1em] text-white transition-opacity hover:opacity-90 disabled:opacity-40"
+        >
+          {isPending
+            ? "raising…"
+            : `raise milestone ${no} of ${total} complete — gasless`}
+        </button>
+      )}
+
+      {stream.state === "pending_review" && (
+        <p className="text-[12px] text-[#2b2a5e]/70">
+          Milestone {no} of {total} submitted — awaiting client approval.
+        </p>
+      )}
+
+      {stream.state === "dripping" && (
+        <p className="text-[12px] text-[#2b2a5e]/70">
+          Milestone {no} of {total} is dripping live. Raise the next one as soon
+          as it finishes settling.
+        </p>
+      )}
+
+      {stream.state === "paused" && (
+        <p className="text-[12px] text-[#b4541f]">
+          Stream paused — a dispute is in progress.
+        </p>
+      )}
+
+      {stream.state === "done" && (
+        <p className="text-[12px] text-[#1d9e75]">
+          All {total} milestones complete — stream fully settled.
+        </p>
+      )}
     </div>
   );
 }

@@ -90,6 +90,46 @@ pub async fn upsert_created(
     Ok(())
 }
 
+/// Backfill the fields the `StreamCreated` event doesn't carry (the coin type
+/// and timing), read from the on-chain object. Without this, `duration_ms`
+/// stays 0 — which breaks both the keeper's drip math and the frontend's live
+/// accrual counter.
+pub async fn set_stream_meta(
+    pool: &PgPool,
+    id: &str,
+    coin_type: &str,
+    duration_ms: i64,
+    drip_interval_ms: i64,
+) -> Result<()> {
+    sqlx::query(
+        r#"UPDATE streams
+           SET coin_type = $2, duration_ms = $3, drip_interval_ms = $4,
+               updated_at = now()
+           WHERE id = $1"#,
+    )
+    .bind(id)
+    .bind(coin_type)
+    .bind(duration_ms)
+    .bind(drip_interval_ms)
+    .execute(pool)
+    .await?;
+    Ok(())
+}
+
+/// Ids of streams still missing their backfilled metadata (coin type / timing).
+/// Covers streams ingested before backfill existed, or whose object read failed.
+pub async fn streams_missing_meta(pool: &PgPool) -> Result<Vec<String>> {
+    let rows: Vec<(String,)> = sqlx::query_as(
+        r#"SELECT id FROM streams
+           WHERE (coin_type = '' OR duration_ms = 0)
+             AND state <> 'done'
+           LIMIT 50"#,
+    )
+    .fetch_all(pool)
+    .await?;
+    Ok(rows.into_iter().map(|(id,)| id).collect())
+}
+
 pub async fn set_pending(pool: &PgPool, ev: &MilestoneRaised) -> Result<()> {
     sqlx::query(
         r#"UPDATE streams

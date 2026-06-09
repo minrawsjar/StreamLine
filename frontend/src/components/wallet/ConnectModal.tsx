@@ -13,7 +13,9 @@ type Props = {
 /**
  * StreamLine's own connect modal — lists detected Sui wallets and connects via
  * dApp Kit. Sharp corners + mono to match the brutalist landing aesthetic.
- * (zkLogin/Enoki social logins are temporarily disabled, see RegisterEnokiWallets.)
+ * Enoki zkLogin wallets (e.g. "Sign in with Google") appear here automatically
+ * once registered (see RegisterEnokiWallets) when the public Enoki key + OAuth
+ * client id are configured.
  */
 export function ConnectModal({ open, onClose }: Props) {
   const wallets = useWallets();

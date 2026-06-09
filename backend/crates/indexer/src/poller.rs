@@ -35,9 +35,23 @@ pub async fn run(state: AppState) {
             if let Err(e) = poll_once(&state, &client).await {
                 tracing::warn!("poll error: {e:#}");
             }
+            if let Err(e) = backfill_missing(&state, &client).await {
+                tracing::warn!("backfill sweep error: {e:#}");
+            }
         }
         tokio::time::sleep(interval).await;
     }
+}
+
+/// Sweep streams that are missing coin type / timing and fill them from chain.
+/// Idempotent and self-limiting: once every row has metadata it does nothing.
+async fn backfill_missing(state: &AppState, client: &SuiClient) -> anyhow::Result<()> {
+    for id in db::streams_missing_meta(&state.pool).await? {
+        if let Err(e) = backfill_meta(state, client, &id).await {
+            tracing::warn!("backfill meta for {id} failed: {e:#}");
+        }
+    }
+    Ok(())
 }
 
 async fn poll_once(state: &AppState, client: &SuiClient) -> anyhow::Result<()> {
@@ -56,7 +70,7 @@ async fn poll_once(state: &AppState, client: &SuiClient) -> anyhow::Result<()> {
         .await?;
 
     for ev in &page.data {
-        if let Err(e) = process_event(state, ev).await {
+        if let Err(e) = process_event(state, client, ev).await {
             tracing::warn!("event {} failed: {e:#}", ev.short_type());
         }
     }
@@ -67,7 +81,11 @@ async fn poll_once(state: &AppState, client: &SuiClient) -> anyhow::Result<()> {
     Ok(())
 }
 
-async fn process_event(state: &AppState, ev: &SuiEvent) -> anyhow::Result<()> {
+async fn process_event(
+    state: &AppState,
+    client: &SuiClient,
+    ev: &SuiEvent,
+) -> anyhow::Result<()> {
     let j = &ev.parsed_json;
     let now = ev
         .timestamp_ms
@@ -85,6 +103,11 @@ async fn process_event(state: &AppState, ev: &SuiEvent) -> anyhow::Result<()> {
                 n_milestones: u64_field(j, "n_milestones"),
             };
             db::upsert_created(&state.pool, &e, now).await?;
+            // The event omits the coin type + timing; read them off the object so
+            // the keeper can settle and the UI can show live accrual.
+            if let Err(err) = backfill_meta(state, client, &e.stream_id).await {
+                tracing::warn!("backfill meta for {} failed: {err:#}", e.stream_id);
+            }
         }
         EV_MILESTONE_RAISED => {
             let e = MilestoneRaised {
@@ -133,4 +156,36 @@ async fn process_event(state: &AppState, ev: &SuiEvent) -> anyhow::Result<()> {
         other => tracing::debug!("ignoring event {other}"),
     }
     Ok(())
+}
+
+/// Read the Stream object and persist the fields the creation event omits:
+/// the coin type (the `T` in `Stream<T>`) plus the duration / drip interval.
+async fn backfill_meta(
+    state: &AppState,
+    client: &SuiClient,
+    stream_id: &str,
+) -> anyhow::Result<()> {
+    let obj = client.get_object(stream_id).await?;
+    let data = &obj["data"];
+
+    let type_str = data["type"].as_str().unwrap_or_default();
+    let coin_type = type_param(type_str).unwrap_or_default();
+
+    let fields = &data["content"]["fields"];
+    let duration_ms = u64_field(fields, "duration_ms") as i64;
+    let drip_interval_ms = u64_field(fields, "drip_interval_ms") as i64;
+
+    db::set_stream_meta(&state.pool, stream_id, &coin_type, duration_ms, drip_interval_ms)
+        .await?;
+    Ok(())
+}
+
+/// Extract `T` from `0x..::stream::Stream<T>` (the innermost generic argument).
+fn type_param(type_str: &str) -> Option<String> {
+    let start = type_str.find('<')?;
+    let end = type_str.rfind('>')?;
+    if end <= start + 1 {
+        return None;
+    }
+    Some(type_str[start + 1..end].trim().to_string())
 }
