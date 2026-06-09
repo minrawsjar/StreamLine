@@ -9,6 +9,12 @@ import { useStreams, useLiveUpdates, type StreamRecord } from "@/lib/indexer";
 import { buildRaiseCompletion } from "@/lib/streamline-tx";
 import { USDC_BASE, formatInterval } from "@/lib/stream-math";
 import {
+  completedMilestones,
+  effectiveState,
+  milestoneCeilingBase,
+  nextMilestoneNo,
+} from "@/lib/stream-state";
+import {
   BarChart,
   Card,
   DashboardHeader,
@@ -23,14 +29,10 @@ import {
 /** Earned base units = already paid + (live accrual while dripping). */
 function earnedBase(s: StreamRecord, nowMs: number): number {
   const paid = s.total - s.remaining;
-  if (s.state !== "dripping" || s.duration_ms <= 0) return paid;
+  if (effectiveState(s) !== "dripping" || s.duration_ms <= 0) return paid;
   const rate = s.total / s.duration_ms; // base units per ms
   const accrued = Math.max(0, (nowMs - s.last_drip_ms) * rate);
-  // Cap live estimate at the current milestone ceiling (equal-split streams).
-  const milestoneCeiling =
-    s.n_milestones > 0
-      ? Math.ceil(((s.current_milestone + 1) * s.total) / s.n_milestones)
-      : s.total;
+  const milestoneCeiling = milestoneCeilingBase(s, s.current_milestone);
   return Math.min(paid + accrued, milestoneCeiling, s.total);
 }
 
@@ -66,7 +68,7 @@ export function FreelancerDashboard() {
   const totals = useMemo(() => {
     const earnedAll = list.reduce((a, s) => a + earnedBase(s, now), 0);
     const locked = list.reduce((a, s) => a + s.total, 0);
-    const dripping = list.filter((s) => s.state === "dripping").length;
+    const dripping = list.filter((s) => effectiveState(s) === "dripping").length;
     return { earnedAll, locked, dripping };
   }, [list, now]);
 
@@ -75,7 +77,7 @@ export function FreelancerDashboard() {
       list.slice(0, 8).map((s) => ({
         label: short(s.id).slice(0, 4),
         value: earnedBase(s, now),
-        active: s.state === "dripping" || s.state === "pending_review",
+        active: effectiveState(s) === "dripping" || s.state === "pending_review",
       })),
     [list, now]
   );
@@ -117,6 +119,10 @@ export function FreelancerDashboard() {
       }
     );
   };
+
+  const view = effectiveState(active);
+  const done = completedMilestones(active);
+  const next = nextMilestoneNo(active);
 
   return (
     <div>
@@ -162,15 +168,21 @@ export function FreelancerDashboard() {
               ${earned.toFixed(6)}
             </p>
             <p className="mt-3 text-[13px] text-[#1d9e75]">
-              {active.state === "dripping"
+              {view === "dripping"
                 ? `+$${ratePerSec.toFixed(6)} / sec · live, gasless`
-                : `Status: ${active.state.replace("_", " ")}`}
+                : view === "locked"
+                  ? `Milestone ${done} finished — apply for milestone ${next}`
+                  : `Status: ${view.replace("_", " ")}`}
             </p>
 
             <div className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
               <Stat
                 label="Milestone"
-                value={`${active.current_milestone + 1}/${active.n_milestones}`}
+                value={
+                  view === "locked"
+                    ? `${done}/${active.n_milestones} done · next ${next}`
+                    : `${next}/${active.n_milestones}`
+                }
               />
               <Stat
                 label="Settles every"
@@ -218,7 +230,7 @@ export function FreelancerDashboard() {
                   }`}
                 >
                   <span className="font-mono">{short(s.id)}</span>
-                  <StateBadge state={s.state} />
+                  <StateBadge state={effectiveState(s)} />
                 </button>
               ))}
             </div>
@@ -239,8 +251,9 @@ function MilestoneAction({
   onRaise: () => void;
 }) {
   const total = stream.n_milestones;
-  const done = stream.current_milestone; // milestones fully paid out
-  const no = Math.min(stream.current_milestone + 1, total); // 1-based current
+  const view = effectiveState(stream);
+  const done = completedMilestones(stream);
+  const next = nextMilestoneNo(stream);
 
   return (
     <div className="mt-6">
@@ -248,7 +261,7 @@ function MilestoneAction({
       <div className="mb-4 flex flex-wrap gap-1.5">
         {Array.from({ length: total }).map((_, i) => {
           const isDone = i < done;
-          const isCurrent = i === done && stream.state !== "done";
+          const isCurrent = i === done && view !== "done";
           return (
             <span
               key={i}
@@ -267,38 +280,47 @@ function MilestoneAction({
         })}
       </div>
 
-      {stream.state === "locked" && (
-        <button
-          onClick={onRaise}
-          disabled={isPending}
-          className="self-start bg-[#5b54e6] px-6 py-3 text-[12px] uppercase tracking-[0.1em] text-white transition-opacity hover:opacity-90 disabled:opacity-40"
-        >
-          {isPending
-            ? "raising…"
-            : `raise milestone ${no} of ${total} complete — gasless`}
-        </button>
+      {view === "locked" && (
+        <div className="flex flex-col gap-3">
+          <p className="text-[14px] font-semibold text-[#1d9e75]">
+            Milestone {done} finished
+          </p>
+          <p className="text-[12px] text-[#2b2a5e]/70">
+            Apply for milestone {next} when your work is ready — the client will
+            review, then dripping resumes.
+          </p>
+          <button
+            onClick={onRaise}
+            disabled={isPending}
+            className="self-start bg-[#5b54e6] px-6 py-3 text-[12px] uppercase tracking-[0.1em] text-white transition-opacity hover:opacity-90 disabled:opacity-40"
+          >
+            {isPending
+              ? "submitting…"
+              : `apply for milestone ${next} — gasless`}
+          </button>
+        </div>
       )}
 
-      {stream.state === "pending_review" && (
+      {view === "pending_review" && (
         <p className="text-[12px] text-[#2b2a5e]/70">
-          Milestone {no} of {total} submitted — awaiting client approval.
+          Milestone {next} submitted — awaiting client approval.
         </p>
       )}
 
-      {stream.state === "dripping" && (
+      {view === "dripping" && (
         <p className="text-[12px] text-[#2b2a5e]/70">
-          Milestone {no} of {total} is dripping live. Raise the next one as soon
-          as it finishes settling.
+          Milestone {next} of {total} is dripping live. It will stop automatically
+          when this milestone&apos;s allocation is fully paid.
         </p>
       )}
 
-      {stream.state === "paused" && (
+      {view === "paused" && (
         <p className="text-[12px] text-[#b4541f]">
           Stream paused — a dispute is in progress.
         </p>
       )}
 
-      {stream.state === "done" && (
+      {view === "done" && (
         <p className="text-[12px] text-[#1d9e75]">
           All {total} milestones complete — stream fully settled.
         </p>
