@@ -23,29 +23,28 @@ const PILLARS = [
 
 export function WhySuiSection() {
   return (
-    <section
-      id="why-sui"
-      data-sl-cursor="on-dark"
-      className="relative w-full bg-[#2b2a5e] px-6 py-24 text-white md:px-8 md:py-32"
-    >
-      <div className="mx-auto max-w-[1440px]">
-        <p className="mb-3 text-[11px] uppercase tracking-[0.24em] text-[#b3aeef]">
-          14 · Why this is Sui-native
+    <section id="why-sui" className="w-full bg-white px-[5%] py-20 md:py-28">
+      <div className="mx-auto max-w-[1200px]">
+        <p className="mb-3 text-sm font-medium tracking-wider text-[#f08030]">
+          Why this is Sui-native
         </p>
-        <h2 className="max-w-3xl text-[clamp(30px,5vw,56px)] font-black leading-[0.95] tracking-[-0.03em]">
+        <h2 className="max-w-3xl text-[clamp(28px,5vw,44px)] font-semibold leading-tight">
           Why does this exist on Sui and not Ethereum or Solana?
         </h2>
 
-        <div className="mt-16 grid gap-px bg-white/15 md:grid-cols-2">
+        <div className="mt-12 grid gap-6 md:grid-cols-2">
           {PILLARS.map((p) => (
-            <div key={p.no} className="bg-[#2b2a5e] p-8 md:p-10">
+            <div
+              key={p.no}
+              className="rounded bg-[#f1f4f5] p-8 shadow-[2px_2px_18px_rgba(0,0,0,0.06)]"
+            >
               <div className="flex items-baseline gap-4">
-                <span className="text-[13px] font-mono text-[#7f77dd]">{p.no}</span>
-                <h3 className="text-[22px] font-bold tracking-[-0.01em]">
-                  {p.title}
-                </h3>
+                <span className="text-sm font-semibold text-[#f08030]">
+                  {p.no}
+                </span>
+                <h3 className="text-xl font-semibold">{p.title}</h3>
               </div>
-              <p className="mt-4 text-[14px] leading-relaxed text-white/70">
+              <p className="mt-4 text-sm leading-relaxed text-[#555]">
                 {p.body}
               </p>
             </div>

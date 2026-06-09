@@ -7,11 +7,11 @@ const STATES = [
 ];
 
 const TONE: Record<string, string> = {
-  ink: "bg-[#2b2a5e] text-white",
+  ink: "bg-[#111] text-white",
   amber: "bg-[#d98a2b] text-white",
   flow: "bg-[#1d9e75] text-white",
   rust: "bg-[#c0533a] text-white",
-  brand: "bg-[#7f77dd] text-white",
+  brand: "bg-[#f08030] text-white",
 };
 
 const FLOW = [
@@ -26,39 +26,35 @@ const FLOW = [
 
 export function HowItWorksSection() {
   return (
-    <section
-      id="how"
-      data-sl-cursor="on-light"
-      className="relative w-full bg-[#f1efe9] px-6 py-24 md:px-8 md:py-32"
-    >
-      <div className="mx-auto max-w-[1440px]">
-        <p className="mb-3 text-[11px] uppercase tracking-[0.24em] text-[#5b54e6]">
-          05 · How it works
+    <section id="how" className="w-full bg-[#f1f4f5] px-[5%] py-20 md:py-28">
+      <div className="mx-auto max-w-[1200px]">
+        <p className="mb-3 text-sm font-medium tracking-wider text-[#f08030]">
+          How it works
         </p>
-        <h2 className="max-w-3xl text-[clamp(30px,5vw,56px)] font-black leading-[0.95] tracking-[-0.03em]">
+        <h2 className="max-w-3xl text-[clamp(28px,5vw,44px)] font-semibold leading-tight">
           A state machine enforced by Move — not a bypassable require().
         </h2>
 
-        <div className="mt-14 flex flex-wrap items-stretch gap-2">
+        <div className="mt-12 flex flex-wrap items-stretch gap-3">
           {STATES.map((s, i) => (
             <div key={s.name} className="flex items-center gap-2">
-              <div className={`flex w-32 flex-col px-4 py-5 ${TONE[s.tone]}`}>
-                <span className="text-[13px] font-black tracking-[0.04em]">
+              <div
+                className={`flex w-32 flex-col rounded px-4 py-5 ${TONE[s.tone]}`}
+              >
+                <span className="text-sm font-semibold tracking-wide">
                   {s.name}
                 </span>
-                <span className="text-[10px] uppercase tracking-[0.18em] opacity-75">
-                  {s.sub}
-                </span>
+                <span className="text-xs opacity-75">{s.sub}</span>
               </div>
               {i < STATES.length - 1 && (
-                <span className="text-[#2b2a5e]/40">→</span>
+                <span className="text-[#555]/40">→</span>
               )}
             </div>
           ))}
         </div>
 
-        <div className="mt-14 border border-[#2b2a5e]/15">
-          <div className="grid grid-cols-12 gap-2 bg-[#2b2a5e] px-5 py-3 text-[10px] uppercase tracking-[0.16em] text-white/80">
+        <div className="mt-12 overflow-hidden rounded bg-white shadow-[2px_2px_18px_rgba(0,0,0,0.08)]">
+          <div className="grid grid-cols-12 gap-2 bg-[#111] px-5 py-3 text-xs font-medium tracking-wide text-white/80">
             <span className="col-span-2">Phase</span>
             <span className="col-span-2">Actor</span>
             <span className="col-span-6">On-chain action</span>
@@ -67,21 +63,23 @@ export function HowItWorksSection() {
           {FLOW.map((row, i) => (
             <div
               key={row[0]}
-              className={`grid grid-cols-12 gap-2 px-5 py-4 text-[12px] ${
-                i % 2 ? "bg-[#2b2a5e]/[0.03]" : ""
+              className={`grid grid-cols-12 gap-2 px-5 py-4 text-sm ${
+                i % 2 ? "bg-[#f1f4f5]/60" : ""
               }`}
             >
-              <span className="col-span-2 font-semibold">{row[0]}</span>
-              <span className="col-span-2 text-[#2b2a5e]/70">{row[1]}</span>
-              <span className="col-span-6 font-mono text-[#2b2a5e]/80">
+              <span className="col-span-2 font-medium">{row[0]}</span>
+              <span className="col-span-2 text-[#555]">{row[1]}</span>
+              <span className="col-span-6 font-mono text-[#555]">
                 {row[2]}
               </span>
-              <span className="col-span-2 font-bold text-[#5b54e6]">{row[3]}</span>
+              <span className="col-span-2 font-semibold text-[#f08030]">
+                {row[3]}
+              </span>
             </div>
           ))}
         </div>
 
-        <p className="mt-8 max-w-2xl text-[14px] leading-relaxed text-[#2b2a5e]/70">
+        <p className="mt-8 max-w-2xl text-sm leading-relaxed text-[#555]">
           The auto-approve timer protects the freelancer: if a client goes silent
           after a milestone is raised, the keeper calls approve_milestone() after
           the deadline (default 48h). Silence equals approval.

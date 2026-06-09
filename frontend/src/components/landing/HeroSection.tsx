@@ -1,45 +1,59 @@
-import { BayerDitherHero } from "@/components/hero/BayerDitherHero";
-
-// Flowing water — the dither resolves it into StreamLine's indigo dot field,
-// and cursor movement sends ripples through it (money "flowing"). A looping
-// ocean clip drives live motion; the still image is the fallback.
-const HERO_VIDEO = "/hero/waves.mp4";
-const HERO_IMAGE =
-  "https://images.unsplash.com/photo-1505144808419-1957a94ca61e?fm=jpg&q=60&w=3000&auto=format&fit=crop";
+import Link from "next/link";
+import { HeroNav } from "./HeroNav";
+import { HeroBackground } from "./HeroBackground";
+import { PhoneMockup } from "./PhoneMockup";
 
 export function HeroSection() {
   return (
     <section
       id="top"
-      data-sl-cursor="on-light"
-      className="relative box-border h-[100dvh] min-h-[100svh] w-full min-w-0 overflow-hidden bg-[#f1efe9]"
+      className="relative flex min-h-[110dvh] w-full flex-col overflow-hidden bg-white"
     >
-      <div
-        data-sl-cursor="on-dark"
-        className="absolute inset-x-0 bottom-0 top-[7dvh] z-0"
-      >
-        <BayerDitherHero
-          videoSrc={HERO_VIDEO}
-          imageSrc={HERO_IMAGE}
-          className="h-full w-full"
-        />
-      </div>
+      <HeroBackground />
+      <HeroNav />
 
-      <div className="pointer-events-none relative z-20 h-full min-h-0 w-full px-4 sm:px-6 lg:px-8">
-        <div className="relative mx-auto h-full max-w-7xl">
-          <p className="sl-hero-tagline absolute bottom-44 left-0 max-w-[min(100%,32rem)] text-[clamp(18px,4.6vw,28px)] font-light leading-snug text-white md:bottom-auto md:left-auto md:right-0 md:top-1/2 md:w-[min(42%,36rem)] md:max-w-none md:-translate-y-1/2 md:text-right">
-            <span className="block">Gasless, milestone-gated payment</span>
-            <span className="block">streams. Money that drips as you work.</span>
+      <div className="relative z-10 mx-auto flex w-full max-w-[1440px] flex-1 flex-col items-center justify-center gap-12 px-[5%] py-10 lg:grid lg:grid-cols-[1fr_auto_1fr] lg:items-center lg:gap-10 lg:py-16">
+        {/* Left column */}
+        <div className="order-2 flex flex-col items-center text-center lg:order-1 lg:items-end lg:text-right">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-[#1a9e8f]">
+            No gas. No claims.
           </p>
-
-          <h1 className="absolute bottom-0 left-0 max-w-[97vw] pb-8 font-black text-white [text-shadow:0_18px_52px_rgba(0,0,0,0.22)] md:pb-14">
-            <div className="tracking-[-0.03em] [font-size:clamp(48px,9vw,150px)] leading-[0.9]">
-              <span className="sl-hero-line block">StreamLine</span>
-              <span className="sl-hero-line sl-hero-line--2 mt-[0.12em] block text-[0.2em] font-black uppercase leading-[1.05] tracking-[0.04em]">
-                Programmable Micropayments on Sui
-              </span>
-            </div>
+          <h1 className="mt-4 max-w-[340px] text-[clamp(1.75rem,3.5vw,2.75rem)] font-bold leading-[1.1] tracking-tight text-[#111] lg:max-w-[360px]">
+            Get paid{" "}
+            <span className="text-[#1a9e8f]">while you work.</span>
           </h1>
+          <p className="mt-4 max-w-[340px] text-[15px] font-medium leading-snug text-[#444] lg:max-w-[360px]">
+            Money hits your wallet every 60 seconds. You don&apos;t click
+            anything. You don&apos;t pay fees. It just lands.
+          </p>
+        </div>
+
+        {/* Center — phone mockup */}
+        <div className="order-1 lg:order-2">
+          <PhoneMockup />
+        </div>
+
+        {/* Right column */}
+        <div className="order-3 flex flex-col items-center text-center lg:items-start lg:text-left">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-[#1a9e8f]">
+            Not ethereum. Not vaporware.
+          </p>
+          <h2 className="mt-4 max-w-[340px] text-[clamp(1.75rem,3.5vw,2.75rem)] font-bold leading-[1.1] tracking-tight text-[#111] lg:max-w-[360px]">
+            The money{" "}
+            <span className="text-[#1a9e8f]">actually arrives.</span>
+          </h2>
+          <p className="mt-4 max-w-[340px] text-[15px] font-medium leading-snug text-[#444] lg:max-w-[360px]">
+            Move enforces the rules on-chain. Client goes silent? Auto-approve
+            fires. Dispute? Stream pauses — funds stay locked.
+          </p>
+          <div className="mt-7 flex flex-wrap items-center justify-center gap-3 lg:justify-start">
+            <Link href="/app" className="sl-glass-btn sl-glass-btn-primary">
+              Launch App →
+            </Link>
+            <Link href="/#how" className="sl-glass-btn">
+              See the flow
+            </Link>
+          </div>
         </div>
       </div>
     </section>

@@ -18,7 +18,7 @@ const ROWS: Row[] = [
 
 function Cell({ on }: { on: boolean }) {
   return (
-    <span className={on ? "font-bold text-[#1d9e75]" : "text-[#2b2a5e]/35"}>
+    <span className={on ? "font-semibold text-[#1d9e75]" : "text-[#555]/40"}>
       {on ? "Yes" : "No"}
     </span>
   );
@@ -26,23 +26,19 @@ function Cell({ on }: { on: boolean }) {
 
 export function ComparisonSection() {
   return (
-    <section
-      id="compare"
-      data-sl-cursor="on-light"
-      className="relative w-full bg-[#f1efe9] px-6 py-24 md:px-8 md:py-32"
-    >
-      <div className="mx-auto max-w-[1440px]">
-        <p className="mb-3 text-[11px] uppercase tracking-[0.24em] text-[#5b54e6]">
-          15 · Competitive landscape
+    <section id="compare" className="w-full bg-[#f1f4f5] px-[5%] py-20 md:py-28">
+      <div className="mx-auto max-w-[1200px]">
+        <p className="mb-3 text-sm font-medium tracking-wider text-[#f08030]">
+          Competitive landscape
         </p>
-        <h2 className="max-w-3xl text-[clamp(30px,5vw,56px)] font-black leading-[0.95] tracking-[-0.03em]">
+        <h2 className="max-w-3xl text-[clamp(28px,5vw,44px)] font-semibold leading-tight">
           The first streaming protocol where the money genuinely arrives.
         </h2>
 
-        <div className="mt-14 overflow-x-auto border border-[#2b2a5e]/15">
-          <table className="w-full min-w-[680px] border-collapse text-left text-[13px]">
+        <div className="mt-12 overflow-x-auto rounded bg-white shadow-[2px_2px_18px_rgba(0,0,0,0.08)]">
+          <table className="w-full min-w-[680px] border-collapse text-left text-sm">
             <thead>
-              <tr className="bg-[#2b2a5e] text-[10px] uppercase tracking-[0.16em] text-white/80">
+              <tr className="bg-[#111] text-xs font-medium tracking-wide text-white/80">
                 <th className="px-5 py-4 font-medium">Protocol</th>
                 <th className="px-5 py-4 font-medium">Chain</th>
                 <th className="px-5 py-4 font-medium">Gasless</th>
@@ -57,31 +53,41 @@ export function ComparisonSection() {
                   key={r.name}
                   className={
                     r.highlight
-                      ? "bg-[#7f77dd]/12 font-semibold"
+                      ? "bg-[#f08030]/10 font-medium"
                       : i % 2
-                        ? "bg-[#2b2a5e]/[0.03]"
+                        ? "bg-[#f1f4f5]/60"
                         : ""
                   }
                 >
                   <td className="px-5 py-4">
                     {r.highlight ? (
-                      <span className="text-[#5b54e6]">{r.name}</span>
+                      <span className="font-semibold text-[#f08030]">
+                        {r.name}
+                      </span>
                     ) : (
                       r.name
                     )}
                   </td>
-                  <td className="px-5 py-4 text-[#2b2a5e]/70">{r.chain}</td>
-                  <td className="px-5 py-4"><Cell on={r.gasless} /></td>
-                  <td className="px-5 py-4"><Cell on={r.milestones} /></td>
-                  <td className="px-5 py-4"><Cell on={r.splits} /></td>
-                  <td className="px-5 py-4"><Cell on={r.collateral} /></td>
+                  <td className="px-5 py-4 text-[#555]">{r.chain}</td>
+                  <td className="px-5 py-4">
+                    <Cell on={r.gasless} />
+                  </td>
+                  <td className="px-5 py-4">
+                    <Cell on={r.milestones} />
+                  </td>
+                  <td className="px-5 py-4">
+                    <Cell on={r.splits} />
+                  </td>
+                  <td className="px-5 py-4">
+                    <Cell on={r.collateral} />
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
 
-        <p className="mt-8 max-w-2xl text-[14px] leading-relaxed text-[#2b2a5e]/70">
+        <p className="mt-8 max-w-2xl text-sm leading-relaxed text-[#555]">
           Every EVM streaming protocol requires recipients to periodically claim
           accumulated balance — a gas-paying action. On StreamLine the money lands
           continuously, with no action required and no fee for either party.

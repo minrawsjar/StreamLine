@@ -1,29 +1,24 @@
 @import "tailwindcss";
 
-/* StreamLine palette — indigo/purple flow on warm paper.
-   Mirrors the Sui Overflow deck (ink #2b2a5e, brand #7f77dd, flow #1d9e75). */
 :root {
-  --sl-ink: #2b2a5e;
-  --sl-ink-800: #34337a;
-  --sl-brand: #7f77dd;
-  --sl-brand-strong: #5b54e6;
-  --sl-flow: #1d9e75;
-  --sl-hero-bg: #34337a;
-  --sl-footer: #1d1c44;
-  --sl-paper: #f1efe9;
+  --sl-accent: #f08030;
+  --sl-accent-hover: #f19654;
+  --sl-ink: #111;
+  --sl-muted: #555;
+  --sl-paper: #f1f4f5;
+  --sl-white: #fff;
 }
 
 @theme inline {
-  --font-sans: var(--font-geist-mono), ui-monospace, "SF Mono", monospace;
-  --color-ink: #2b2a5e;
-  --color-brand: #7f77dd;
-  --color-flow: #1d9e75;
-  --color-paper: #f1efe9;
+  --font-sans: var(--font-poppins), "Poppins", sans-serif;
+  --color-accent: #f08030;
+  --color-accent-hover: #f19654;
+  --color-ink: #111;
+  --color-paper: #f1f4f5;
 }
 
 html {
   scroll-behavior: smooth;
-  cursor: none;
   margin: 0;
   width: 100%;
   overflow-x: hidden;
@@ -36,68 +31,14 @@ body {
   overflow-x: hidden;
   background: var(--sl-paper);
   color: var(--sl-ink);
-  font-family: var(--font-geist-mono), ui-monospace, monospace;
+  font-family: var(--font-poppins), "Poppins", sans-serif;
 }
 
-a,
-button,
-[role="button"],
-input,
-textarea,
-select,
-label[for] {
-  cursor: none;
-}
-
-/* Sharp corners site-wide — matches the SAIL/brutalist aesthetic */
-*,
-*::before,
-*::after {
-  border-radius: 0 !important;
-}
-
-/* Hero entrance — CSS only */
-@keyframes sl-hero-slide {
-  from {
-    opacity: 0;
-    transform: translateY(20px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-@keyframes sl-hero-fade {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
-
-.sl-hero-line {
-  opacity: 0;
-  animation: sl-hero-slide 0.85s ease forwards;
-}
-
-.sl-hero-line--2 {
-  animation-delay: 0.15s;
-}
-
-.sl-hero-tagline {
-  opacity: 0;
-  animation: sl-hero-fade 0.9s ease 1s forwards;
-}
-
-/* Tabular numerals so the live earn counter doesn't jitter as digits tick. */
 .tabular {
   font-variant-numeric: tabular-nums;
   font-feature-settings: "tnum";
 }
 
-/* Marquee for the stablecoin / primitive ticker strip */
 @keyframes sl-marquee {
   0% {
     transform: translateX(0);
@@ -110,4 +51,86 @@ label[for] {
 .sl-marquee {
   animation: sl-marquee 28s linear infinite;
   will-change: transform;
+}
+
+/* Landing button styles */
+.sl-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px 25px;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  letter-spacing: 1px;
+  transition: 0.5s all ease;
+}
+
+.sl-btn-outline {
+  background-color: #fff;
+  color: #111;
+  box-shadow: 2px 2px 18px rgba(0, 0, 0, 0.1);
+}
+
+.sl-btn-outline:hover {
+  background-color: var(--sl-accent);
+  color: #fff;
+}
+
+.sl-btn-primary {
+  background-color: var(--sl-accent);
+  color: #fff;
+  box-shadow: 2px 2px 18px rgba(0, 0, 0, 0.2);
+}
+
+.sl-btn-primary:hover {
+  background-color: var(--sl-accent-hover);
+}
+
+.sl-accent {
+  color: var(--sl-accent);
+}
+
+/* Glassmorphic pill buttons — nav & hero CTAs */
+.sl-glass-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 22px;
+  border-radius: 9999px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  transition: all 0.3s ease;
+  background: rgba(255, 255, 255, 0.42);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid rgba(255, 255, 255, 0.65);
+  box-shadow:
+    0 4px 24px rgba(0, 0, 0, 0.06),
+    inset 0 1px 0 rgba(255, 255, 255, 0.8);
+  color: #111;
+}
+
+.sl-glass-btn:hover {
+  background: rgba(255, 255, 255, 0.62);
+  border-color: rgba(26, 158, 143, 0.35);
+  color: #0d6e63;
+}
+
+.sl-glass-btn-primary {
+  background: rgba(26, 158, 143, 0.72);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  box-shadow:
+    0 8px 28px rgba(26, 158, 143, 0.28),
+    inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  color: #fff;
+}
+
+.sl-glass-btn-primary:hover {
+  background: rgba(13, 110, 99, 0.82);
+  border-color: rgba(255, 255, 255, 0.4);
+  color: #fff;
 }

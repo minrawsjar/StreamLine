@@ -1,5 +1,4 @@
 import {
-  Navbar,
   HeroSection,
   StatsStrip,
   HowItWorksSection,
@@ -11,7 +10,6 @@ import {
 export default function Home() {
   return (
     <main className="relative w-full">
-      <Navbar />
       <HeroSection />
       <StatsStrip />
       <HowItWorksSection />

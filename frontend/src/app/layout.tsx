@@ -1,12 +1,12 @@
 import type { Metadata } from "next";
-import { Geist_Mono } from "next/font/google";
+import { Poppins } from "next/font/google";
 import "./globals.css";
 import { SuiProviders } from "@/components/providers/SuiProviders";
-import { CustomCursor } from "@/components/landing/CustomCursor";
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
+const poppins = Poppins({
+  variable: "--font-poppins",
   subsets: ["latin"],
+  weight: ["100", "200", "300", "400", "500", "600", "700", "800", "900"],
 });
 
 export const metadata: Metadata = {
@@ -30,12 +30,9 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className={geistMono.variable}>
+    <html lang="en" className={poppins.variable}>
       <body>
-        <SuiProviders>
-          <CustomCursor />
-          {children}
-        </SuiProviders>
+        <SuiProviders>{children}</SuiProviders>
       </body>
     </html>
   );
