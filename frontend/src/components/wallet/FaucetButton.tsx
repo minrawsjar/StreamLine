@@ -1,35 +1,30 @@
 "use client";
 
 import { useState } from "react";
-import {
-  useCurrentAccount,
-  useSignAndExecuteTransaction,
-  useSuiClientContext,
-} from "@mysten/dapp-kit";
+import { useCurrentAccount, useSuiClientContext } from "@mysten/dapp-kit";
 
 import { TEST_USDC } from "@/lib/networks";
 import { buildMintTestUsdc } from "@/lib/streamline-tx";
 import { toBaseUnits } from "@/lib/stream-math";
+import { useGaslessExecute } from "@/lib/use-gasless";
 
 /** Mints test USDC to the connected wallet. Testnet only. */
 export function FaucetButton({ amount = 1000 }: { amount?: number }) {
   const account = useCurrentAccount();
   const { network } = useSuiClientContext();
-  const { mutate: signAndExecute, isPending } = useSignAndExecuteTransaction();
+  const { execute, isPending } = useGaslessExecute();
   const [done, setDone] = useState(false);
 
   if (!account || network !== "testnet") return null;
 
   const onMint = () => {
     setDone(false);
-    signAndExecute(
-      {
-        transaction: buildMintTestUsdc({
-          packageId: TEST_USDC.packageId,
-          treasuryId: TEST_USDC.treasuryId,
-          amountBase: toBaseUnits(amount),
-        }),
-      },
+    execute(
+      buildMintTestUsdc({
+        packageId: TEST_USDC.packageId,
+        treasuryId: TEST_USDC.treasuryId,
+        amountBase: toBaseUnits(amount),
+      }),
       {
         onSuccess: () => {
           setDone(true);

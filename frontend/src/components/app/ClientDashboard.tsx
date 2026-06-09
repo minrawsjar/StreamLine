@@ -1,19 +1,27 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import {
-  useCurrentAccount,
-  useSignAndExecuteTransaction,
-  useSuiClientQuery,
-} from "@mysten/dapp-kit";
+import { useCurrentAccount, useSuiClientQuery } from "@mysten/dapp-kit";
 
 import { useNetworkVariable } from "@/lib/networks";
+import { useGaslessExecute } from "@/lib/use-gasless";
 import { useStreams, useLiveUpdates, type StreamRecord } from "@/lib/indexer";
 import {
   buildApproveMilestone,
   buildRaiseDispute,
 } from "@/lib/streamline-tx";
 import { USDC_BASE } from "@/lib/stream-math";
+import {
+  BarChart,
+  Card,
+  DashboardHeader,
+  DonutProgress,
+  EmptyPanel,
+  StatCard,
+  StateBadge,
+  short,
+  type BarDatum,
+} from "./dashboard-ui";
 
 /** Map of stream id → owned StreamCap object id, so the client can approve. */
 function useStreamCaps(packageId: string) {
@@ -42,11 +50,13 @@ function useStreamCaps(packageId: string) {
   }, [data]);
 }
 
+const usd = (base: number) => (base / USDC_BASE).toFixed(2);
+
 export function ClientDashboard() {
   const account = useCurrentAccount();
   const packageId = useNetworkVariable("packageId");
   const usdcType = useNetworkVariable("usdcType");
-  const { mutate: signAndExecute, isPending } = useSignAndExecuteTransaction();
+  const { execute, isPending } = useGaslessExecute();
   const { data: streams, isLoading, refetch } = useStreams({
     sender: account?.address,
   });
@@ -55,10 +65,28 @@ export function ClientDashboard() {
 
   useLiveUpdates(() => refetch());
 
-  if (isLoading) return <Panel>Loading your streams…</Panel>;
-  const list = streams ?? [];
-  if (list.length === 0)
-    return <Panel>No streams created yet. Head to “Create stream” to lock your first.</Panel>;
+  const list = useMemo(() => streams ?? [], [streams]);
+
+  const totals = useMemo(() => {
+    const locked = list.reduce((a, s) => a + s.total, 0);
+    const streamed = list.reduce((a, s) => a + (s.total - s.remaining), 0);
+    const dripping = list.filter((s) => s.state === "dripping").length;
+    const review = list.filter((s) => s.state === "pending_review").length;
+    return { locked, streamed, dripping, review };
+  }, [list]);
+
+  const bars: BarDatum[] = useMemo(
+    () =>
+      list.slice(0, 8).map((s) => ({
+        label: short(s.id).slice(0, 4),
+        value: s.total - s.remaining,
+        active: s.state === "dripping" || s.state === "pending_review",
+      })),
+    [list]
+  );
+
+  const progress =
+    totals.locked > 0 ? (totals.streamed / totals.locked) * 100 : 0;
 
   const approve = (s: StreamRecord) => {
     const capId = caps.get(s.id);
@@ -67,106 +95,166 @@ export function ClientDashboard() {
       return;
     }
     setBusy(s.id);
-    signAndExecute(
-      {
-        transaction: buildApproveMilestone({
-          packageId,
-          usdcType,
-          streamId: s.id,
-          capId,
-        }),
-      },
+    execute(
+      buildApproveMilestone({ packageId, usdcType, streamId: s.id, capId }),
       { onSettled: () => setBusy(null), onSuccess: () => refetch() }
     );
   };
 
   const dispute = (s: StreamRecord) => {
     setBusy(s.id);
-    signAndExecute(
-      { transaction: buildRaiseDispute({ packageId, usdcType, streamId: s.id }) },
-      { onSettled: () => setBusy(null), onSuccess: () => refetch() }
-    );
+    execute(buildRaiseDispute({ packageId, usdcType, streamId: s.id }), {
+      onSettled: () => setBusy(null),
+      onSuccess: () => refetch(),
+    });
   };
 
+  if (isLoading) return <EmptyPanel>Loading your streams…</EmptyPanel>;
+
   return (
-    <div className="flex flex-col gap-4">
-      {list.map((s) => (
-        <div
-          key={s.id}
-          className="grid grid-cols-1 gap-4 border border-[#2b2a5e]/15 bg-white p-5 md:grid-cols-[1fr_auto] md:items-center"
-        >
-          <div className="flex flex-col gap-2">
-            <div className="flex items-center gap-3">
-              <span className="font-mono text-[13px]">{short(s.id)}</span>
-              <Badge state={s.state} />
-              <span className="text-[11px] text-[#2b2a5e]/50">
-                milestone {s.current_milestone + 1}/{s.n_milestones}
-              </span>
-            </div>
-            <div className="flex gap-6 text-[12px] text-[#2b2a5e]/70">
-              <span>Locked ${(s.total / USDC_BASE).toFixed(2)}</span>
-              <span>Streamed ${((s.total - s.remaining) / USDC_BASE).toFixed(2)}</span>
-              <span className="font-mono">→ {short(s.freelancer)}</span>
-            </div>
-            {busy === `${s.id}:no-cap` && (
-              <span className="text-[11px] text-[#c0533a]">
-                StreamCap not found in this wallet.
-              </span>
-            )}
+    <div>
+      <DashboardHeader
+        eyebrow="Payer console"
+        title="Client dashboard"
+        subtitle="Lock funds, watch them stream, approve milestones as work lands."
+      />
+
+      {list.length === 0 ? (
+        <EmptyPanel>
+          No streams created yet. Head to “Create stream” to lock your first.
+        </EmptyPanel>
+      ) : (
+        <div className="flex flex-col gap-6">
+          {/* Stat row */}
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <StatCard
+              tone="flow"
+              label="Locked total"
+              value={`$${usd(totals.locked)}`}
+              sub="across all streams"
+            />
+            <StatCard
+              label="Streamed out"
+              value={`$${usd(totals.streamed)}`}
+              sub="paid as work happened"
+            />
+            <StatCard
+              label="Active streams"
+              value={String(totals.dripping)}
+              sub="currently dripping"
+            />
+            <StatCard
+              label="Awaiting review"
+              value={String(totals.review)}
+              sub="need your approval"
+            />
           </div>
 
-          <div className="flex gap-2">
-            {s.state === "pending_review" && (
-              <button
-                onClick={() => approve(s)}
-                disabled={isPending}
-                className="bg-[#1d9e75] px-4 py-2 text-[11px] uppercase tracking-[0.1em] text-white hover:opacity-90 disabled:opacity-40"
-              >
-                {busy === s.id ? "…" : "approve"}
-              </button>
-            )}
-            {(s.state === "pending_review" || s.state === "dripping") && (
-              <button
-                onClick={() => dispute(s)}
-                disabled={isPending}
-                className="border border-[#c0533a] px-4 py-2 text-[11px] uppercase tracking-[0.1em] text-[#c0533a] hover:bg-[#c0533a]/[0.06] disabled:opacity-40"
-              >
-                dispute
-              </button>
-            )}
+          {/* Analytics + reminders */}
+          <div className="grid gap-6 lg:grid-cols-[1fr_360px]">
+            <Card title="Stream analytics">
+              <p className="-mt-2 mb-5 text-[11px] text-[#2b2a5e]/45">
+                Streamed-out per stream (live + pending highlighted)
+              </p>
+              {bars.length > 0 ? (
+                <BarChart data={bars} />
+              ) : (
+                <p className="py-10 text-center text-[12px] text-[#2b2a5e]/45">
+                  No outflow yet.
+                </p>
+              )}
+            </Card>
+
+            <Card title="Overall progress">
+              <DonutProgress percent={progress} caption="funds streamed" />
+              <div className="mt-2 grid grid-cols-2 gap-3 text-center">
+                <div className="border border-[#2b2a5e]/10 py-3">
+                  <p className="text-[10px] uppercase tracking-[0.12em] text-[#2b2a5e]/45">
+                    Streamed
+                  </p>
+                  <p className="mt-1 text-[14px] font-bold tabular">
+                    ${usd(totals.streamed)}
+                  </p>
+                </div>
+                <div className="border border-[#2b2a5e]/10 py-3">
+                  <p className="text-[10px] uppercase tracking-[0.12em] text-[#2b2a5e]/45">
+                    Remaining
+                  </p>
+                  <p className="mt-1 text-[14px] font-bold tabular">
+                    ${usd(totals.locked - totals.streamed)}
+                  </p>
+                </div>
+              </div>
+            </Card>
           </div>
+
+          {/* Stream table */}
+          <Card title="Your streams" padded={false}>
+            <div className="flex flex-col">
+              {list.map((s) => {
+                const pct =
+                  s.total > 0 ? ((s.total - s.remaining) / s.total) * 100 : 0;
+                return (
+                  <div
+                    key={s.id}
+                    className="grid grid-cols-1 gap-4 border-t border-[#2b2a5e]/10 p-5 md:grid-cols-[1fr_auto] md:items-center"
+                  >
+                    <div className="flex flex-col gap-2">
+                      <div className="flex flex-wrap items-center gap-3">
+                        <span className="font-mono text-[13px]">{short(s.id)}</span>
+                        <StateBadge state={s.state} />
+                        <span className="text-[11px] text-[#2b2a5e]/50">
+                          milestone {s.current_milestone + 1}/{s.n_milestones}
+                        </span>
+                        <span className="font-mono text-[11px] text-[#2b2a5e]/50">
+                          → {short(s.freelancer)}
+                        </span>
+                      </div>
+                      <div className="flex max-w-md items-center gap-3">
+                        <div className="h-1.5 flex-1 bg-[#2b2a5e]/10">
+                          <div
+                            className="h-full bg-[#1d9e75]"
+                            style={{ width: `${pct}%` }}
+                          />
+                        </div>
+                        <span className="tabular text-[11px] text-[#2b2a5e]/60">
+                          ${usd(s.total - s.remaining)} / ${usd(s.total)}
+                        </span>
+                      </div>
+                      {busy === `${s.id}:no-cap` && (
+                        <span className="text-[11px] text-[#c0533a]">
+                          StreamCap not found in this wallet.
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="flex gap-2">
+                      {s.state === "pending_review" && (
+                        <button
+                          onClick={() => approve(s)}
+                          disabled={isPending}
+                          className="bg-[#1d9e75] px-4 py-2 text-[11px] uppercase tracking-[0.1em] text-white hover:opacity-90 disabled:opacity-40"
+                        >
+                          {busy === s.id ? "…" : "approve"}
+                        </button>
+                      )}
+                      {(s.state === "pending_review" || s.state === "dripping") && (
+                        <button
+                          onClick={() => dispute(s)}
+                          disabled={isPending}
+                          className="border border-[#c0533a] px-4 py-2 text-[11px] uppercase tracking-[0.1em] text-[#c0533a] hover:bg-[#c0533a]/[0.06] disabled:opacity-40"
+                        >
+                          dispute
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </Card>
         </div>
-      ))}
+      )}
     </div>
   );
-}
-
-function Badge({ state }: { state: string }) {
-  const tone =
-    state === "dripping"
-      ? "bg-[#1d9e75] text-white"
-      : state === "pending_review"
-        ? "bg-[#d98a2b] text-white"
-        : state === "paused"
-          ? "bg-[#c0533a] text-white"
-          : state === "done"
-            ? "bg-[#7f77dd] text-white"
-            : "bg-[#2b2a5e] text-white";
-  return (
-    <span className={`px-2 py-0.5 text-[10px] uppercase tracking-[0.14em] ${tone}`}>
-      {state.replace("_", " ")}
-    </span>
-  );
-}
-
-function Panel({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="border border-dashed border-[#2b2a5e]/25 px-8 py-16 text-center text-[13px] text-[#2b2a5e]/60">
-      {children}
-    </div>
-  );
-}
-
-function short(a: string) {
-  return `${a.slice(0, 6)}…${a.slice(-4)}`;
 }

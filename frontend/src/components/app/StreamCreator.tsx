@@ -1,12 +1,10 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import {
-  useCurrentAccount,
-  useSignAndExecuteTransaction,
-} from "@mysten/dapp-kit";
+import { useCurrentAccount } from "@mysten/dapp-kit";
 
 import { useNetworkVariable } from "@/lib/networks";
+import { useGaslessExecute } from "@/lib/use-gasless";
 import {
   durationToMs,
   dripIntervalMs,
@@ -29,7 +27,7 @@ export function StreamCreator() {
   const account = useCurrentAccount();
   const packageId = useNetworkVariable("packageId");
   const usdcType = useNetworkVariable("usdcType");
-  const { mutate: signAndExecute, isPending } = useSignAndExecuteTransaction();
+  const { execute, isPending } = useGaslessExecute();
 
   const [freelancer, setFreelancer] = useState("");
   const [amount, setAmount] = useState(800);
@@ -88,13 +86,11 @@ export function StreamCreator() {
       durationMs,
     });
     setStatus("Awaiting wallet signature…");
-    signAndExecute(
-      { transaction: tx },
-      {
-        onSuccess: (r) => setStatus(`Stream created — locked ${formatUsd(amount)}. Digest ${r.digest}`),
-        onError: (e) => setStatus(e.message),
-      }
-    );
+    execute(tx, {
+      onSuccess: (r) =>
+        setStatus(`Stream created — locked ${formatUsd(amount)}. Digest ${r.digest}`),
+      onError: (e) => setStatus(e.message),
+    });
   };
 
   return (

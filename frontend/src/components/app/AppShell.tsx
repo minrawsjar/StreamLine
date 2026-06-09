@@ -7,17 +7,17 @@ import { useCurrentAccount, useSuiClientContext } from "@mysten/dapp-kit";
 import { WalletButton } from "@/components/wallet/WalletButton";
 import { FaucetButton } from "@/components/wallet/FaucetButton";
 import { StreamCreator } from "./StreamCreator";
-import { LiveEarnings } from "./LiveEarnings";
+import { FreelancerDashboard } from "./FreelancerDashboard";
 import { ClientDashboard } from "./ClientDashboard";
 import { RoleSelect, type Role } from "./RoleSelect";
 
 const PAYER_TABS = [
+  { id: "dashboard", label: "Dashboard" },
   { id: "create", label: "Create stream" },
-  { id: "dashboard", label: "Client dashboard" },
 ] as const;
 
 const RECEIVER_TABS = [
-  { id: "earn", label: "Live earnings" },
+  { id: "earn", label: "Dashboard" },
   { id: "collateral", label: "Collateral" },
 ] as const;
 
@@ -33,7 +33,7 @@ export function AppShell() {
 
   const selectRole = (r: Role) => {
     setRole(r);
-    setTab(r === "payer" ? "create" : "earn");
+    setTab(r === "payer" ? "dashboard" : "earn");
   };
 
   const tabs = role === "payer" ? PAYER_TABS : RECEIVER_TABS;
@@ -90,7 +90,7 @@ export function AppShell() {
 
           {tab === "create" && <StreamCreator />}
           {tab === "dashboard" && <ClientDashboard />}
-          {tab === "earn" && <LiveEarnings />}
+          {tab === "earn" && <FreelancerDashboard />}
           {tab === "collateral" && <ComingSoon title="Collateral panel" />}
         </div>
       )}
