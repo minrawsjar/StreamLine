@@ -27,7 +27,13 @@ impl Config {
             ),
             package_id: env_or("STREAMLINE_PACKAGE_ID", "0x0"),
             module: env_or("STREAMLINE_MODULE", "stream"),
-            port: env_or("INDEXER_PORT", "8080").parse().unwrap_or(8080),
+            // Railway (and most PaaS) inject $PORT; fall back to INDEXER_PORT
+            // for local runs, then a sane default.
+            port: std::env::var("PORT")
+                .or_else(|_| std::env::var("INDEXER_PORT"))
+                .ok()
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(8080),
             poll_interval_ms: env_or("POLL_INTERVAL_MS", "2000")
                 .parse()
                 .unwrap_or(2000),
