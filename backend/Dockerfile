@@ -31,7 +31,7 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates curl \
     && curl -fsSL -o /tmp/sui.tgz \
        "https://github.com/MystenLabs/sui/releases/download/${SUI_VERSION}/sui-${SUI_VERSION}-ubuntu-x86_64.tgz" \
-    && tar -xzf /tmp/sui.tgz -C /usr/local/bin sui \
+    && tar -xzf /tmp/sui.tgz -C /usr/local/bin ./sui \
     && rm /tmp/sui.tgz \
     && chmod +x /usr/local/bin/sui \
     && sui --version \
