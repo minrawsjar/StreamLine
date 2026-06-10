@@ -97,12 +97,13 @@ The Rust indexer only ever stores/serves `blobId`s — it never sees plaintext.
 Add deps: `@mysten/seal`, `@mysten/walrus` (confirm latest versions against
 `@mysten/sui@1.36`).
 
-1. **lib/seal.ts** — construct a `SealClient`:
+1. **lib/seal.ts** — construct a `SealClient` against **mainnet** key servers
+   (Seal is live on Sui mainnet, same network as StreamLine's gasless transfers):
    ```ts
    import { SealClient, getAllowlistedKeyServers } from "@mysten/seal";
    const client = new SealClient({
      suiClient,
-     serverConfigs: getAllowlistedKeyServers("testnet").map((id) => ({ objectId: id, weight: 1 })),
+     serverConfigs: getAllowlistedKeyServers("mainnet").map((id) => ({ objectId: id, weight: 1 })),
      verifyKeyServers: false,
    });
    ```
@@ -131,10 +132,12 @@ Add deps: `@mysten/seal`, `@mysten/walrus` (confirm latest versions against
    const ciphertext = await walrusGet(blobId);
    const plaintext = await client.decrypt({ data: ciphertext, sessionKey, txBytes });
    ```
-4. **Walrus helpers** — simplest path is the testnet publisher/aggregator HTTP:
-   - `PUT https://publisher.walrus-testnet.walrus.space/v1/blobs` → returns blobId
-   - `GET https://aggregator.walrus-testnet.walrus.space/v1/blobs/<blobId>`
-   Swap to `@mysten/walrus` SDK later for browser-native upload.
+4. **Walrus helpers** — simplest path is the **mainnet** publisher/aggregator HTTP
+   (Walrus is the production data layer paired with Seal):
+   - `PUT https://publisher.walrus.space/v1/blobs` → returns blobId
+   - `GET https://aggregator.walrus.space/v1/blobs/<blobId>`
+   Confirm current endpoint hostnames against Walrus docs; swap to the
+   `@mysten/walrus` SDK later for browser-native upload (needs WAL for storage).
 
 ## Backend (Rust indexer)
 
@@ -153,7 +156,7 @@ read — decide during implementation.
 ## Open questions to resolve before coding
 
 - Seal `id` strategy: random nonce (recommended) vs. post-creation attach.
-- Key-server threshold (1-of-n for demo; 2-of-3 for resilience).
+- Key-server threshold: use **2-of-3** on mainnet for resilience (not 1-of-1).
 - Walrus: HTTP publisher (fast) vs. SDK (browser-native, needs WAL/funding).
 - Keep a public milestone label for UX, or encrypt everything?
 - Confirm `@mysten/seal` / `@mysten/walrus` versions compatible with `@mysten/sui@1.36`.
