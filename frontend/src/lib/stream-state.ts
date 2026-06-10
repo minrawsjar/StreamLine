@@ -45,3 +45,13 @@ export function nextMilestoneNo(s: StreamRecord): number {
   }
   return s.current_milestone + 1;
 }
+
+/** Client must approve before dripping resumes. */
+export function isAwaitingClientApproval(s: StreamRecord): boolean {
+  return s.state === "pending_review";
+}
+
+/** Freelancer must call raise_completion before the client sees anything. */
+export function isAwaitingFreelancerRaise(s: StreamRecord): boolean {
+  return effectiveState(s) === "locked";
+}

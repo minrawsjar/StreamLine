@@ -164,15 +164,18 @@ pub async fn set_stream_state(
     id: &str,
     state: &str,
     current_milestone: i64,
+    review_deadline_ms: Option<i64>,
 ) -> Result<()> {
     sqlx::query(
         r#"UPDATE streams
-           SET state = $2, current_milestone = $3, updated_at = now()
+           SET state = $2, current_milestone = $3,
+               review_deadline_ms = $4, updated_at = now()
            WHERE id = $1"#,
     )
     .bind(id)
     .bind(state)
     .bind(current_milestone)
+    .bind(review_deadline_ms)
     .execute(pool)
     .await?;
     Ok(())

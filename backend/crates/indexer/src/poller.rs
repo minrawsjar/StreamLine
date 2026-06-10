@@ -212,8 +212,21 @@ async fn sync_stream_state(
     let fields = &obj["data"]["content"]["fields"];
     let code = u64_field(fields, "state");
     let milestone = u64_field(fields, "current_milestone") as i64;
+    let deadline = u64_field(fields, "review_deadline_ms") as i64;
     let label = state_label(code);
-    db::set_stream_state(&state.pool, stream_id, label, milestone).await?;
+    let review_deadline_ms = if label == "pending_review" && deadline > 0 {
+        Some(deadline)
+    } else {
+        None
+    };
+    db::set_stream_state(
+        &state.pool,
+        stream_id,
+        label,
+        milestone,
+        review_deadline_ms,
+    )
+    .await?;
     state.publish(LiveUpdate::State {
         stream_id: stream_id.into(),
         state: label.into(),

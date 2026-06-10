@@ -7,6 +7,11 @@ import { useNetworkVariable } from "@/lib/networks";
 import { useGaslessExecute } from "@/lib/use-gasless";
 import { useStreams, useLiveUpdates, type StreamRecord } from "@/lib/indexer";
 import {
+  isAwaitingClientApproval,
+  isAwaitingFreelancerRaise,
+  nextMilestoneNo,
+} from "@/lib/stream-state";
+import {
   buildApproveMilestone,
   buildRaiseDispute,
 } from "@/lib/streamline-tx";
@@ -71,8 +76,9 @@ export function ClientDashboard() {
     const locked = list.reduce((a, s) => a + s.total, 0);
     const streamed = list.reduce((a, s) => a + (s.total - s.remaining), 0);
     const dripping = list.filter((s) => s.state === "dripping").length;
-    const review = list.filter((s) => s.state === "pending_review").length;
-    return { locked, streamed, dripping, review };
+    const review = list.filter((s) => isAwaitingClientApproval(s)).length;
+    const waiting = list.filter((s) => isAwaitingFreelancerRaise(s)).length;
+    return { locked, streamed, dripping, review, waiting };
   }, [list]);
 
   const bars: BarDatum[] = useMemo(
@@ -80,7 +86,10 @@ export function ClientDashboard() {
       list.slice(0, 8).map((s) => ({
         label: short(s.id).slice(0, 4),
         value: s.total - s.remaining,
-        active: s.state === "dripping" || s.state === "pending_review",
+        active:
+          s.state === "dripping" ||
+          isAwaitingClientApproval(s) ||
+          isAwaitingFreelancerRaise(s),
       })),
     [list]
   );
@@ -146,7 +155,11 @@ export function ClientDashboard() {
             <StatCard
               label="Awaiting review"
               value={String(totals.review)}
-              sub="need your approval"
+              sub={
+                totals.waiting > 0
+                  ? `${totals.waiting} waiting on freelancer`
+                  : "need your approval"
+              }
             />
           </div>
 
@@ -202,9 +215,15 @@ export function ClientDashboard() {
                     <div className="flex flex-col gap-2">
                       <div className="flex flex-wrap items-center gap-3">
                         <span className="font-mono text-[13px]">{short(s.id)}</span>
-                        <StateBadge state={s.state} />
+                        <StateBadge
+                          state={
+                            isAwaitingClientApproval(s)
+                              ? "pending_review"
+                              : s.state
+                          }
+                        />
                         <span className="text-[11px] text-[#2b2a5e]/50">
-                          milestone {s.current_milestone + 1}/{s.n_milestones}
+                          milestone {nextMilestoneNo(s)}/{s.n_milestones}
                         </span>
                         <span className="font-mono text-[11px] text-[#2b2a5e]/50">
                           → {short(s.freelancer)}
@@ -226,10 +245,18 @@ export function ClientDashboard() {
                           StreamCap not found in this wallet.
                         </span>
                       )}
+                      {isAwaitingFreelancerRaise(s) && (
+                        <span className="text-[11px] text-[#2b2a5e]/55">
+                          Freelancer hasn&apos;t submitted milestone{" "}
+                          {nextMilestoneNo(s)} for review yet — nothing to
+                          approve until they click &quot;apply&quot; on their
+                          dashboard.
+                        </span>
+                      )}
                     </div>
 
                     <div className="flex gap-2">
-                      {s.state === "pending_review" && (
+                      {isAwaitingClientApproval(s) && (
                         <button
                           onClick={() => approve(s)}
                           disabled={isPending}
@@ -238,7 +265,7 @@ export function ClientDashboard() {
                           {busy === s.id ? "…" : "approve"}
                         </button>
                       )}
-                      {(s.state === "pending_review" || s.state === "dripping") && (
+                      {(isAwaitingClientApproval(s) || s.state === "dripping") && (
                         <button
                           onClick={() => dispute(s)}
                           disabled={isPending}
