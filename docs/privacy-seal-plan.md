@@ -97,13 +97,15 @@ The Rust indexer only ever stores/serves `blobId`s — it never sees plaintext.
 Add deps: `@mysten/seal`, `@mysten/walrus` (confirm latest versions against
 `@mysten/sui@1.36`).
 
-1. **lib/seal.ts** — construct a `SealClient` against **mainnet** key servers
-   (Seal is live on Sui mainnet, same network as StreamLine's gasless transfers):
+1. **lib/seal.ts** — construct a `SealClient`, **network-driven** off the same env
+   as `networks.ts` so dev (testnet) and prod (mainnet) share one codebase. Seal
+   is live on both testnet and mainnet:
    ```ts
    import { SealClient, getAllowlistedKeyServers } from "@mysten/seal";
+   const NET = process.env.NEXT_PUBLIC_DEFAULT_NETWORK ?? "testnet";
    const client = new SealClient({
      suiClient,
-     serverConfigs: getAllowlistedKeyServers("mainnet").map((id) => ({ objectId: id, weight: 1 })),
+     serverConfigs: getAllowlistedKeyServers(NET).map((id) => ({ objectId: id, weight: 1 })),
      verifyKeyServers: false,
    });
    ```
@@ -132,12 +134,15 @@ Add deps: `@mysten/seal`, `@mysten/walrus` (confirm latest versions against
    const ciphertext = await walrusGet(blobId);
    const plaintext = await client.decrypt({ data: ciphertext, sessionKey, txBytes });
    ```
-4. **Walrus helpers** — simplest path is the **mainnet** publisher/aggregator HTTP
-   (Walrus is the production data layer paired with Seal):
-   - `PUT https://publisher.walrus.space/v1/blobs` → returns blobId
-   - `GET https://aggregator.walrus.space/v1/blobs/<blobId>`
-   Confirm current endpoint hostnames against Walrus docs; swap to the
-   `@mysten/walrus` SDK later for browser-native upload (needs WAL for storage).
+4. **Walrus helpers** — HTTP publisher/aggregator, network-driven via env
+   (`NEXT_PUBLIC_WALRUS_PUBLISHER` / `_AGGREGATOR`):
+   - **testnet** (dev): `https://publisher.walrus-testnet.walrus.space`,
+     `https://aggregator.walrus-testnet.walrus.space`
+   - **mainnet** (prod): `https://publisher.walrus.space`,
+     `https://aggregator.walrus.space` (confirm current hostnames vs. Walrus docs)
+   - `PUT <publisher>/v1/blobs` → returns blobId; `GET <aggregator>/v1/blobs/<id>`
+   Public endpoints are free but rate-limited; swap to the `@mysten/walrus` SDK
+   later for browser-native upload (needs WAL for storage).
 
 ## Backend (Rust indexer)
 
@@ -156,7 +161,8 @@ read — decide during implementation.
 ## Open questions to resolve before coding
 
 - Seal `id` strategy: random nonce (recommended) vs. post-creation attach.
-- Key-server threshold: use **2-of-3** on mainnet for resilience (not 1-of-1).
+- Key-server threshold: **1-of-2** on testnet for dev; **2-of-3** on mainnet for
+  resilience. Driven by the same network env, no code change between them.
 - Walrus: HTTP publisher (fast) vs. SDK (browser-native, needs WAL/funding).
 - Keep a public milestone label for UX, or encrypt everything?
 - Confirm `@mysten/seal` / `@mysten/walrus` versions compatible with `@mysten/sui@1.36`.
