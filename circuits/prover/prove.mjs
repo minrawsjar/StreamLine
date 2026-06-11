@@ -10,12 +10,12 @@
 // fastcrypto). Server-side (keeper / Next.js route) for now; a browser-native JS
 // serializer can replace the converter shell-out later.
 
-import { execFileSync } from "node:child_process";
-import { mkdtempSync, writeFileSync, copyFileSync, readFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import * as snarkjs from "snarkjs";
+
+import { vkToBytes, proofToBytes, publicToBytes, hex } from "./serialize.mjs";
 
 const ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
 
@@ -24,35 +24,19 @@ export async function prove(circuit, input) {
   const build = join(ROOT, "build", circuit);
   const wasm = join(build, `${circuit}_js`, `${circuit}.wasm`);
   const zkey = join(build, `${circuit}.zkey`);
-
-  const { proof, publicSignals } = await snarkjs.groth16.fullProve(
-    input,
-    wasm,
-    zkey
-  );
-
-  // Self-check before we bother converting.
   const vkey = JSON.parse(readFileSync(join(build, `${circuit}.vkey.json`)));
+
+  const { proof, publicSignals } = await snarkjs.groth16.fullProve(input, wasm, zkey);
+
   const ok = await snarkjs.groth16.verify(vkey, publicSignals, proof);
   if (!ok) throw new Error(`${circuit}: snarkjs verification failed`);
 
-  // Hand proof + vkey to the arkworks converter for Sui bytes.
-  const dir = mkdtempSync(join(tmpdir(), "sl-prove-"));
-  writeFileSync(join(dir, "proof.json"), JSON.stringify(proof));
-  writeFileSync(join(dir, "public.json"), JSON.stringify(publicSignals));
-  copyFileSync(join(build, `${circuit}.vkey.json`), join(dir, "verification_key.json"));
-
-  const out = execFileSync(
-    "cargo",
-    ["run", "--quiet", "--release", dir],
-    { cwd: join(ROOT, "converter"), encoding: "utf8" }
-  );
-  const grab = (k) => out.match(new RegExp(`${k}=([0-9a-f]+)`))[1];
+  // Pure-JS serialization to Sui bytes (no Rust) — same path the browser uses.
   return {
     publicSignals,
-    vk: grab("VK_BYTES"),
-    proof: grab("PROOF_BYTES"),
-    inputs: grab("INPUTS_BYTES"),
+    vk: hex(vkToBytes(vkey)),
+    proof: hex(proofToBytes(proof)),
+    inputs: hex(publicToBytes(publicSignals)),
   };
 }
 
