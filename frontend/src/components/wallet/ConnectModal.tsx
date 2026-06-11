@@ -49,7 +49,7 @@ export function ConnectModal({ open, onClose }: Props) {
           const message = e.message ?? "Failed to connect";
           setError(
             /phantom/i.test(wallet.name)
-              ? "Phantom is not a Sui wallet. Install Slush or another Sui wallet extension."
+              ? "Couldn't connect Phantom. Enable Sui in Phantom and set the network to Testnet."
               : message
           );
         },
@@ -129,8 +129,8 @@ export function ConnectModal({ open, onClose }: Props) {
           )}
 
           <p className="text-[11px] leading-relaxed text-[#2b2a5e]/50">
-            Use a Sui-native wallet such as <strong>Slush</strong> — Solana
-            wallets like Phantom are not supported. Set your wallet to{" "}
+            Use a Sui wallet such as <strong>Slush</strong> or{" "}
+            <strong>Phantom</strong> (with Sui enabled). Set your wallet to{" "}
             <strong>Testnet</strong>.
           </p>
         </div>
