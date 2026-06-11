@@ -22,7 +22,7 @@ import type { NetworkName } from "@/lib/networks";
  * explorer, account switching, and disconnect. Replaces the connect button
  * once a wallet/zkLogin session is active.
  */
-export function AccountMenu() {
+export function AccountMenu({ className }: { className?: string }) {
   const account = useCurrentAccount();
   const { currentWallet } = useCurrentWallet();
   const accounts = useAccounts();
@@ -53,19 +53,26 @@ export function AccountMenu() {
   };
 
   return (
-    <div className="relative" ref={ref} data-sl-cursor="on-dark">
+    <div
+      className="relative"
+      ref={ref}
+      data-sl-cursor={className ? "on-light" : "on-dark"}
+    >
       <button
         onClick={() => setOpen((v) => !v)}
-        className="flex items-center gap-2 border border-white/20 bg-[#2b2a5e] px-4 py-2.5 text-[12px] text-white transition-opacity hover:opacity-90"
+        className={`flex items-center gap-2 transition-opacity ${
+          className ??
+          "border border-white/20 bg-[#2b2a5e] px-4 py-2.5 text-[12px] text-white hover:opacity-90"
+        }`}
       >
         {currentWallet?.icon && (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={currentWallet.icon} alt="" className="h-4 w-4" />
+          <img src={currentWallet.icon} alt="" className="h-[1.1em] w-[1.1em] shrink-0" />
         )}
-        <span className="tabular">
+        <span className="tabular truncate">
           {account.label ?? shortAddress(account.address)}
         </span>
-        <span className="text-[9px] opacity-60">▼</span>
+        <span className="text-[0.8em] opacity-60">▼</span>
       </button>
 
       {open && (

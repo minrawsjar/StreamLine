@@ -6,8 +6,10 @@
  */
 
 // Deployed StreamLine package on testnet (see contracts/deployment.testnet.json).
+// v2 (2026-06-12) adds confidential_balance + ConfidentialStream.
+// Original v1: 0x9d6e7815d5e11424a68f827e26499078fead7648328f44fdbdeff6d34ed0b3a8
 const TESTNET_PACKAGE =
-  "0x9d6e7815d5e11424a68f827e26499078fead7648328f44fdbdeff6d34ed0b3a8";
+  "0x25e2dac28bdda5655040ceab5876794b8bdc3687178c1309974017c16dd76fdb";
 
 export const PACKAGE_IDS = {
   mainnet: process.env.NEXT_PUBLIC_PACKAGE_ID_MAINNET ?? "0x0",

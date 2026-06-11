@@ -27,7 +27,7 @@ export function WalletButton({ className }: { className?: string }) {
   }
 
   if (account) {
-    return <AccountMenu />;
+    return <AccountMenu className={className} />;
   }
 
   return (

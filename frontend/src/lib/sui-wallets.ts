@@ -6,8 +6,12 @@ import {
   type WalletWithRequiredFeatures,
 } from "@mysten/wallet-standard";
 
-/** Wallets that register in the browser but do not reliably support Sui. */
-const BLOCKED_WALLET_NAMES = new Set(["phantom", "metamask", "coinbase wallet"]);
+/**
+ * EVM-only wallets that register in the browser but don't support Sui. Phantom
+ * is NOT blocked — it added native Sui support, so it passes the chain + feature
+ * checks below and appears when the user has Sui enabled in Phantom.
+ */
+const BLOCKED_WALLET_NAMES = new Set(["metamask", "coinbase wallet"]);
 
 export function isConnectableSuiWallet(
   wallet: WalletWithRequiredFeatures
