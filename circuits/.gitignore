@@ -9,3 +9,7 @@ build/*.sym
 # Keep the small JSON artifacts (proof.json, public.json, verification_key.json,
 # input.json) and Sui byte exports for reproducibility / auditing.
 converter/target/
+
+# Move build output
+move/build/
+converter/Cargo.lock
