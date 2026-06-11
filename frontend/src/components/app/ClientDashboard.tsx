@@ -15,6 +15,7 @@ import {
   buildApproveMilestone,
   buildRaiseDispute,
 } from "@/lib/streamline-tx";
+import { PrivateStreamsPanel } from "./PrivateStreamsPanel";
 import { USDC_BASE } from "@/lib/stream-math";
 import {
   BarChart,
@@ -28,7 +29,11 @@ import {
   type BarDatum,
 } from "./dashboard-ui";
 
-/** Map of stream id → owned StreamCap object id, so the client can approve. */
+/**
+ * Map of stream id → owned StreamCap object id, so the client can approve.
+ * NB: pass the *original* package id — Sui pins struct types to the package
+ * version that defined them, regardless of upgrades.
+ */
 function useStreamCaps(packageId: string) {
   const account = useCurrentAccount();
   const { data } = useSuiClientQuery(
@@ -60,12 +65,13 @@ const usd = (base: number) => (base / USDC_BASE).toFixed(2);
 export function ClientDashboard() {
   const account = useCurrentAccount();
   const packageId = useNetworkVariable("packageId");
+  const originalPackageId = useNetworkVariable("originalPackageId");
   const usdcType = useNetworkVariable("usdcType");
   const { execute, isPending } = useGaslessExecute();
   const { data: streams, isLoading, refetch } = useStreams({
     sender: account?.address,
   });
-  const caps = useStreamCaps(packageId);
+  const caps = useStreamCaps(originalPackageId);
   const [busy, setBusy] = useState<string | null>(null);
 
   useLiveUpdates(() => refetch());
@@ -129,9 +135,12 @@ export function ClientDashboard() {
       />
 
       {list.length === 0 ? (
-        <EmptyPanel>
-          No streams created yet. Head to “Create stream” to lock your first.
-        </EmptyPanel>
+        <div className="flex flex-col gap-6">
+          <EmptyPanel>
+            No streams created yet. Head to “Create stream” to lock your first.
+          </EmptyPanel>
+          <PrivateStreamsPanel role="sender" />
+        </div>
       ) : (
         <div className="flex flex-col gap-6">
           {/* Stat row */}
@@ -280,6 +289,8 @@ export function ClientDashboard() {
               })}
             </div>
           </Card>
+
+          <PrivateStreamsPanel role="sender" />
         </div>
       )}
     </div>

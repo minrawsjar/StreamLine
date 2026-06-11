@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { useCurrentAccount } from "@mysten/dapp-kit";
+import { useCurrentAccount, useSuiClient } from "@mysten/dapp-kit";
 
 import { useNetworkVariable } from "@/lib/networks";
 import { useGaslessExecute } from "@/lib/use-gasless";
@@ -14,7 +14,22 @@ import {
   toBaseUnits,
   type DurationUnit,
 } from "@/lib/stream-math";
-import { buildCreateStream, splitMilestoneAmounts } from "@/lib/streamline-tx";
+import {
+  buildCreateStream,
+  splitMilestoneAmounts,
+  DEFAULT_DISPUTE_WINDOW_MS,
+} from "@/lib/streamline-tx";
+import {
+  buildCreateConfidentialStreamV2,
+  commit,
+  proveWrap,
+  randomBlinding,
+} from "@/lib/confidential";
+import { encryptSecrets } from "@/lib/seal";
+import {
+  addSecret,
+  findCreatedConfidentialStream,
+} from "@/lib/confidential-store";
 
 type SplitRow = { label: string; address: string; pct: number; yield: boolean };
 
@@ -25,10 +40,13 @@ const DEFAULT_SPLITS: SplitRow[] = [
 
 export function StreamCreator() {
   const account = useCurrentAccount();
+  const client = useSuiClient();
   const packageId = useNetworkVariable("packageId");
   const usdcType = useNetworkVariable("usdcType");
+  const originalPackageId = useNetworkVariable("originalPackageId");
   const { execute, isPending } = useGaslessExecute();
 
+  const [isPrivate, setIsPrivate] = useState(false);
   const [freelancer, setFreelancer] = useState("");
   const [amount, setAmount] = useState(800);
   const [durationValue, setDurationValue] = useState(14);
@@ -41,6 +59,7 @@ export function StreamCreator() {
   ]);
   const [splits, setSplits] = useState<SplitRow[]>(DEFAULT_SPLITS);
   const [status, setStatus] = useState<string | null>(null);
+  const [proving, setProving] = useState(false);
 
   const durationMs = durationToMs(durationValue, durationUnit);
   const rate = ratePerSecond(amount, durationMs);
@@ -51,13 +70,21 @@ export function StreamCreator() {
   const errors = useMemo(() => {
     const e: string[] = [];
     if (amount <= 0) e.push("Amount must be greater than 0.");
-    if (durationValue <= 0) e.push("Duration must be greater than 0.");
     if (milestones.length === 0) e.push("Add at least one milestone.");
     if (amount / Math.max(milestones.length, 1) < 0.01)
       e.push("Each milestone must be ≥ 0.01 USDC.");
-    if (splitSum !== 100) e.push(`Splits must total 100% (currently ${splitSum}%).`);
+    if (isPrivate) {
+      // Private streams encrypt the secrets to the recipient's wallet, so it
+      // must be a concrete address. Duration/splits don't apply (manual drips).
+      if (!/^0x[0-9a-fA-F]{1,64}$/.test(freelancer.trim()))
+        e.push("Private streams need a valid recipient address (0x…).");
+    } else {
+      if (durationValue <= 0) e.push("Duration must be greater than 0.");
+      if (splitSum !== 100)
+        e.push(`Splits must total 100% (currently ${splitSum}%).`);
+    }
     return e;
-  }, [amount, durationValue, milestones.length, splitSum]);
+  }, [amount, durationValue, milestones.length, splitSum, isPrivate, freelancer]);
 
   const canCreate = errors.length === 0 && !!account;
 
@@ -72,6 +99,10 @@ export function StreamCreator() {
       setStatus(
         "Move package not deployed on this network yet — PTB is previewed above."
       );
+      return;
+    }
+    if (isPrivate) {
+      void onCreatePrivate();
       return;
     }
     const totalBase = toBaseUnits(amount);
@@ -93,9 +124,121 @@ export function StreamCreator() {
     });
   };
 
+  /**
+   * Private path: commit to the amount, prove the wrap in-browser, Seal-encrypt
+   * the blindings to both wallets, and lock the funds — one signature.
+   */
+  const onCreatePrivate = async () => {
+    if (!account) return;
+    const recipient = freelancer.trim();
+    setProving(true);
+    try {
+      setStatus("Generating commitments + proof in your browser…");
+      const totalBase = toBaseUnits(amount);
+      const rRemaining = randomBlinding();
+      const rEarned = randomBlinding();
+      const remainingC = await commit(totalBase, rRemaining);
+      const earnedC = await commit(0n, rEarned);
+      const wrap = await proveWrap(totalBase, rRemaining);
+
+      setStatus("Encrypting stream secrets to both wallets (Seal)…");
+      const envelope = await encryptSecrets({
+        suiClient: client,
+        sealNamespace: originalPackageId,
+        sender: account.address,
+        freelancer: recipient,
+        payload: {
+          v: 1,
+          coinType: usdcType,
+          totalBase: totalBase.toString(),
+          milestones: milestones.length,
+          freelancer: recipient,
+          remainingBase: totalBase.toString(),
+          rRemaining: rRemaining.toString(),
+          earnedBase: "0",
+          rEarned: rEarned.toString(),
+        },
+      });
+
+      const tx = buildCreateConfidentialStreamV2({
+        packageId,
+        coinType: usdcType,
+        sender: account.address,
+        totalBase,
+        freelancer: recipient,
+        nMilestones: milestones.length,
+        remainingCommitment: remainingC,
+        wrapProof: wrap.proof,
+        earnedCommitment: earnedC,
+        disputeWindowMs: DEFAULT_DISPUTE_WINDOW_MS,
+        encryptedSecrets: envelope,
+      });
+
+      setStatus("Awaiting wallet signature…");
+      await execute(tx, {
+        onSuccess: async ({ digest }) => {
+          setStatus("Confirming on-chain…");
+          const streamId = await findCreatedConfidentialStream(client, digest);
+          if (streamId) {
+            // Local cache so this wallet can act without a Seal round-trip.
+            addSecret(account.address, {
+              streamId,
+              coinType: usdcType,
+              totalBase: totalBase.toString(),
+              milestones: milestones.length,
+              freelancer: recipient,
+              remainingBase: totalBase.toString(),
+              rRemaining: rRemaining.toString(),
+              earnedBase: "0",
+              rEarned: rEarned.toString(),
+              createdAt: Date.now(),
+            });
+          }
+          setStatus(
+            `Private stream created — amount hidden on-chain. The recipient can decrypt via Seal. Digest ${digest}`
+          );
+        },
+        onError: (e) => setStatus(e.message),
+      });
+    } catch (e) {
+      setStatus(e instanceof Error ? e.message : String(e));
+    } finally {
+      setProving(false);
+    }
+  };
+
   return (
     <div className="grid gap-10 lg:grid-cols-[1.4fr_1fr]">
       <div className="flex flex-col gap-8">
+        {/* Privacy is a property of the stream, not a separate product. */}
+        <div className="flex items-center justify-between border border-[#2b2a5e]/15 bg-white px-4 py-3">
+          <div>
+            <p className="text-[12px] font-semibold">
+              Private amounts {isPrivate && "🔒"}
+            </p>
+            <p className="mt-0.5 text-[11px] leading-relaxed text-[#2b2a5e]/60">
+              {isPrivate
+                ? "Amounts are hidden on-chain (commitments + ZK proofs). Secrets are Seal-encrypted to you and the recipient."
+                : "Amounts visible on-chain. Toggle to hide them with ZK commitments."}
+            </p>
+          </div>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={isPrivate}
+            onClick={() => setIsPrivate((v) => !v)}
+            className={`relative h-6 w-11 shrink-0 transition-colors ${
+              isPrivate ? "bg-[#5b54e6]" : "bg-[#2b2a5e]/20"
+            }`}
+          >
+            <span
+              className={`absolute top-0.5 h-5 w-5 bg-white transition-transform ${
+                isPrivate ? "translate-x-[22px]" : "translate-x-0.5"
+              }`}
+            />
+          </button>
+        </div>
+
         <Field label="Recipient (freelancer address)">
           <input
             value={freelancer}
@@ -118,31 +261,33 @@ export function StreamCreator() {
               className="w-full border border-[#2b2a5e]/20 bg-white px-3 py-2.5 text-[14px] outline-none focus:border-[#5b54e6]"
             />
           </Field>
-          <Field label="Duration">
-            <div className="flex gap-2">
-              <input
-                type="number"
-                value={durationValue === 0 ? "" : durationValue}
-                min={0}
-                placeholder="14"
-                onChange={(e) =>
-                  setDurationValue(
-                    e.target.value === "" ? 0 : Number(e.target.value)
-                  )
-                }
-                className="w-full border border-[#2b2a5e]/20 bg-white px-3 py-2.5 text-[14px] outline-none focus:border-[#5b54e6]"
-              />
-              <select
-                value={durationUnit}
-                onChange={(e) => setDurationUnit(e.target.value as DurationUnit)}
-                className="border border-[#2b2a5e]/20 bg-white px-2 text-[13px] outline-none focus:border-[#5b54e6]"
-              >
-                <option value="hours">hours</option>
-                <option value="days">days</option>
-                <option value="weeks">weeks</option>
-              </select>
-            </div>
-          </Field>
+          {!isPrivate && (
+            <Field label="Duration">
+              <div className="flex gap-2">
+                <input
+                  type="number"
+                  value={durationValue === 0 ? "" : durationValue}
+                  min={0}
+                  placeholder="14"
+                  onChange={(e) =>
+                    setDurationValue(
+                      e.target.value === "" ? 0 : Number(e.target.value)
+                    )
+                  }
+                  className="w-full border border-[#2b2a5e]/20 bg-white px-3 py-2.5 text-[14px] outline-none focus:border-[#5b54e6]"
+                />
+                <select
+                  value={durationUnit}
+                  onChange={(e) => setDurationUnit(e.target.value as DurationUnit)}
+                  className="border border-[#2b2a5e]/20 bg-white px-2 text-[13px] outline-none focus:border-[#5b54e6]"
+                >
+                  <option value="hours">hours</option>
+                  <option value="days">days</option>
+                  <option value="weeks">weeks</option>
+                </select>
+              </div>
+            </Field>
+          )}
         </div>
 
         <Field label={`Milestones (${milestones.length})`}>
@@ -177,6 +322,7 @@ export function StreamCreator() {
           </div>
         </Field>
 
+        {!isPrivate && (
         <Field label={`Split config (${splitSum}%)`}>
           <div className="flex flex-col gap-2">
             {splits.map((r, i) => (
@@ -228,36 +374,52 @@ export function StreamCreator() {
             </button>
           </div>
         </Field>
+        )}
       </div>
 
       <aside className="flex flex-col gap-4 border border-[#2b2a5e]/15 bg-white p-6">
         <p className="text-[11px] uppercase tracking-[0.18em] text-[#2b2a5e]/50">
           PTB preview
         </p>
-        <Summary label="Locks" value={formatUsd(amount)} />
         <Summary
-          label="Rate"
-          value={`${formatUsd(rate)} / sec`}
+          label={isPrivate ? "Locks (hidden on-chain)" : "Locks"}
+          value={formatUsd(amount)}
         />
-        <Summary label="Settles every" value={formatInterval(interval)} />
+        {!isPrivate && (
+          <>
+            <Summary label="Rate" value={`${formatUsd(rate)} / sec`} />
+            <Summary label="Settles every" value={formatInterval(interval)} />
+          </>
+        )}
         <Summary label="Milestones" value={String(milestones.length)} />
         <Summary
           label="Per milestone"
           value={formatUsd(amount / Math.max(milestones.length, 1))}
         />
-        <div className="border-t border-[#2b2a5e]/10 pt-3 text-[12px] leading-relaxed text-[#2b2a5e]/70">
-          {splits.map((s, i) => (
-            <div key={i} className="flex justify-between">
-              <span>
-                {s.label} {s.yield && "↗"}
-              </span>
-              <span className="tabular">{s.pct}%</span>
-            </div>
-          ))}
-        </div>
-        <p className="text-[11px] leading-relaxed text-[#1d9e75]">
-          All gasless via Address Balances. {formatInterval(interval)}.
-        </p>
+        {!isPrivate && (
+          <div className="border-t border-[#2b2a5e]/10 pt-3 text-[12px] leading-relaxed text-[#2b2a5e]/70">
+            {splits.map((s, i) => (
+              <div key={i} className="flex justify-between">
+                <span>
+                  {s.label} {s.yield && "↗"}
+                </span>
+                <span className="tabular">{s.pct}%</span>
+              </div>
+            ))}
+          </div>
+        )}
+        {isPrivate ? (
+          <p className="text-[11px] leading-relaxed text-[#5b54e6]">
+            Amounts hidden via Poseidon commitments; every transition proven
+            with Groth16 in your browser. Secrets are Seal-encrypted to both
+            wallets, so the recipient can drip, raise and claim on their own.
+            Gas is sponsored — milestone names stay off-chain.
+          </p>
+        ) : (
+          <p className="text-[11px] leading-relaxed text-[#1d9e75]">
+            All gasless via Address Balances. {formatInterval(interval)}.
+          </p>
+        )}
 
         {errors.length > 0 && (
           <ul className="flex flex-col gap-1 text-[11px] text-[#c0533a]">
@@ -269,10 +431,16 @@ export function StreamCreator() {
 
         <button
           onClick={onCreate}
-          disabled={!canCreate || isPending}
+          disabled={!canCreate || isPending || proving}
           className="mt-2 bg-[#5b54e6] px-5 py-3 text-[12px] uppercase tracking-[0.1em] text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
         >
-          {isPending ? "creating…" : "create stream — gasless"}
+          {proving || isPending
+            ? isPrivate
+              ? "proving + creating…"
+              : "creating…"
+            : isPrivate
+              ? "create private stream"
+              : "create stream — gasless"}
         </button>
         {!deployed && (
           <p className="text-[11px] text-[#2b2a5e]/50">

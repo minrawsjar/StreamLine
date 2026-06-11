@@ -7,19 +7,18 @@ import { WalletButton } from "@/components/wallet/WalletButton";
 import { StreamCreator } from "../StreamCreator";
 import { FreelancerDashboard } from "../FreelancerDashboard";
 import { ClientDashboard } from "../ClientDashboard";
-import { ConfidentialStreams } from "../ConfidentialStreams";
 import { RoleSelect, type Role } from "./RoleSelect";
 
+// Privacy is a per-stream toggle in the Create flow (not a separate tab);
+// private streams appear directly in each dashboard.
 const PAYER_TABS = [
   { id: "dashboard", label: "Dashboard" },
   { id: "create", label: "Create stream" },
-  { id: "confidential", label: "Confidential 🔒" },
 ] as const;
 
 const RECEIVER_TABS = [
   { id: "earn", label: "Dashboard" },
   { id: "collateral", label: "Collateral" },
-  { id: "confidential", label: "Confidential 🔒" },
 ] as const;
 
 export function UserAppShell() {
@@ -83,7 +82,6 @@ export function UserAppShell() {
       {tab === "dashboard" && <ClientDashboard />}
       {tab === "earn" && <FreelancerDashboard />}
       {tab === "collateral" && <ComingSoon title="Collateral panel" />}
-      {tab === "confidential" && <ConfidentialStreams />}
     </div>
   );
 }

@@ -7,6 +7,7 @@ import { useNetworkVariable } from "@/lib/networks";
 import { useGaslessExecute } from "@/lib/use-gasless";
 import { useStreams, useLiveUpdates, type StreamRecord } from "@/lib/indexer";
 import { buildRaiseCompletion } from "@/lib/streamline-tx";
+import { PrivateStreamsPanel } from "./PrivateStreamsPanel";
 import { USDC_BASE, formatInterval } from "@/lib/stream-math";
 import {
   completedMilestones,
@@ -92,11 +93,14 @@ export function FreelancerDashboard() {
           title="Freelancer dashboard"
           subtitle="Watch money arrive in real time and raise milestones in one click."
         />
-        <EmptyPanel>
-          No streams yet. When a client creates one for{" "}
-          <span className="font-mono">{short(account?.address)}</span>, it appears
-          here and starts earning live.
-        </EmptyPanel>
+        <div className="flex flex-col gap-6">
+          <EmptyPanel>
+            No streams yet. When a client creates one for{" "}
+            <span className="font-mono">{short(account?.address)}</span>, it
+            appears here and starts earning live.
+          </EmptyPanel>
+          <PrivateStreamsPanel role="freelancer" />
+        </div>
       </div>
     );
 
@@ -236,6 +240,10 @@ export function FreelancerDashboard() {
             </div>
           </Card>
         </aside>
+      </div>
+
+      <div className="mt-6">
+        <PrivateStreamsPanel role="freelancer" />
       </div>
     </div>
   );

@@ -8,9 +8,11 @@
 module streamline::stream;
 
 use std::string::String;
+use sui::address;
 use sui::balance::{Self, Balance};
 use sui::clock::Clock;
 use sui::coin::{Self, Coin};
+use sui::dynamic_field as df;
 use sui::event;
 use streamline::confidential_balance;
 
@@ -36,6 +38,7 @@ const EMilestoneTooSmall: u64 = 3;
 const EBadDuration: u64 = 4;
 const ENoMilestones: u64 = 5;
 const ENotDue: u64 = 6;
+const ENoAccess: u64 = 7;
 
 // === Objects ===
 
@@ -412,6 +415,21 @@ public struct ConfStreamCreated has copy, drop {
     n_milestones: u64,
 }
 
+public struct ConfMilestoneRaised has copy, drop {
+    stream_id: ID,
+    milestone_index: u64,
+    review_deadline_ms: u64,
+}
+
+public struct ConfMilestoneApproved has copy, drop {
+    stream_id: ID,
+    milestone_index: u64,
+}
+
+public struct ConfSecretsUpdated has copy, drop {
+    stream_id: ID,
+}
+
 public struct ConfStreamDripped has copy, drop {
     stream_id: ID,
     timestamp_ms: u64,
@@ -437,12 +455,66 @@ public fun create_confidential_stream<T>(
     dispute_window_ms: u64,
     ctx: &mut TxContext,
 ) {
+    new_confidential_stream(
+        payment,
+        freelancer,
+        n_milestones,
+        remaining_commitment,
+        wrap_proof,
+        earned_commitment,
+        dispute_window_ms,
+        vector[],
+        ctx,
+    );
+}
+
+/// Like `create_confidential_stream`, but also attaches `encrypted_secrets`: a
+/// Seal ciphertext of the stream's values + blindings, encrypted to both
+/// parties' wallet identities so the freelancer (a different wallet) can
+/// decrypt and act. Decryption is gated by `seal_approve` below.
+#[allow(lint(self_transfer))]
+public fun create_confidential_stream_v2<T>(
+    payment: Coin<T>,
+    freelancer: address,
+    n_milestones: u64,
+    remaining_commitment: vector<u8>,
+    wrap_proof: vector<u8>,
+    earned_commitment: vector<u8>,
+    dispute_window_ms: u64,
+    encrypted_secrets: vector<u8>,
+    ctx: &mut TxContext,
+) {
+    new_confidential_stream(
+        payment,
+        freelancer,
+        n_milestones,
+        remaining_commitment,
+        wrap_proof,
+        earned_commitment,
+        dispute_window_ms,
+        encrypted_secrets,
+        ctx,
+    );
+}
+
+#[allow(lint(self_transfer))]
+fun new_confidential_stream<T>(
+    payment: Coin<T>,
+    freelancer: address,
+    n_milestones: u64,
+    remaining_commitment: vector<u8>,
+    wrap_proof: vector<u8>,
+    earned_commitment: vector<u8>,
+    dispute_window_ms: u64,
+    encrypted_secrets: vector<u8>,
+    ctx: &mut TxContext,
+) {
     assert!(n_milestones > 0, ENoMilestones);
     // The locked amount must equal the hidden remaining balance.
     confidential_balance::verify_wrap(remaining_commitment, payment.value(), wrap_proof);
 
     let sender = ctx.sender();
-    let stream = ConfidentialStream<T> {
+    let mut stream = ConfidentialStream<T> {
         id: object::new(ctx),
         sender,
         freelancer,
@@ -453,6 +525,9 @@ public fun create_confidential_stream<T>(
         dispute_window_ms,
         remaining_commitment,
         earned_commitment,
+    };
+    if (encrypted_secrets.length() > 0) {
+        set_secrets(&mut stream, encrypted_secrets);
     };
     let stream_id = object::id(&stream);
     event::emit(ConfStreamCreated { stream_id, sender, freelancer, n_milestones });
@@ -489,6 +564,28 @@ public fun confidential_drip<T>(
     });
 }
 
+/// `confidential_drip` + refresh of the Seal-encrypted secrets blob. Drips
+/// rotate the blindings, so the dripper (who must know the openings to build a
+/// valid proof) re-encrypts the new secrets for both parties in the same tx —
+/// the other party never sees a stale ciphertext.
+public fun confidential_drip_v2<T>(
+    stream: &mut ConfidentialStream<T>,
+    new_remaining_commitment: vector<u8>,
+    new_earned_commitment: vector<u8>,
+    transfer_proof: vector<u8>,
+    encrypted_secrets: vector<u8>,
+    clock: &Clock,
+) {
+    confidential_drip(
+        stream,
+        new_remaining_commitment,
+        new_earned_commitment,
+        transfer_proof,
+        clock,
+    );
+    set_secrets(stream, encrypted_secrets);
+}
+
 /// Freelancer claims `amount` of earnings: proves it opens the current earned
 /// commitment (`unwrap_proof`), withdraws from the reserve, and resets earned to
 /// `reset_commitment` (their fresh remainder/zero commitment).
@@ -503,8 +600,123 @@ public fun claim<T>(
     confidential_balance::verify_unwrap(stream.earned_commitment, amount, unwrap_proof);
     assert!(stream.reserve.value() >= amount, ENotDue);
     stream.earned_commitment = reset_commitment;
+    if (stream.reserve.value() == amount) {
+        // Everything locked has been cashed out — the stream is settled.
+        stream.state = STATE_DONE;
+    };
     event::emit(ConfStreamClaimed { stream_id: object::id(stream), amount });
     coin::from_balance(stream.reserve.split(amount), ctx)
+}
+
+// === Confidential milestone review ===
+//
+// Milestone boundaries are hidden (amounts are commitments), so the contract
+// can't detect "allocation fully dripped" like the public flow does. Instead
+// the parties drive it: the freelancer raises when work is done (drips pause),
+// the client approves (drips resume, milestone counter advances). The review
+// deadline lives in a dynamic field so the keeper can auto-approve silence.
+
+/// Freelancer signals the current milestone is complete; drips pause for review.
+public fun conf_raise_completion<T>(
+    stream: &mut ConfidentialStream<T>,
+    clock: &Clock,
+    ctx: &TxContext,
+) {
+    assert!(ctx.sender() == stream.freelancer, ENotAuthorized);
+    assert!(stream.state == STATE_DRIPPING, EWrongState);
+    let deadline = clock.timestamp_ms() + stream.dispute_window_ms;
+    stream.state = STATE_PENDING_REVIEW;
+    set_review_deadline(stream, deadline);
+    event::emit(ConfMilestoneRaised {
+        stream_id: object::id(stream),
+        milestone_index: stream.current_milestone,
+        review_deadline_ms: deadline,
+    });
+}
+
+/// Client approves the raised milestone (via the cap); dripping resumes.
+public fun conf_approve_milestone<T>(cap: &StreamCap, stream: &mut ConfidentialStream<T>) {
+    assert!(cap.stream_id == object::id(stream), ENotAuthorized);
+    conf_approve_internal(stream);
+}
+
+/// Keeper auto-approves once the review deadline passes — silence ≠ blocking pay.
+public fun conf_auto_approve<T>(stream: &mut ConfidentialStream<T>, clock: &Clock) {
+    assert!(stream.state == STATE_PENDING_REVIEW, EWrongState);
+    let deadline = review_deadline(stream);
+    assert!(deadline > 0 && clock.timestamp_ms() >= deadline, ENotDue);
+    conf_approve_internal(stream);
+}
+
+fun conf_approve_internal<T>(stream: &mut ConfidentialStream<T>) {
+    assert!(stream.state == STATE_PENDING_REVIEW, EWrongState);
+    let index = stream.current_milestone;
+    stream.state = STATE_DRIPPING;
+    if (stream.current_milestone < stream.n_milestones) {
+        stream.current_milestone = stream.current_milestone + 1;
+    };
+    set_review_deadline(stream, 0);
+    event::emit(ConfMilestoneApproved {
+        stream_id: object::id(stream),
+        milestone_index: index,
+    });
+}
+
+// === Seal integration ===
+//
+// The stream's hidden values + blindings are encrypted client-side with Seal
+// (threshold IBE) under each party's *wallet identity* and stored on the
+// stream object. Key servers grant decryption only if `seal_approve` passes:
+// the requesting wallet must be the identity the blob was encrypted to. This
+// is how a freelancer on a different wallet learns the secrets they need to
+// drip/claim/raise.
+
+/// Seal access policy: identity = the requester's own address bytes.
+entry fun seal_approve(id: vector<u8>, ctx: &TxContext) {
+    check_seal_access(id, ctx);
+}
+
+fun check_seal_access(id: vector<u8>, ctx: &TxContext) {
+    assert!(id == address::to_bytes(ctx.sender()), ENoAccess);
+}
+
+#[test_only]
+public fun seal_approve_for_testing(id: vector<u8>, ctx: &TxContext) {
+    check_seal_access(id, ctx);
+}
+
+/// Either party replaces the encrypted secrets blob (e.g. re-encrypting after
+/// recovering from a missed rotation).
+public fun update_confidential_secrets<T>(
+    stream: &mut ConfidentialStream<T>,
+    encrypted_secrets: vector<u8>,
+    ctx: &TxContext,
+) {
+    let s = ctx.sender();
+    assert!(s == stream.sender || s == stream.freelancer, ENotAuthorized);
+    set_secrets(stream, encrypted_secrets);
+}
+
+// Dynamic-field keys (the struct layout is frozen by upgrade compatibility,
+// so post-v2 state lives in dynamic fields).
+const SECRETS_KEY: vector<u8> = b"seal_secrets";
+const REVIEW_KEY: vector<u8> = b"review_deadline_ms";
+
+fun set_secrets<T>(stream: &mut ConfidentialStream<T>, blob: vector<u8>) {
+    if (df::exists(&stream.id, SECRETS_KEY)) {
+        *df::borrow_mut(&mut stream.id, SECRETS_KEY) = blob;
+    } else {
+        df::add(&mut stream.id, SECRETS_KEY, blob);
+    };
+    event::emit(ConfSecretsUpdated { stream_id: object::id(stream) });
+}
+
+fun set_review_deadline<T>(stream: &mut ConfidentialStream<T>, deadline: u64) {
+    if (df::exists(&stream.id, REVIEW_KEY)) {
+        *df::borrow_mut(&mut stream.id, REVIEW_KEY) = deadline;
+    } else {
+        df::add(&mut stream.id, REVIEW_KEY, deadline);
+    };
 }
 
 /// Either party pauses a confidential stream pending arbitration.
@@ -527,4 +739,24 @@ public fun conf_remaining_commitment<T>(s: &ConfidentialStream<T>): vector<u8> {
 
 public fun conf_earned_commitment<T>(s: &ConfidentialStream<T>): vector<u8> {
     s.earned_commitment
+}
+
+public fun conf_current_milestone<T>(s: &ConfidentialStream<T>): u64 { s.current_milestone }
+
+/// The Seal ciphertext of the stream secrets (empty if never attached).
+public fun conf_encrypted_secrets<T>(s: &ConfidentialStream<T>): vector<u8> {
+    if (df::exists(&s.id, SECRETS_KEY)) {
+        *df::borrow(&s.id, SECRETS_KEY)
+    } else {
+        vector[]
+    }
+}
+
+/// Review deadline for a raised confidential milestone (0 when not pending).
+public fun review_deadline<T>(s: &ConfidentialStream<T>): u64 {
+    if (df::exists(&s.id, REVIEW_KEY)) {
+        *df::borrow(&s.id, REVIEW_KEY)
+    } else {
+        0
+    }
 }

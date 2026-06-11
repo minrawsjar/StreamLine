@@ -1,8 +1,10 @@
 import { createNetworkConfig } from "@mysten/dapp-kit";
 
 import {
+  CONF_DEFINING_PACKAGE_IDS,
   DEFAULT_NETWORK,
   FULLNODE_URLS,
+  ORIGINAL_PACKAGE_IDS,
   PACKAGE_IDS,
   TEST_USDC,
   USDC_TYPE,
@@ -29,14 +31,29 @@ export const { networkConfig, useNetworkVariable, useNetworkVariables } =
   createNetworkConfig({
     mainnet: {
       url: FULLNODE_URLS.mainnet,
-      variables: { packageId: PACKAGE_IDS.mainnet, usdcType: USDC_TYPE.mainnet },
+      variables: {
+        packageId: PACKAGE_IDS.mainnet,
+        usdcType: USDC_TYPE.mainnet,
+        originalPackageId: ORIGINAL_PACKAGE_IDS.mainnet,
+        confPackageId: CONF_DEFINING_PACKAGE_IDS.mainnet,
+      },
     },
     testnet: {
       url: FULLNODE_URLS.testnet,
-      variables: { packageId: PACKAGE_IDS.testnet, usdcType: USDC_TYPE.testnet },
+      variables: {
+        packageId: PACKAGE_IDS.testnet,
+        usdcType: USDC_TYPE.testnet,
+        originalPackageId: ORIGINAL_PACKAGE_IDS.testnet,
+        confPackageId: CONF_DEFINING_PACKAGE_IDS.testnet,
+      },
     },
     devnet: {
       url: FULLNODE_URLS.devnet,
-      variables: { packageId: PACKAGE_IDS.devnet, usdcType: USDC_TYPE.devnet },
+      variables: {
+        packageId: PACKAGE_IDS.devnet,
+        usdcType: USDC_TYPE.devnet,
+        originalPackageId: ORIGINAL_PACKAGE_IDS.devnet,
+        confPackageId: CONF_DEFINING_PACKAGE_IDS.devnet,
+      },
     },
   });

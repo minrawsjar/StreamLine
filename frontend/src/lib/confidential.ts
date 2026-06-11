@@ -9,7 +9,7 @@
  *
  * snarkjs / circomlibjs are heavy and browser/Node-only — imported dynamically.
  */
-import { Transaction } from "@mysten/sui/transactions";
+import { Transaction, coinWithBalance } from "@mysten/sui/transactions";
 
 const FIELD =
   21888242871839275222246405745257275088696311157297823662689037894645226208583n;
@@ -233,6 +233,146 @@ export function buildCreateConfidentialStream(args: {
       vec(tx, args.earnedCommitment),
       tx.pure.u64(args.disputeWindowMs),
     ],
+  });
+  return tx;
+}
+
+/** v2: also attaches the Seal-encrypted secrets so the freelancer can act. */
+export function buildCreateConfidentialStreamV2(args: {
+  packageId: string;
+  coinType: string;
+  /** Creator address — needed so `coinWithBalance` can resolve their coins. */
+  sender: string;
+  totalBase: bigint;
+  freelancer: string;
+  nMilestones: number;
+  remainingCommitment: Uint8Array;
+  wrapProof: Uint8Array;
+  earnedCommitment: Uint8Array;
+  disputeWindowMs: number;
+  encryptedSecrets: Uint8Array;
+}): Transaction {
+  const tx = new Transaction();
+  tx.setSenderIfNotSet(args.sender);
+  tx.moveCall({
+    target: `${args.packageId}::stream::create_confidential_stream_v2`,
+    typeArguments: [args.coinType],
+    arguments: [
+      coinWithBalance({ type: args.coinType, balance: args.totalBase }),
+      tx.pure.address(args.freelancer),
+      tx.pure.u64(args.nMilestones),
+      vec(tx, args.remainingCommitment),
+      vec(tx, args.wrapProof),
+      vec(tx, args.earnedCommitment),
+      tx.pure.u64(args.disputeWindowMs),
+      vec(tx, args.encryptedSecrets),
+    ],
+  });
+  return tx;
+}
+
+/** v2 drip: rotates blindings + the on-chain Seal ciphertext atomically. */
+export function buildConfidentialDripV2(args: {
+  packageId: string;
+  coinType: string;
+  streamId: string;
+  newRemainingCommitment: Uint8Array;
+  newEarnedCommitment: Uint8Array;
+  transferProof: Uint8Array;
+  encryptedSecrets: Uint8Array;
+}): Transaction {
+  const tx = new Transaction();
+  tx.moveCall({
+    target: `${args.packageId}::stream::confidential_drip_v2`,
+    typeArguments: [args.coinType],
+    arguments: [
+      tx.object(args.streamId),
+      vec(tx, args.newRemainingCommitment),
+      vec(tx, args.newEarnedCommitment),
+      vec(tx, args.transferProof),
+      vec(tx, args.encryptedSecrets),
+      tx.object(CLOCK_ID),
+    ],
+  });
+  return tx;
+}
+
+/** Freelancer raises the current milestone; drips pause for client review. */
+export function buildConfRaiseCompletion(args: {
+  packageId: string;
+  coinType: string;
+  streamId: string;
+}): Transaction {
+  const tx = new Transaction();
+  tx.moveCall({
+    target: `${args.packageId}::stream::conf_raise_completion`,
+    typeArguments: [args.coinType],
+    arguments: [tx.object(args.streamId), tx.object(CLOCK_ID)],
+  });
+  return tx;
+}
+
+/** Client approves the raised milestone via their StreamCap. */
+export function buildConfApproveMilestone(args: {
+  packageId: string;
+  coinType: string;
+  streamId: string;
+  capId: string;
+}): Transaction {
+  const tx = new Transaction();
+  tx.moveCall({
+    target: `${args.packageId}::stream::conf_approve_milestone`,
+    typeArguments: [args.coinType],
+    arguments: [tx.object(args.capId), tx.object(args.streamId)],
+  });
+  return tx;
+}
+
+/**
+ * v2 claim: withdraw earned funds *and* refresh the on-chain Seal ciphertext
+ * (the claim resets the earned blinding) in one PTB.
+ */
+export function buildClaimV2(args: {
+  packageId: string;
+  coinType: string;
+  streamId: string;
+  amount: bigint;
+  unwrapProof: Uint8Array;
+  resetCommitment: Uint8Array;
+  recipient: string;
+  encryptedSecrets: Uint8Array;
+}): Transaction {
+  const tx = new Transaction();
+  const coin = tx.moveCall({
+    target: `${args.packageId}::stream::claim`,
+    typeArguments: [args.coinType],
+    arguments: [
+      tx.object(args.streamId),
+      tx.pure.u64(args.amount),
+      vec(tx, args.unwrapProof),
+      vec(tx, args.resetCommitment),
+    ],
+  });
+  tx.moveCall({
+    target: `${args.packageId}::stream::update_confidential_secrets`,
+    typeArguments: [args.coinType],
+    arguments: [tx.object(args.streamId), vec(tx, args.encryptedSecrets)],
+  });
+  tx.transferObjects([coin], tx.pure.address(args.recipient));
+  return tx;
+}
+
+/** Either party pauses a confidential stream pending arbitration. */
+export function buildConfDispute(args: {
+  packageId: string;
+  coinType: string;
+  streamId: string;
+}): Transaction {
+  const tx = new Transaction();
+  tx.moveCall({
+    target: `${args.packageId}::stream::confidential_dispute`,
+    typeArguments: [args.coinType],
+    arguments: [tx.object(args.streamId)],
   });
   return tx;
 }

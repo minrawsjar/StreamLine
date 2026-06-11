@@ -5,15 +5,39 @@
  * config on top of these.
  */
 
-// Deployed StreamLine package on testnet (see contracts/deployment.testnet.json).
-// v2 (2026-06-12) adds confidential_balance + ConfidentialStream.
-// Original v1: 0x9d6e7815d5e11424a68f827e26499078fead7648328f44fdbdeff6d34ed0b3a8
+// Deployed StreamLine package on testnet (see contracts/Published.toml).
+// v3 (2026-06-12) adds Seal secrets + confidential milestone review.
+// v2 added confidential_balance + ConfidentialStream.
 const TESTNET_PACKAGE =
-  "0x25e2dac28bdda5655040ceab5876794b8bdc3687178c1309974017c16dd76fdb";
+  "0x98175e041610f0f152a066233e7c477c63e8e484e80340561c63e1134134dbdb";
 
 export const PACKAGE_IDS = {
   mainnet: process.env.NEXT_PUBLIC_PACKAGE_ID_MAINNET ?? "0x0",
   testnet: process.env.NEXT_PUBLIC_PACKAGE_ID_TESTNET ?? TESTNET_PACKAGE,
+  devnet: "0x0",
+} as const;
+
+/**
+ * The *original* (v1) package ids. Object types and Seal's identity namespace
+ * are pinned to the first version of a package, so Seal encryption and
+ * SessionKeys must use these even though move calls target the latest version.
+ */
+export const ORIGINAL_PACKAGE_IDS = {
+  mainnet: process.env.NEXT_PUBLIC_PACKAGE_ID_MAINNET ?? "0x0",
+  testnet:
+    "0x9d6e7815d5e11424a68f827e26499078fead7648328f44fdbdeff6d34ed0b3a8",
+  devnet: "0x0",
+} as const;
+
+/**
+ * The package version that *defined* the confidential types (v2). Sui pins a
+ * struct's type address to the version that introduced it, so
+ * `ConfidentialStream` objects and `ConfStreamCreated` events carry this id.
+ */
+export const CONF_DEFINING_PACKAGE_IDS = {
+  mainnet: process.env.NEXT_PUBLIC_PACKAGE_ID_MAINNET ?? "0x0",
+  testnet:
+    "0x25e2dac28bdda5655040ceab5876794b8bdc3687178c1309974017c16dd76fdb",
   devnet: "0x0",
 } as const;
 

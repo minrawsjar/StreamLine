@@ -67,6 +67,140 @@ fun confidential_stream_lifecycle() {
 }
 
 #[test]
+fun confidential_v2_secrets_and_milestone_review() {
+    let mut sc = ts::begin(CLIENT);
+    let mut clk = clock::create_for_testing(sc.ctx());
+
+    // --- Create with a Seal ciphertext attached ---
+    let payment = coin::mint_for_testing<TESTUSDC>(500_000_000, sc.ctx());
+    stream::create_confidential_stream_v2(
+        payment,
+        FREELANCER,
+        4,
+        C_REMAINING_OLD,
+        WRAP_PROOF,
+        C_EARNED_OLD,
+        48 * 60 * 60 * 1000,
+        b"seal-ciphertext-v1",
+        sc.ctx(),
+    );
+
+    sc.next_tx(CLIENT);
+    let mut s = sc.take_shared<ConfidentialStream<TESTUSDC>>();
+    assert!(stream::conf_encrypted_secrets(&s) == b"seal-ciphertext-v1", 0);
+    assert!(stream::conf_current_milestone(&s) == 0, 1);
+
+    // --- Drip v2 rotates the blindings and the ciphertext atomically ---
+    stream::confidential_drip_v2(
+        &mut s,
+        C_REMAINING_NEW,
+        C_EARNED_NEW,
+        TRANSFER_PROOF,
+        b"seal-ciphertext-v2",
+        &clk,
+    );
+    assert!(stream::conf_encrypted_secrets(&s) == b"seal-ciphertext-v2", 2);
+    ts::return_shared(s);
+
+    // --- Freelancer raises the milestone: drips pause for review ---
+    sc.next_tx(FREELANCER);
+    let mut s = sc.take_shared<ConfidentialStream<TESTUSDC>>();
+    stream::conf_raise_completion(&mut s, &clk, sc.ctx());
+    assert!(stream::conf_state(&s) == 1, 3); // PENDING_REVIEW
+    assert!(stream::review_deadline(&s) == 48 * 60 * 60 * 1000, 4);
+    ts::return_shared(s);
+
+    // --- Client approves via the cap: dripping resumes, milestone advances ---
+    sc.next_tx(CLIENT);
+    let cap = sc.take_from_sender<stream::StreamCap>();
+    let mut s = sc.take_shared<ConfidentialStream<TESTUSDC>>();
+    stream::conf_approve_milestone(&cap, &mut s);
+    assert!(stream::conf_state(&s) == 2, 5); // DRIPPING
+    assert!(stream::conf_current_milestone(&s) == 1, 6);
+    assert!(stream::review_deadline(&s) == 0, 7);
+
+    // --- Freelancer re-encrypts secrets out of band ---
+    sc.next_tx(FREELANCER);
+    stream::update_confidential_secrets(&mut s, b"seal-ciphertext-v3", sc.ctx());
+    assert!(stream::conf_encrypted_secrets(&s) == b"seal-ciphertext-v3", 8);
+    ts::return_shared(s);
+    ts::return_to_address(CLIENT, cap);
+
+    // --- Silence auto-approves after the deadline ---
+    sc.next_tx(FREELANCER);
+    let mut s = sc.take_shared<ConfidentialStream<TESTUSDC>>();
+    stream::conf_raise_completion(&mut s, &clk, sc.ctx());
+    clk.increment_for_testing(48 * 60 * 60 * 1000 + 1);
+    stream::conf_auto_approve(&mut s, &clk);
+    assert!(stream::conf_state(&s) == 2, 9);
+    assert!(stream::conf_current_milestone(&s) == 2, 10);
+    ts::return_shared(s);
+
+    clock::destroy_for_testing(clk);
+    sc.end();
+}
+
+#[test]
+#[expected_failure]
+fun drip_paused_during_review_aborts() {
+    let mut sc = ts::begin(CLIENT);
+    let clk = clock::create_for_testing(sc.ctx());
+
+    let payment = coin::mint_for_testing<TESTUSDC>(500_000_000, sc.ctx());
+    stream::create_confidential_stream(
+        payment, FREELANCER, 4, C_REMAINING_OLD, WRAP_PROOF, C_EARNED_OLD,
+        48 * 60 * 60 * 1000, sc.ctx(),
+    );
+
+    sc.next_tx(FREELANCER);
+    let mut s = sc.take_shared<ConfidentialStream<TESTUSDC>>();
+    stream::conf_raise_completion(&mut s, &clk, sc.ctx());
+    // Dripping while a milestone awaits review must abort.
+    stream::confidential_drip(&mut s, C_REMAINING_NEW, C_EARNED_NEW, TRANSFER_PROOF, &clk);
+    ts::return_shared(s);
+
+    clock::destroy_for_testing(clk);
+    sc.end();
+}
+
+#[test]
+#[expected_failure]
+fun raise_by_non_freelancer_aborts() {
+    let mut sc = ts::begin(CLIENT);
+    let clk = clock::create_for_testing(sc.ctx());
+
+    let payment = coin::mint_for_testing<TESTUSDC>(500_000_000, sc.ctx());
+    stream::create_confidential_stream(
+        payment, FREELANCER, 4, C_REMAINING_OLD, WRAP_PROOF, C_EARNED_OLD,
+        48 * 60 * 60 * 1000, sc.ctx(),
+    );
+
+    sc.next_tx(CLIENT);
+    let mut s = sc.take_shared<ConfidentialStream<TESTUSDC>>();
+    stream::conf_raise_completion(&mut s, &clk, sc.ctx());
+    ts::return_shared(s);
+
+    clock::destroy_for_testing(clk);
+    sc.end();
+}
+
+#[test]
+fun seal_approve_grants_own_wallet_identity() {
+    let mut sc = ts::begin(FREELANCER);
+    stream::seal_approve_for_testing(sui::address::to_bytes(FREELANCER), sc.ctx());
+    sc.end();
+}
+
+#[test]
+#[expected_failure]
+fun seal_approve_denies_foreign_identity() {
+    let mut sc = ts::begin(CLIENT);
+    // CLIENT asking for the freelancer's identity must be denied.
+    stream::seal_approve_for_testing(sui::address::to_bytes(FREELANCER), sc.ctx());
+    sc.end();
+}
+
+#[test]
 #[expected_failure]
 fun drip_with_wrong_commitment_aborts() {
     let mut sc = ts::begin(CLIENT);

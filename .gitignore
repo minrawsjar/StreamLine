@@ -50,3 +50,6 @@ Cargo.lock.bak
 # Postgres / local data
 *.sqlite
 data/
+
+# Local tool binaries (e.g. pinned sui CLI)
+.tools/
