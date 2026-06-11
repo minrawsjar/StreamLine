@@ -5,6 +5,8 @@ import { createPortal } from "react-dom";
 import { useWallets, useConnectWallet } from "@mysten/dapp-kit";
 import type { WalletWithRequiredFeatures } from "@mysten/wallet-standard";
 
+import { filterConnectableSuiWallets } from "@/lib/sui-wallets";
+
 type Props = {
   open: boolean;
   onClose: () => void;
@@ -32,7 +34,9 @@ export function ConnectModal({ open, onClose }: Props) {
 
   if (!open) return null;
 
-  const standardWallets = wallets as WalletWithRequiredFeatures[];
+  const standardWallets = filterConnectableSuiWallets(
+    wallets as WalletWithRequiredFeatures[]
+  );
 
   const onConnect = (wallet: WalletWithRequiredFeatures) => {
     setError(null);
@@ -41,7 +45,14 @@ export function ConnectModal({ open, onClose }: Props) {
       { wallet },
       {
         onSuccess: () => onClose(),
-        onError: (e) => setError(e.message ?? "Failed to connect"),
+        onError: (e) => {
+          const message = e.message ?? "Failed to connect";
+          setError(
+            /phantom/i.test(wallet.name)
+              ? "Phantom is not a Sui wallet. Install Slush or another Sui wallet extension."
+              : message
+          );
+        },
         onSettled: () => setPendingName(null),
       }
     );
@@ -118,8 +129,9 @@ export function ConnectModal({ open, onClose }: Props) {
           )}
 
           <p className="text-[11px] leading-relaxed text-[#2b2a5e]/50">
-            Connect a Sui wallet to create and watch streams on testnet. Make
-            sure your wallet network is set to <strong>Testnet</strong>.
+            Use a Sui-native wallet such as <strong>Slush</strong> — Solana
+            wallets like Phantom are not supported. Set your wallet to{" "}
+            <strong>Testnet</strong>.
           </p>
         </div>
       </div>

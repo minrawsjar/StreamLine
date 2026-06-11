@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { SuiClientProvider, WalletProvider } from "@mysten/dapp-kit";
 
 import { networkConfig, DEFAULT_NETWORK } from "@/lib/networks";
+import { isConnectableSuiWallet } from "@/lib/sui-wallets";
 import { RegisterEnokiWallets } from "./RegisterEnokiWallets";
 
 /**
@@ -19,7 +20,14 @@ export function SuiProviders({ children }: { children: ReactNode }) {
     <QueryClientProvider client={queryClient}>
       <SuiClientProvider networks={networkConfig} defaultNetwork={DEFAULT_NETWORK}>
         <RegisterEnokiWallets />
-        <WalletProvider autoConnect>{children}</WalletProvider>
+        <WalletProvider
+          autoConnect
+          walletFilter={isConnectableSuiWallet}
+          preferredWallets={["Slush", "Sui Wallet", "Suiet"]}
+          slushWallet={{ name: "StreamLine" }}
+        >
+          {children}
+        </WalletProvider>
       </SuiClientProvider>
     </QueryClientProvider>
   );

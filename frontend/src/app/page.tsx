@@ -1,21 +1,9 @@
-import {
-  HeroSection,
-  StatsStrip,
-  HowItWorksSection,
-  WhySuiSection,
-  ComparisonSection,
-  SiteFooter,
-} from "@/components/landing";
+import { ScrollHero } from "@/components/landing/ScrollHero";
 
 export default function Home() {
   return (
-    <main className="relative w-full">
-      <HeroSection />
-      <StatsStrip />
-      <HowItWorksSection />
-      <WhySuiSection />
-      <ComparisonSection />
-      <SiteFooter />
+    <main className="h-[100dvh] overflow-hidden">
+      <ScrollHero />
     </main>
   );
 }
