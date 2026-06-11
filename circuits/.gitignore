@@ -1,15 +1,13 @@
 node_modules/
-# Heavy / regenerable proving artifacts
-build/*.ptau
-build/*.zkey
-build/*.wtns
-build/*_js/
-build/*.r1cs
-build/*.sym
-# Keep the small JSON artifacts (proof.json, public.json, verification_key.json,
-# input.json) and Sui byte exports for reproducibility / auditing.
+# Heavy / regenerable proving artifacts (recursive)
+**/*.ptau
+**/*.zkey
+**/*.wtns
+**/*.r1cs
+**/*.sym
+**/*_js/
+build/**/*.wasm
 converter/target/
-
+converter/Cargo.lock
 # Move build output
 move/build/
-converter/Cargo.lock
