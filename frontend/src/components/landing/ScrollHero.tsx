@@ -5,10 +5,10 @@ import { HeroNav } from "./HeroNav";
 import { HeroBackground } from "./HeroBackground";
 import { PhoneMockup } from "./PhoneMockup";
 import { SceneTextPanel } from "./SceneTextPanel";
-import { StoreSoonBadges } from "./StoreSoonBadges";
 import { HERO_SCENES, SCENE_COUNT } from "./heroScenes";
 import { useSceneNavigation } from "./useSceneNavigation";
 import type { PhoneAppRoute } from "@/components/app/phone/types";
+import { HERO_LAYOUT_MAX_CLASS } from "./heroLayout";
 
 export function ScrollHero() {
   const [phoneApp, setPhoneApp] = useState<PhoneAppRoute | null>(null);
@@ -41,7 +41,7 @@ export function ScrollHero() {
 
       {/* Desktop: fixed 3-column grid — text slots always same size */}
       <div
-        className={`relative z-10 mx-auto hidden w-full max-w-[1520px] flex-1 -translate-y-4 items-center px-[6%] lg:grid lg:grid-cols-[1fr_auto_1fr] lg:-translate-y-9 xl:-translate-y-10 ${
+        className={`relative z-10 mx-auto hidden w-full ${HERO_LAYOUT_MAX_CLASS} flex-1 -translate-y-4 items-center px-8 lg:grid lg:grid-cols-[1fr_auto_1fr] lg:-translate-y-9 xl:-translate-y-10 ${
           isIntroTiles ? "lg:gap-8 xl:gap-12" : "lg:gap-16 xl:gap-24"
         }`}
       >
@@ -59,15 +59,24 @@ export function ScrollHero() {
                 isIntroTiles ? "items-start" : "items-center"
               } ${i === activeIndex ? "z-10" : "z-0 pointer-events-none"}`}
             >
-              {i === activeIndex && (
-                <SceneTextPanel
-                  side="left"
-                  content={s.left}
-                  theme={s.theme}
-                  panelMode={s.panelMode}
-                  visible={textVisible && !inApp}
-                />
-              )}
+              {i === activeIndex &&
+                (i === SCENE_COUNT - 1 ? (
+                  <SceneTextPanel
+                    side="left"
+                    content={s.left}
+                    theme={s.theme}
+                    visible={textVisible && !inApp}
+                    storeCard="apple"
+                  />
+                ) : (
+                  <SceneTextPanel
+                    side="left"
+                    content={s.left}
+                    theme={s.theme}
+                    panelMode={s.panelMode}
+                    visible={textVisible && !inApp}
+                  />
+                ))}
             </div>
           ))}
         </div>
@@ -106,8 +115,7 @@ export function ScrollHero() {
                   theme={s.theme}
                   panelMode={s.panelMode}
                   visible={textVisible && !inApp}
-                  showLaunchCta={i === SCENE_COUNT - 1}
-                  onLaunchApp={launchApp}
+                  storeCard={i === SCENE_COUNT - 1 ? "google" : undefined}
                 />
               )}
             </div>
@@ -136,46 +144,66 @@ export function ScrollHero() {
                 : "max-w-[360px]"
             }`}
           >
-            <SceneTextPanel
-              side="left"
-              content={scene.left}
-              theme={scene.theme}
-              panelMode={scene.panelMode}
-              visible={textVisible}
-              compact
-            />
-            {scene.panelMode !== "tiles" && (
-              <div className="mt-4">
+            {isLast ? (
+              <div className="mt-4 flex w-full max-w-[360px] gap-3">
+                <SceneTextPanel
+                  side="left"
+                  content={scene.left}
+                  theme={scene.theme}
+                  visible={textVisible}
+                  compact
+                  storeCard="apple"
+                />
                 <SceneTextPanel
                   side="right"
                   content={scene.right}
                   theme={scene.theme}
                   visible={textVisible}
                   compact
+                  storeCard="google"
                 />
               </div>
-            )}
-            {scene.panelMode === "tiles" && (
-              <SceneTextPanel
-                side="right"
-                content={scene.right}
-                theme={scene.theme}
-                panelMode={scene.panelMode}
-                visible={textVisible}
-                compact
-              />
+            ) : (
+              <>
+                <SceneTextPanel
+                  side="left"
+                  content={scene.left}
+                  theme={scene.theme}
+                  panelMode={scene.panelMode}
+                  visible={textVisible}
+                  compact
+                />
+                {scene.panelMode !== "tiles" && (
+                  <div className="mt-4">
+                    <SceneTextPanel
+                      side="right"
+                      content={scene.right}
+                      theme={scene.theme}
+                      visible={textVisible}
+                      compact
+                    />
+                  </div>
+                )}
+                {scene.panelMode === "tiles" && (
+                  <SceneTextPanel
+                    side="right"
+                    content={scene.right}
+                    theme={scene.theme}
+                    panelMode={scene.panelMode}
+                    visible={textVisible}
+                    compact
+                  />
+                )}
+              </>
             )}
             {isLast && (
-              <div className="mt-5 flex flex-col items-center gap-3">
-                <StoreSoonBadges />
-                <button
-                  type="button"
-                  onClick={launchApp}
-                  className="sl-glass-btn sl-glass-btn-primary"
-                >
-                  Launch App →
-                </button>
-              </div>
+              <button
+                type="button"
+                onClick={launchApp}
+                className="sl-glass-btn sl-glass-btn-primary mt-5"
+              >
+                Launch App →
+              </button>
             )}
           </div>
         )}

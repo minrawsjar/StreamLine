@@ -1,7 +1,9 @@
 "use client";
 
 import Link from "next/link";
+
 import { StreamLineMark } from "./StreamLineMark";
+import { HERO_LAYOUT_MAX_CLASS } from "./heroLayout";
 import type { SceneTheme } from "./heroScenes";
 
 type HeroNavProps = {
@@ -21,7 +23,7 @@ export function HeroNav({
 
   return (
     <nav
-      className={`relative z-20 flex shrink-0 items-center justify-between px-[5%] py-5 transition-colors duration-700 ${
+      className={`relative z-20 mx-auto flex w-full ${HERO_LAYOUT_MAX_CLASS} shrink-0 items-center justify-between px-8 py-5 transition-colors duration-700 ${
         isPro ? "font-[family-name:var(--font-inter)]" : ""
       }`}
     >

@@ -15,6 +15,7 @@
   --color-accent-hover: #f19654;
   --color-ink: #111;
   --color-paper: #f1f4f5;
+  --color-brand: #3d81e3;
 }
 
 html {
@@ -236,7 +237,128 @@ body {
   .sl-levitate,
   .sl-levitate-glow,
   .sl-drift,
-  .sl-float-tile {
+  .sl-float-tile,
+  .animate-shiny {
     animation: none;
   }
+}
+
+/* Shiny keyword accent (headline highlights) */
+@keyframes sl-shiny {
+  0% {
+    background-position: -200% center;
+  }
+  100% {
+    background-position: 200% center;
+  }
+}
+
+.sl-shiny {
+  background-image: linear-gradient(
+    to right,
+    #091020 0%,
+    #0b2551 12.5%,
+    #a4f4fd 32.5%,
+    #00d2ff 50%,
+    #0b2551 67.5%,
+    #091020 87.5%,
+    #091020 100%
+  );
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  filter: url(#c3-noise);
+}
+
+.sl-shiny-dark {
+  background-image: linear-gradient(
+    to right,
+    #1a0800 0%,
+    #7c2d12 12%,
+    #ea580c 28%,
+    #fbbf24 42%,
+    #f08030 50%,
+    #fbbf24 58%,
+    #ea580c 72%,
+    #9a3412 88%,
+    #1a0800 100%
+  );
+}
+
+.animate-shiny {
+  animation: sl-shiny 6s linear infinite;
+}
+
+/* Liquid-glass surfaces (phone frame, panels) */
+.liquid-glass {
+  background: rgb(255 255 255 / 0.01);
+  background-blend-mode: luminosity;
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  border: none;
+  box-shadow: inset 0 1px 1px rgb(255 255 255 / 0.1);
+  position: relative;
+  overflow: hidden;
+}
+
+.liquid-glass::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1.4px;
+  background: linear-gradient(
+    180deg,
+    rgb(255 255 255 / 0.45) 0%,
+    rgb(255 255 255 / 0.15) 20%,
+    rgb(255 255 255 / 0) 40%,
+    rgb(255 255 255 / 0) 60%,
+    rgb(255 255 255 / 0.15) 80%,
+    rgb(255 255 255 / 0.45) 100%
+  );
+  -webkit-mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+.liquid-glass-light {
+  background: rgb(255 255 255 / 0.42);
+  box-shadow:
+    inset 0 1px 1px rgb(255 255 255 / 0.85),
+    0 48px 96px rgb(0 0 0 / 0.1);
+}
+
+.liquid-glass-light::before {
+  background: linear-gradient(
+    180deg,
+    rgb(255 255 255 / 0.95) 0%,
+    rgb(255 255 255 / 0.35) 22%,
+    rgb(255 255 255 / 0) 42%,
+    rgb(255 255 255 / 0) 58%,
+    rgb(255 255 255 / 0.3) 78%,
+    rgb(255 255 255 / 0.7) 100%
+  );
+}
+
+.liquid-glass-notch {
+  background: rgb(0 0 0 / 0.35);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid rgb(255 255 255 / 0.14);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.18),
+    0 2px 8px rgb(0 0 0 / 0.25);
+}
+
+.liquid-glass-notch-light {
+  background: rgb(255 255 255 / 0.45);
+  border: 1px solid rgb(0 0 0 / 0.08);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.9),
+    0 2px 8px rgb(0 0 0 / 0.08);
 }

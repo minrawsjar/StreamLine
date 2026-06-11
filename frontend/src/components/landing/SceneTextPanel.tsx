@@ -1,5 +1,9 @@
+"use client";
+
+import type { ReactNode } from "react";
+
 import type { PanelMode, ScenePanel, SceneTheme } from "./heroScenes";
-import { StoreSoonBadges } from "./StoreSoonBadges";
+import { StoreDownloadCard, type StorePlatform } from "./StoreSoonBadges";
 
 type SceneTextPanelProps = {
   side: "left" | "right";
@@ -7,8 +11,7 @@ type SceneTextPanelProps = {
   theme: SceneTheme;
   visible: boolean;
   panelMode?: PanelMode;
-  showLaunchCta?: boolean;
-  onLaunchApp?: () => void;
+  storeCard?: StorePlatform;
   compact?: boolean;
 };
 
@@ -16,18 +19,50 @@ const PANEL_W = "w-full max-w-[360px] min-h-[280px]";
 const TILE_W = "w-full max-w-[min(100%,520px)]";
 const TILE_W_COMPACT = "w-full flex-1 min-w-0";
 
+function AccentText({
+  children,
+  isPro,
+}: {
+  children: ReactNode;
+  isPro: boolean;
+}) {
+  return (
+    <span
+      className={`sl-shiny animate-shiny ${isPro ? "sl-shiny-dark" : ""}`}
+    >
+      {children}
+    </span>
+  );
+}
+
 export function SceneTextPanel({
   side,
   content,
   theme,
   visible,
   panelMode = "full",
-  showLaunchCta,
-  onLaunchApp,
+  storeCard,
   compact,
 }: SceneTextPanelProps) {
   const isPro = theme === "pro";
   const isTiles = panelMode === "tiles";
+
+  if (storeCard) {
+    return (
+      <div
+        className={`${PANEL_W} flex flex-col transition-all duration-500 ease-out ${
+          side === "left"
+            ? "items-center lg:items-end"
+            : "items-center lg:items-start"
+        } ${visible ? "translate-y-0 opacity-100" : "translate-y-4 opacity-0"}`}
+      >
+        <StoreDownloadCard
+          store={storeCard}
+          size={compact ? "sm" : "md"}
+        />
+      </div>
+    );
+  }
 
   if (isTiles) {
     return (
@@ -54,9 +89,7 @@ export function SceneTextPanel({
         >
           {content.headline}
           <br />
-          <span className={isPro ? "text-white/55" : "text-black/70"}>
-            {content.accent}
-          </span>
+          <AccentText isPro={isPro}>{content.accent}</AccentText>
         </h2>
         {content.body && (
           <p
@@ -83,28 +116,27 @@ export function SceneTextPanel({
         isPro ? "font-[family-name:var(--font-inter)]" : ""
       }`}
     >
-      {/* Fixed slot: label */}
-      <p
-        className={`h-4 text-[10px] font-semibold uppercase tracking-[0.22em] ${
-          isPro ? "text-white/50" : "text-black/40"
-        }`}
-      >
-        {content.label}
-      </p>
+      {content.label ? (
+        <p
+          className={`h-4 text-[10px] font-semibold uppercase tracking-[0.22em] ${
+            isPro ? "text-white/50" : "text-black/40"
+          }`}
+        >
+          {content.label}
+        </p>
+      ) : (
+        <div className="h-0" aria-hidden />
+      )}
 
-      {/* Fixed slot: headline */}
       <h2
-        className={`mt-4 text-[1.625rem] font-semibold leading-[1.12] tracking-[-0.02em] lg:text-[1.75rem] ${
+        className={`${content.label ? "mt-4" : "mt-0"} text-[1.625rem] font-semibold leading-[1.12] tracking-[-0.02em] lg:text-[1.75rem] ${
           isPro ? "font-medium text-white" : "font-bold text-[#111]"
         }`}
       >
         {content.headline}{" "}
-        <span className={isPro ? "text-white/55" : "text-black/70"}>
-          {content.accent}
-        </span>
+        <AccentText isPro={isPro}>{content.accent}</AccentText>
       </h2>
 
-      {/* Fixed slot: body */}
       {!compact && (
         <p
           className={`mt-4 text-[13px] leading-[1.65] ${
@@ -115,7 +147,6 @@ export function SceneTextPanel({
         </p>
       )}
 
-      {/* Fixed slot: bullets */}
       {!compact && content.bullets.length > 0 && (
         <ul
           className={`mt-5 space-y-2 ${
@@ -140,7 +171,6 @@ export function SceneTextPanel({
         </ul>
       )}
 
-      {/* Fixed slot: metric */}
       {content.metric && !compact && (
         <div
           className={`mt-5 inline-flex items-baseline gap-2 rounded-lg px-3 py-2 ${
@@ -166,22 +196,6 @@ export function SceneTextPanel({
         </div>
       )}
 
-      {showLaunchCta && (
-        <div
-          className={`mt-6 flex flex-col gap-4 ${
-            side === "left" ? "items-center lg:items-end" : "items-center lg:items-start"
-          }`}
-        >
-          <StoreSoonBadges className="hidden lg:flex" />
-          <button
-            type="button"
-            onClick={onLaunchApp}
-            className="sl-glass-btn sl-glass-btn-primary"
-          >
-            Launch App →
-          </button>
-        </div>
-      )}
     </div>
   );
 }
