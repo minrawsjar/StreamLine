@@ -1,0 +1,11 @@
+node_modules/
+# Heavy / regenerable proving artifacts
+build/*.ptau
+build/*.zkey
+build/*.wtns
+build/*_js/
+build/*.r1cs
+build/*.sym
+# Keep the small JSON artifacts (proof.json, public.json, verification_key.json,
+# input.json) and Sui byte exports for reproducibility / auditing.
+converter/target/
