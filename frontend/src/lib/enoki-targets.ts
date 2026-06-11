@@ -12,6 +12,11 @@ const STREAM_FUNCTIONS = [
   "drip",
   "raise_dispute",
   "set_splits",
+  // Confidential streaming (amounts hidden, Groth16-verified on-chain).
+  "create_confidential_stream",
+  "confidential_drip",
+  "claim",
+  "confidential_dispute",
 ] as const;
 
 export function allowedMoveCallTargets(network: NetworkName): string[] {

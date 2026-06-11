@@ -7,7 +7,7 @@ import { WalletButton } from "@/components/wallet/WalletButton";
 import { StreamCreator } from "../StreamCreator";
 import { FreelancerDashboard } from "../FreelancerDashboard";
 import { ClientDashboard } from "../ClientDashboard";
-import { ConfidentialDemo } from "../ConfidentialDemo";
+import { ConfidentialStreams } from "../ConfidentialStreams";
 import { RoleSelect, type Role } from "./RoleSelect";
 
 const PAYER_TABS = [
@@ -83,7 +83,7 @@ export function UserAppShell() {
       {tab === "dashboard" && <ClientDashboard />}
       {tab === "earn" && <FreelancerDashboard />}
       {tab === "collateral" && <ComingSoon title="Collateral panel" />}
-      {tab === "confidential" && <ConfidentialDemo />}
+      {tab === "confidential" && <ConfidentialStreams />}
     </div>
   );
 }
