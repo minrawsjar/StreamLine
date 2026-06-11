@@ -1,5 +1,6 @@
 export { Navbar } from "./Navbar";
 export { HeroSection } from "./HeroSection";
+export { ScrollHero } from "./ScrollHero";
 export { StatsStrip } from "./StatsStrip";
 export { HowItWorksSection } from "./HowItWorksSection";
 export { WhySuiSection } from "./WhySuiSection";

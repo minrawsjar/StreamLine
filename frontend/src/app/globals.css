@@ -134,3 +134,38 @@ body {
   border-color: rgba(255, 255, 255, 0.4);
   color: #fff;
 }
+
+/* Pro / dark theme glass buttons */
+.sl-glass-btn-dark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 22px;
+  border-radius: 9999px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  transition: all 0.3s ease;
+  background: rgba(255, 255, 255, 0.06);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.sl-glass-btn-dark:hover {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.22);
+  color: #fff;
+}
+
+.sl-glass-btn-dark-primary {
+  background: rgba(255, 255, 255, 0.92);
+  border-color: transparent;
+  color: #0a0a0a;
+}
+
+.sl-glass-btn-dark-primary:hover {
+  background: #fff;
+  color: #0a0a0a;
+}
