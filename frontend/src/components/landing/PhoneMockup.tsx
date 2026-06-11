@@ -1,8 +1,9 @@
 "use client";
 
-import Link from "next/link";
 import { StreamLineMark } from "./StreamLineMark";
 import { StoreSoonBadges } from "./StoreSoonBadges";
+import { PhoneAppShell } from "@/components/app/phone/PhoneAppShell";
+import type { PhoneAppRoute } from "@/components/app/phone/types";
 import type { PhoneScene, SceneTheme } from "./heroScenes";
 
 const STATES = ["LOCKED", "PENDING", "DRIPPING", "PAUSED", "DONE"];
@@ -16,20 +17,24 @@ type PhoneMockupProps = {
   transitioning?: boolean;
   theme?: SceneTheme;
   compact?: boolean;
+  phoneApp?: PhoneAppRoute | null;
+  onPhoneAppChange?: (route: PhoneAppRoute) => void;
+  onCloseApp?: () => void;
+  onLaunchApp?: () => void;
 };
 
 function PhoneWallpaper() {
   return (
     <>
       <div
-        className="absolute inset-0 opacity-30"
+        className="absolute inset-0 opacity-25"
         style={{
-          backgroundImage: `radial-gradient(circle at 70% 30%, #1a9e8f 0%, transparent 50%),
-            radial-gradient(circle at 20% 80%, #0d6e63 0%, transparent 40%)`,
+          backgroundImage: `radial-gradient(circle at 70% 30%, rgba(0,0,0,0.12) 0%, transparent 50%),
+            radial-gradient(circle at 20% 80%, rgba(0,0,0,0.08) 0%, transparent 40%)`,
         }}
       />
       <svg
-        className="absolute inset-0 h-full w-full opacity-40"
+        className="absolute inset-0 h-full w-full opacity-30"
         viewBox="0 0 393 852"
         fill="none"
         preserveAspectRatio="xMidYMid slice"
@@ -37,12 +42,12 @@ function PhoneWallpaper() {
       >
         <path
           d="M-20 720 C100 600, 180 480, 260 360 C320 260, 380 160, 460 60"
-          stroke="#1a9e8f"
+          stroke="#111"
           strokeWidth="2"
         />
         <path
           d="M40 780 C160 660, 240 540, 320 420 C380 320, 440 220, 520 120"
-          stroke="#1a9e8f"
+          stroke="#111"
           strokeWidth="1.5"
         />
       </svg>
@@ -50,33 +55,18 @@ function PhoneWallpaper() {
   );
 }
 
-function PhoneHeader({
-  badge,
-  pro = false,
-}: {
-  badge: string;
-  pro?: boolean;
-}) {
+function PhoneHeader({ pro = false }: { pro?: boolean }) {
   return (
-    <div className="flex shrink-0 items-center justify-between">
-      <div className="flex items-center gap-2">
-        <StreamLineMark size="sm" variant={pro ? "pro" : "default"} />
-        <span
-          className={`text-sm font-semibold tracking-tight ${
-            pro ? "font-[family-name:var(--font-inter)] text-white" : "font-bold text-[#111]"
-          }`}
-        >
-          streamline{pro && <span className="text-white/40">.pro</span>}
-        </span>
-      </div>
+    <div className="flex shrink-0 items-center gap-2">
+      <StreamLineMark size="sm" variant={pro ? "pro" : "default"} />
       <span
-        className={`rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider ${
+        className={`text-sm font-semibold tracking-tight ${
           pro
-            ? "border border-white/15 bg-white/10 text-white/70"
-            : "bg-[#1a9e8f]/10 text-[#1a9e8f]"
+            ? "font-[family-name:var(--font-inter)] text-white"
+            : "font-bold text-[#111]"
         }`}
       >
-        {badge}
+        streamline{pro && <span className="text-white/40">.pro</span>}
       </span>
     </div>
   );
@@ -84,7 +74,7 @@ function PhoneHeader({
 
 function DashboardScreen() {
   return (
-    <div className="mt-6 flex min-h-0 flex-1 flex-col">
+    <div className="mt-4 flex min-h-0 flex-1 flex-col justify-center gap-3">
       <div className="rounded-2xl border border-white/60 bg-white/75 p-4 shadow-[0_4px_24px_rgba(0,0,0,0.06)] backdrop-blur-md">
         <p className="text-[10px] font-semibold uppercase tracking-wider text-[#888]">
           Earned today
@@ -92,8 +82,8 @@ function DashboardScreen() {
         <p className="mt-1.5 text-[1.85rem] font-bold tabular leading-none text-[#111]">
           $142.50
         </p>
-        <div className="mt-3 h-2 overflow-hidden rounded-full bg-[#e8f5f3]">
-          <div className="h-full w-[68%] rounded-full bg-[#1a9e8f]" />
+        <div className="mt-3 h-2 overflow-hidden rounded-full bg-black/8">
+          <div className="h-full w-[68%] rounded-full bg-[#111]" />
         </div>
       </div>
       <div className="mt-3 grid grid-cols-2 gap-2.5">
@@ -107,14 +97,9 @@ function DashboardScreen() {
           <p className="text-[9px] font-medium uppercase tracking-wider text-[#888]">
             Next drip
           </p>
-          <p className="mt-0.5 text-sm font-bold text-[#1a9e8f]">42s</p>
+          <p className="mt-0.5 text-sm font-bold text-[#111]">42s</p>
         </div>
       </div>
-      <p className="mt-auto pt-6 text-xl font-bold leading-tight tracking-tight text-[#111]">
-        Pay as
-        <br />
-        you build.
-      </p>
     </div>
   );
 }
@@ -124,12 +109,12 @@ function DripScreen({ progress }: { progress: number }) {
   return (
     <div className="mt-6 flex min-h-0 flex-1 flex-col items-center justify-center text-center">
       <div className="relative flex h-28 w-28 items-center justify-center">
-        <div className="absolute inset-0 animate-ping rounded-full bg-[#1a9e8f]/20" />
-        <div className="relative flex h-24 w-24 items-center justify-center rounded-full border-2 border-[#1a9e8f]/40 bg-white/80 backdrop-blur-md">
+        <div className="absolute inset-0 animate-ping rounded-full bg-black/10" />
+        <div className="relative flex h-24 w-24 items-center justify-center rounded-full border-2 border-black/25 bg-white/80 backdrop-blur-md">
           <span className="text-2xl">↓</span>
         </div>
       </div>
-      <p className="mt-6 text-[10px] font-semibold uppercase tracking-[0.2em] text-[#1a9e8f]">
+      <p className="mt-6 text-[10px] font-semibold uppercase tracking-[0.2em] text-black/50">
         Incoming drip
       </p>
       <p className="mt-2 text-[2rem] font-bold tabular leading-none text-[#111]">
@@ -158,9 +143,9 @@ function StatesScreen({ progress }: { progress: number }) {
             key={s}
             className={`rounded-xl px-3.5 py-2.5 text-xs font-bold transition-all duration-500 ${
               i === active
-                ? "bg-[#1a9e8f] text-white shadow-[0_4px_16px_rgba(26,158,143,0.35)]"
+                ? "bg-[#111] text-white shadow-[0_4px_16px_rgba(0,0,0,0.2)]"
                 : i < active
-                  ? "bg-[#1a9e8f]/15 text-[#1a9e8f]"
+                  ? "bg-black/10 text-[#111]"
                   : "bg-white/60 text-[#aaa]"
             }`}
           >
@@ -197,7 +182,7 @@ function StatsScreen() {
             key={s.l}
             className="rounded-xl border border-white/50 bg-white/70 p-3.5 backdrop-blur-md"
           >
-            <p className="text-lg font-bold tabular text-[#1a9e8f]">{s.v}</p>
+            <p className="text-lg font-bold tabular text-[#111]">{s.v}</p>
             <p className="text-[9px] font-medium uppercase tracking-wider text-[#888]">
               {s.l}
             </p>
@@ -271,7 +256,7 @@ function ProWallpaper() {
   );
 }
 
-function LaunchScreen() {
+function LaunchScreen({ onLaunchApp }: { onLaunchApp?: () => void }) {
   return (
     <div className="mt-4 flex min-h-0 flex-1 flex-col items-center justify-center text-center">
       <StreamLineMark size="lg" className="!h-12 !w-12 !text-xl" />
@@ -284,12 +269,13 @@ function LaunchScreen() {
         Scan to download — available on iOS &amp; Android shortly.
       </p>
       <StoreSoonBadges className="mt-5" size="sm" />
-      <Link
-        href="/app"
+      <button
+        type="button"
+        onClick={onLaunchApp}
         className="sl-glass-btn sl-glass-btn-primary mt-5 !px-5 !py-2.5 !text-[10px]"
       >
         Use web app →
-      </Link>
+      </button>
     </div>
   );
 }
@@ -297,9 +283,11 @@ function LaunchScreen() {
 function PhoneScreenContent({
   scene,
   sceneProgress,
+  onLaunchApp,
 }: {
   scene: PhoneScene;
   sceneProgress: number;
+  onLaunchApp?: () => void;
 }) {
   switch (scene) {
     case "dashboard":
@@ -313,18 +301,9 @@ function PhoneScreenContent({
     case "pro":
       return <ProScreen progress={sceneProgress} />;
     case "launch":
-      return <LaunchScreen />;
+      return <LaunchScreen onLaunchApp={onLaunchApp} />;
   }
 }
-
-const BADGES: Record<PhoneScene, string> = {
-  dashboard: "Live",
-  drip: "Dripping",
-  states: "On-chain",
-  stats: "Sui",
-  pro: "Enterprise",
-  launch: "Go",
-};
 
 export function PhoneMockup({
   scene,
@@ -332,8 +311,14 @@ export function PhoneMockup({
   transitioning = false,
   theme = "light",
   compact = false,
+  phoneApp = null,
+  onPhoneAppChange,
+  onCloseApp,
+  onLaunchApp,
 }: PhoneMockupProps) {
-  const isPro = theme === "pro" || scene === "pro";
+  const inApp = phoneApp !== null;
+  const isPro =
+    phoneApp === "pro" || (!inApp && (theme === "pro" || scene === "pro"));
 
   return (
     <div
@@ -343,19 +328,20 @@ export function PhoneMockup({
           : "w-[min(88vw,300px)] sm:w-[320px] lg:w-[340px]"
       }`}
     >
-      <div
-        className={`absolute inset-x-4 top-6 bottom-6 rounded-[3.25rem] blur-3xl transition-colors duration-700 ${
-          isPro ? "bg-white/8" : "bg-[#1a9e8f]/12"
-        }`}
-      />
+      <div className="sl-levitate relative">
+        <div
+          className={`sl-levitate-glow absolute inset-x-4 top-6 bottom-6 rounded-[3.25rem] blur-3xl transition-colors duration-700 ${
+            isPro ? "bg-white/8" : "bg-black/8"
+          }`}
+        />
 
-      <div
-        className={`relative rounded-[3rem] border-[3.5px] p-[11px] shadow-[0_48px_96px_rgba(0,0,0,0.2)] transition-colors duration-700 ${
-          isPro
-            ? "border-[#333] bg-[#1a1a1a]"
-            : "border-[#1a1a1a] bg-[#1a1a1a]"
-        }`}
-      >
+        <div
+          className={`relative rounded-[3rem] border-[3.5px] p-[11px] shadow-[0_48px_96px_rgba(0,0,0,0.2)] transition-colors duration-700 ${
+            isPro
+              ? "border-[#333] bg-[#1a1a1a]"
+              : "border-[#1a1a1a] bg-[#1a1a1a]"
+          }`}
+        >
         <div className="absolute left-1/2 top-[18px] z-20 h-[26px] w-[96px] -translate-x-1/2 rounded-full bg-[#0a0a0a]" />
 
         <div
@@ -368,14 +354,28 @@ export function PhoneMockup({
 
           <div
             className={`absolute inset-0 z-10 flex flex-col px-6 pb-8 pt-14 transition-all duration-[420ms] ease-out ${
-              transitioning
+              transitioning && !inApp
                 ? "scale-[0.97] opacity-0"
                 : "scale-100 opacity-100"
             }`}
           >
-            <PhoneHeader badge={BADGES[scene]} pro={isPro} />
-            <PhoneScreenContent scene={scene} sceneProgress={sceneProgress} />
+            {inApp && phoneApp && onPhoneAppChange ? (
+              <PhoneAppShell
+                route={phoneApp}
+                onNavigate={onPhoneAppChange}
+              />
+            ) : (
+              <>
+                <PhoneHeader pro={isPro} />
+                <PhoneScreenContent
+                  scene={scene}
+                  sceneProgress={sceneProgress}
+                  onLaunchApp={onLaunchApp}
+                />
+              </>
+            )}
           </div>
+        </div>
         </div>
       </div>
     </div>

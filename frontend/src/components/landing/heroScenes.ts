@@ -17,10 +17,13 @@ export type ScenePanel = {
   metric?: { value: string; label: string };
 };
 
+export type PanelMode = "tiles" | "full";
+
 export type HeroScene = {
   id: string;
   phone: PhoneScene;
   theme: SceneTheme;
+  panelMode?: PanelMode;
   left: ScenePanel;
   right: ScenePanel;
 };
@@ -30,29 +33,20 @@ export const HERO_SCENES: HeroScene[] = [
     id: "earn",
     phone: "dashboard",
     theme: "light",
+    panelMode: "tiles",
     left: {
-      label: "For freelancers & creators",
-      headline: "Income that flows",
-      accent: "with your work.",
-      body: "Stop invoicing and chasing payments. StreamLine drips USDC to your wallet every 60 seconds while milestones unlock — no claims, no gas, no waiting.",
-      bullets: [
-        "Live balance updates as you deliver",
-        "Milestone gates protect both sides",
-        "zkLogin — sign up with Google in seconds",
-      ],
-      metric: { value: "$0.00", label: "fee per drip" },
+      label: "Earn",
+      headline: "Pay as",
+      accent: "you build.",
+      body: "Milestone-gated streams that release funds as you deliver — no chasing invoices.",
+      bullets: [],
     },
     right: {
-      label: "Real-time settlement",
-      headline: "Every second",
-      accent: "counts.",
-      body: "Keepers settle on-chain at ≤60s intervals. Your earned amount ticks up continuously — like a salary, but tied to output, not a calendar.",
-      bullets: [
-        "Address Balances — zero-fee transfers",
-        "No wallet action needed to receive",
-        "Works with USDC, USDsui, and more",
-      ],
-      metric: { value: "≤60s", label: "settlement cycle" },
+      label: "Stream",
+      headline: "Every",
+      accent: "60 seconds.",
+      body: "Micropayments drip on-chain automatically. No claim tx, no gas, no waiting.",
+      bullets: [],
     },
   },
   {

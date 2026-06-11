@@ -50,7 +50,7 @@ function StoreBadge({
           {isApple ? "App Store" : "Google Play"}
         </p>
       </div>
-      <span className="absolute right-2 top-1.5 rounded-full bg-[#1a9e8f]/15 px-1.5 py-0.5 text-[7px] font-bold uppercase tracking-wider text-[#1a9e8f]/80">
+      <span className="absolute right-2 top-1.5 rounded-full bg-black/8 px-1.5 py-0.5 text-[7px] font-bold uppercase tracking-wider text-black/55">
         Soon
       </span>
     </div>

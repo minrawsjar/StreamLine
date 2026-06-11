@@ -1,0 +1,89 @@
+"use client";
+
+import { useCurrentAccount } from "@mysten/dapp-kit";
+
+import { WalletButton } from "@/components/wallet/WalletButton";
+import { StreamLineMark } from "@/components/landing/StreamLineMark";
+import type { PhoneAppRoute } from "./types";
+
+const APPS: {
+  route: PhoneAppRoute;
+  subtitle: string;
+  pro?: boolean;
+}[] = [
+  { route: "user", subtitle: "User" },
+  { route: "pro", subtitle: "Business", pro: true },
+];
+
+type PhoneLauncherProps = {
+  onOpen: (route: PhoneAppRoute) => void;
+};
+
+export function PhoneLauncher({ onOpen }: PhoneLauncherProps) {
+  const account = useCurrentAccount();
+
+  if (!account) {
+    return (
+      <div className="flex min-h-0 flex-1 flex-col items-center justify-center px-2 text-center">
+        <StreamLineMark size="lg" className="!h-11 !w-11" />
+        <p className="mt-5 text-[9px] font-semibold uppercase tracking-[0.2em] text-black/45">
+          StreamLine
+        </p>
+        <h2 className="mt-2 text-base font-bold leading-tight tracking-tight text-[#111]">
+          Connect wallet
+        </h2>
+        <p className="mt-2 max-w-[200px] text-[10px] leading-snug text-[#666]">
+          Sign in to open your apps inside StreamLine.
+        </p>
+        <WalletButton className="sl-glass-btn sl-glass-btn-primary mt-5 !px-4 !py-2 !text-[9px]" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex min-h-0 flex-1 flex-col">
+      <p className="text-[9px] font-semibold uppercase tracking-[0.18em] text-[#888]">
+        Your apps
+      </p>
+      <div className="mt-5 grid flex-1 grid-cols-2 content-start gap-4">
+        {APPS.map((app) => (
+          <button
+            key={app.route}
+            type="button"
+            onClick={() => onOpen(app.route)}
+            className="group flex flex-col items-center gap-2 text-center"
+          >
+            <div
+              className={`flex h-14 w-14 items-center justify-center rounded-2xl shadow-[0_4px_16px_rgba(0,0,0,0.08)] transition-transform group-active:scale-95 ${
+                app.pro
+                  ? "border border-white/12 bg-[#141414]"
+                  : "border border-white/70 bg-white"
+              }`}
+            >
+              <StreamLineMark
+                size="sm"
+                variant={app.pro ? "pro" : "default"}
+                className="!h-8 !w-8"
+              />
+            </div>
+            <div>
+              <p
+                className={`text-[11px] font-semibold ${
+                  app.pro ? "text-[#111]" : "text-[#111]"
+                }`}
+              >
+                streamline
+                {app.pro && (
+                  <span className="font-medium text-[#888]">.pro</span>
+                )}
+              </p>
+              <p className="text-[8px] uppercase tracking-[0.14em] text-[#aaa]">
+                {app.subtitle}
+              </p>
+            </div>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}

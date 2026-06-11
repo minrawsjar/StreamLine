@@ -114,24 +114,24 @@ body {
 
 .sl-glass-btn:hover {
   background: rgba(255, 255, 255, 0.62);
-  border-color: rgba(26, 158, 143, 0.35);
-  color: #0d6e63;
+  border-color: rgba(0, 0, 0, 0.18);
+  color: #111;
 }
 
 .sl-glass-btn-primary {
-  background: rgba(26, 158, 143, 0.72);
+  background: rgba(17, 17, 17, 0.88);
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
-  border: 1px solid rgba(255, 255, 255, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.12);
   box-shadow:
-    0 8px 28px rgba(26, 158, 143, 0.28),
-    inset 0 1px 0 rgba(255, 255, 255, 0.25);
+    0 8px 28px rgba(0, 0, 0, 0.18),
+    inset 0 1px 0 rgba(255, 255, 255, 0.12);
   color: #fff;
 }
 
 .sl-glass-btn-primary:hover {
-  background: rgba(13, 110, 99, 0.82);
-  border-color: rgba(255, 255, 255, 0.4);
+  background: rgba(0, 0, 0, 0.95);
+  border-color: rgba(255, 255, 255, 0.18);
   color: #fff;
 }
 
@@ -168,4 +168,75 @@ body {
 .sl-glass-btn-dark-primary:hover {
   background: #fff;
   color: #0a0a0a;
+}
+
+@keyframes sl-levitate {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-12px);
+  }
+}
+
+@keyframes sl-levitate-glow {
+  0%,
+  100% {
+    transform: translateY(8px) scale(1);
+    opacity: 0.55;
+  }
+  50% {
+    transform: translateY(-10px) scale(1.05);
+    opacity: 0.78;
+  }
+}
+
+@keyframes sl-drift {
+  0%,
+  100% {
+    transform: translateY(-50%) translateX(0);
+  }
+  50% {
+    transform: translateY(calc(-50% - 16px)) translateX(8px);
+  }
+}
+
+@keyframes sl-float-tile {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-7px);
+  }
+}
+
+.sl-levitate {
+  animation: sl-levitate 5.5s ease-in-out infinite;
+}
+
+.sl-levitate-glow {
+  animation: sl-levitate-glow 5.5s ease-in-out infinite;
+}
+
+.sl-drift {
+  animation: sl-drift 14s ease-in-out infinite;
+}
+
+.sl-float-tile {
+  animation: sl-float-tile 5s ease-in-out infinite;
+}
+
+.sl-float-tile-delay {
+  animation-delay: 1.4s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sl-levitate,
+  .sl-levitate-glow,
+  .sl-drift,
+  .sl-float-tile {
+    animation: none;
+  }
 }

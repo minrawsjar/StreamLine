@@ -24,9 +24,9 @@ export const metadata: Metadata = {
     "Gasless, milestone-gated, composable payment streams on Sui. Money that drips in real time as you work.",
   applicationName: "StreamLine",
   icons: {
-    icon: "/icon.svg",
-    shortcut: "/icon.svg",
-    apple: "/icon.svg",
+    icon: "/logo.png",
+    shortcut: "/logo.png",
+    apple: "/logo.png",
   },
 };
 

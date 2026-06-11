@@ -1,16 +1,22 @@
 "use client";
 
 import Link from "next/link";
-import { WalletButton } from "@/components/wallet/WalletButton";
 import { StreamLineMark } from "./StreamLineMark";
 import type { SceneTheme } from "./heroScenes";
 
 type HeroNavProps = {
-  onSceneSelect?: (index: number) => void;
   theme?: SceneTheme;
+  inApp?: boolean;
+  onLaunchApp?: () => void;
+  onBackToMain?: () => void;
 };
 
-export function HeroNav({ onSceneSelect, theme = "light" }: HeroNavProps) {
+export function HeroNav({
+  theme = "light",
+  inApp = false,
+  onLaunchApp,
+  onBackToMain,
+}: HeroNavProps) {
   const isPro = theme === "pro";
 
   return (
@@ -33,34 +39,17 @@ export function HeroNav({ onSceneSelect, theme = "light" }: HeroNavProps) {
         </span>
       </Link>
 
-      <ul className="flex list-none items-center gap-2.5">
-        <li className="hidden min-[419px]:block">
-          <button
-            type="button"
-            className={isPro ? "sl-glass-btn-dark" : "sl-glass-btn"}
-            onClick={() => onSceneSelect?.(2)}
-          >
-            How it works
-          </button>
-        </li>
-        <li className="hidden md:block">
-          <WalletButton
-            className={isPro ? "sl-glass-btn-dark" : "sl-glass-btn"}
-          />
-        </li>
-        <li>
-          <Link
-            href="/app"
-            className={
-              isPro
-                ? "sl-glass-btn-dark sl-glass-btn-dark-primary"
-                : "sl-glass-btn sl-glass-btn-primary"
-            }
-          >
-            {isPro ? "Request demo" : "Launch App"}
-          </Link>
-        </li>
-      </ul>
+      <button
+        type="button"
+        onClick={inApp ? onBackToMain : onLaunchApp}
+        className={
+          isPro
+            ? "sl-glass-btn-dark sl-glass-btn-dark-primary"
+            : "sl-glass-btn sl-glass-btn-primary"
+        }
+      >
+        {inApp ? "Back to main" : "Launch App"}
+      </button>
     </nav>
   );
 }

@@ -6,7 +6,11 @@ import { SCENE_COUNT } from "./heroScenes";
 const WHEEL_THRESHOLD = 55;
 const SCENE_COOLDOWN_MS = 700;
 
-export function useSceneNavigation() {
+type UseSceneNavigationOptions = {
+  enabled?: boolean;
+};
+
+export function useSceneNavigation({ enabled = true }: UseSceneNavigationOptions = {}) {
   const [activeIndex, setActiveIndex] = useState(0);
   const [sceneProgress, setSceneProgress] = useState(0);
   const [transitioning, setTransitioning] = useState(false);
@@ -29,6 +33,8 @@ export function useSceneNavigation() {
   }, []);
 
   useEffect(() => {
+    if (!enabled) return;
+
     const prevOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
 
@@ -78,9 +84,11 @@ export function useSceneNavigation() {
       window.removeEventListener("touchend", onTouchEnd);
       window.removeEventListener("keydown", onKey);
     };
-  }, [goTo]);
+  }, [goTo, enabled]);
 
   useEffect(() => {
+    if (!enabled) return;
+
     setSceneProgress(0);
     const start = Date.now();
     const duration = 2800;
@@ -93,7 +101,7 @@ export function useSceneNavigation() {
     };
     frame = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(frame);
-  }, [activeIndex]);
+  }, [activeIndex, enabled]);
 
   return { activeIndex, sceneProgress, transitioning, goTo };
 }
