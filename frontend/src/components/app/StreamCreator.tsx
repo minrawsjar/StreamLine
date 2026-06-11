@@ -429,19 +429,14 @@ export function StreamCreator() {
           </ul>
         )}
 
-        <button
+        <CreateStreamButton
+          isPrivate={isPrivate}
+          amount={amount}
+          milestones={milestones.length}
+          canCreate={canCreate && !!deployed}
+          busy={isPending || proving}
           onClick={onCreate}
-          disabled={!canCreate || isPending || proving}
-          className="mt-2 bg-[#5b54e6] px-5 py-3 text-[12px] uppercase tracking-[0.1em] text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
-        >
-          {proving || isPending
-            ? isPrivate
-              ? "proving + creating…"
-              : "creating…"
-            : isPrivate
-              ? "create private stream"
-              : "create stream — gasless"}
-        </button>
+        />
         {!deployed && (
           <p className="text-[11px] text-[#2b2a5e]/50">
             Note: Move package not set for this network — set
@@ -472,6 +467,115 @@ function Summary({ label, value }: { label: string; value: string }) {
     <div className="flex items-baseline justify-between">
       <span className="text-[12px] text-[#2b2a5e]/55">{label}</span>
       <span className="text-[14px] font-semibold tabular">{value}</span>
+    </div>
+  );
+}
+
+function CreateStreamButton({
+  isPrivate,
+  amount,
+  milestones,
+  canCreate,
+  busy,
+  onClick,
+}: {
+  isPrivate: boolean;
+  amount: number;
+  milestones: number;
+  canCreate: boolean;
+  busy: boolean;
+  onClick: () => void;
+}) {
+  const locked = formatUsd(amount);
+  const perMilestone = formatUsd(amount / Math.max(milestones, 1));
+
+  const title = busy
+    ? isPrivate
+      ? "Proving & creating…"
+      : "Creating stream…"
+    : isPrivate
+      ? "Create private stream"
+      : "Create stream";
+
+  const subtitle = busy
+    ? isPrivate
+      ? "Groth16 proof + Seal encryption in your browser"
+      : "Awaiting wallet signature"
+    : isPrivate
+      ? `Lock ${locked} hidden · ${milestones} milestones · Seal-encrypted`
+      : `Lock ${locked} · gasless · ${perMilestone} per milestone`;
+
+  const enabled = canCreate && !busy;
+
+  return (
+    <div className="mt-4 border-t border-[#2b2a5e]/10 pt-5">
+      <button
+        type="button"
+        onClick={onClick}
+        disabled={!canCreate || busy}
+        className={[
+          "group relative w-full overflow-hidden px-5 py-4 text-left transition-all duration-200",
+          enabled
+            ? isPrivate
+              ? "bg-[#2b2a5e] text-white shadow-[0_8px_24px_rgba(43,42,94,0.28)] hover:-translate-y-px hover:shadow-[0_12px_32px_rgba(43,42,94,0.34)] active:translate-y-0"
+              : "bg-[#2b2a5e] text-white shadow-[0_8px_24px_rgba(43,42,94,0.22)] hover:-translate-y-px hover:shadow-[0_12px_32px_rgba(43,42,94,0.3)] active:translate-y-0"
+            : "cursor-not-allowed border border-[#2b2a5e]/12 bg-[#f4f3f8] text-[#2b2a5e]/45",
+        ].join(" ")}
+      >
+        {enabled && isPrivate && (
+          <span
+            aria-hidden
+            className="pointer-events-none absolute inset-y-0 right-0 w-24 bg-gradient-to-l from-[#5b54e6]/35 to-transparent"
+          />
+        )}
+        <span className="relative flex items-center gap-3">
+          <span
+            className={[
+              "flex h-9 w-9 shrink-0 items-center justify-center text-[15px]",
+              enabled
+                ? isPrivate
+                  ? "bg-[#5b54e6]/25 ring-1 ring-[#5b54e6]/40"
+                  : "bg-white/10 ring-1 ring-white/15"
+                : "bg-[#2b2a5e]/06 text-[#2b2a5e]/30",
+            ].join(" ")}
+          >
+            {busy ? "…" : isPrivate ? "🔒" : "→"}
+          </span>
+          <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+            <span
+              className={[
+                "text-[13px] font-semibold uppercase tracking-[0.08em]",
+                enabled ? "text-white" : "",
+              ].join(" ")}
+            >
+              {title}
+            </span>
+            <span
+              className={[
+                "truncate text-[11px] leading-snug",
+                enabled ? "text-white/75" : "text-[#2b2a5e]/40",
+              ].join(" ")}
+            >
+              {subtitle}
+            </span>
+          </span>
+          {enabled && (
+            <span
+              aria-hidden
+              className="shrink-0 text-[18px] text-white/50 transition-transform group-hover:translate-x-0.5"
+            >
+              ›
+            </span>
+          )}
+        </span>
+      </button>
+      {!canCreate && !busy && (
+        <p className="mt-2.5 text-center text-[10px] text-[#2b2a5e]/45">
+          {isPrivate
+            ? "Enter a valid recipient address to continue"
+            : "Fix the fields above to continue"}
+        </p>
+      )}
     </div>
   );
 }
