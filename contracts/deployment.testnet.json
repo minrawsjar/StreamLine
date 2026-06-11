@@ -1,8 +1,12 @@
 {
   "network": "testnet",
-  "package_id": "0x9d6e7815d5e11424a68f827e26499078fead7648328f44fdbdeff6d34ed0b3a8",
+  "package_id": "0x25e2dac28bdda5655040ceab5876794b8bdc3687178c1309974017c16dd76fdb",
+  "original_package_id": "0x9d6e7815d5e11424a68f827e26499078fead7648328f44fdbdeff6d34ed0b3a8",
   "upgrade_cap": "0x351ff70fa0639fb0c1bf61bbb5402314c4b2d853f22e7274adbec4dba7f5447e",
   "publish_digest": "EgeLX5dN3FEfzNgpPZsA92XJn7LHRwJSGpaMoW4HUbrY",
-  "modules": ["stream", "collateral"],
-  "published_at": "2026-06-08"
+  "upgrade_digest": "65UEcqZ39957AwJKrCCbWqFePe5MVA7zpmfgrpFbMUS4",
+  "version": 2,
+  "modules": ["stream", "collateral", "confidential_balance"],
+  "published_at": "2026-06-08",
+  "upgraded_at": "2026-06-12"
 }
