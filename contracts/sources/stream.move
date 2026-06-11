@@ -12,6 +12,7 @@ use sui::balance::{Self, Balance};
 use sui::clock::Clock;
 use sui::coin::{Self, Coin};
 use sui::event;
+use streamline::confidential_balance;
 
 // === State machine ===
 const STATE_LOCKED: u8 = 0;
@@ -377,4 +378,153 @@ public fun total<T>(s: &Stream<T>): u64 { s.total }
 
 fun ceil_div(a: u128, b: u128): u64 {
     (((a + b - 1) / b) as u64)
+}
+
+// === Confidential streaming (amounts hidden via Groth16) ===
+//
+// The same milestone-gated model, but the per-drip amounts, the remaining
+// balance, and the freelancer's earned balance are hidden. The locked `reserve`
+// holds real funds (public in aggregate); the hidden balances are Poseidon
+// commitments updated only via proofs verified by `confidential_balance`
+// (transfer.circom / wrap.circom / unwrap.circom). A keeper advances drips with
+// the pre-proven schedule; the freelancer claims by revealing only what they
+// withdraw. See contracts/sources/confidential_balance.move and circuits/.
+
+public struct ConfidentialStream<phantom T> has key {
+    id: UID,
+    sender: address,
+    freelancer: address,
+    reserve: Balance<T>,
+    state: u8,
+    n_milestones: u64,
+    current_milestone: u64,
+    dispute_window_ms: u64,
+    /// Poseidon commitment of the undripped stream balance (hidden).
+    remaining_commitment: vector<u8>,
+    /// Poseidon commitment of the freelancer's accrued, unclaimed balance (hidden).
+    earned_commitment: vector<u8>,
+}
+
+public struct ConfStreamCreated has copy, drop {
+    stream_id: ID,
+    sender: address,
+    freelancer: address,
+    n_milestones: u64,
+}
+
+public struct ConfStreamDripped has copy, drop {
+    stream_id: ID,
+    timestamp_ms: u64,
+}
+
+public struct ConfStreamClaimed has copy, drop {
+    stream_id: ID,
+    amount: u64, // revealed only at cash-out
+}
+
+/// Open a confidential stream: lock `payment`, bind the locked amount to the
+/// hidden `remaining_commitment` (proven by `wrap_proof`), and set the
+/// freelancer's initial `earned_commitment` (a commitment to zero). The client
+/// receives a `StreamCap`.
+#[allow(lint(self_transfer))]
+public fun create_confidential_stream<T>(
+    payment: Coin<T>,
+    freelancer: address,
+    n_milestones: u64,
+    remaining_commitment: vector<u8>,
+    wrap_proof: vector<u8>,
+    earned_commitment: vector<u8>,
+    dispute_window_ms: u64,
+    ctx: &mut TxContext,
+) {
+    assert!(n_milestones > 0, ENoMilestones);
+    // The locked amount must equal the hidden remaining balance.
+    confidential_balance::verify_wrap(remaining_commitment, payment.value(), wrap_proof);
+
+    let sender = ctx.sender();
+    let stream = ConfidentialStream<T> {
+        id: object::new(ctx),
+        sender,
+        freelancer,
+        reserve: payment.into_balance(),
+        state: STATE_DRIPPING,
+        n_milestones,
+        current_milestone: 0,
+        dispute_window_ms,
+        remaining_commitment,
+        earned_commitment,
+    };
+    let stream_id = object::id(&stream);
+    event::emit(ConfStreamCreated { stream_id, sender, freelancer, n_milestones });
+
+    let cap = StreamCap { id: object::new(ctx), stream_id, revocable: true };
+    transfer::public_transfer(cap, sender);
+    transfer::share_object(stream);
+}
+
+/// Permissionless confidential drip: move a hidden delta from the stream's
+/// remaining balance to the freelancer's earned balance. `transfer_proof`
+/// (transfer.circom) enforces conservation + no underflow against the current
+/// commitments; the delta is never revealed.
+public fun confidential_drip<T>(
+    stream: &mut ConfidentialStream<T>,
+    new_remaining_commitment: vector<u8>,
+    new_earned_commitment: vector<u8>,
+    transfer_proof: vector<u8>,
+    clock: &Clock,
+) {
+    assert!(stream.state == STATE_DRIPPING, EWrongState);
+    confidential_balance::verify_transfer(
+        stream.remaining_commitment,
+        new_remaining_commitment,
+        stream.earned_commitment,
+        new_earned_commitment,
+        transfer_proof,
+    );
+    stream.remaining_commitment = new_remaining_commitment;
+    stream.earned_commitment = new_earned_commitment;
+    event::emit(ConfStreamDripped {
+        stream_id: object::id(stream),
+        timestamp_ms: clock.timestamp_ms(),
+    });
+}
+
+/// Freelancer claims `amount` of earnings: proves it opens the current earned
+/// commitment (`unwrap_proof`), withdraws from the reserve, and resets earned to
+/// `reset_commitment` (their fresh remainder/zero commitment).
+public fun claim<T>(
+    stream: &mut ConfidentialStream<T>,
+    amount: u64,
+    unwrap_proof: vector<u8>,
+    reset_commitment: vector<u8>,
+    ctx: &mut TxContext,
+): Coin<T> {
+    assert!(ctx.sender() == stream.freelancer, ENotAuthorized);
+    confidential_balance::verify_unwrap(stream.earned_commitment, amount, unwrap_proof);
+    assert!(stream.reserve.value() >= amount, ENotDue);
+    stream.earned_commitment = reset_commitment;
+    event::emit(ConfStreamClaimed { stream_id: object::id(stream), amount });
+    coin::from_balance(stream.reserve.split(amount), ctx)
+}
+
+/// Either party pauses a confidential stream pending arbitration.
+public fun confidential_dispute<T>(stream: &mut ConfidentialStream<T>, ctx: &TxContext) {
+    let s = ctx.sender();
+    assert!(s == stream.sender || s == stream.freelancer, ENotAuthorized);
+    assert!(stream.state == STATE_DRIPPING, EWrongState);
+    stream.state = STATE_PAUSED;
+    event::emit(StreamPaused { stream_id: object::id(stream) });
+}
+
+// Confidential views
+public fun conf_state<T>(s: &ConfidentialStream<T>): u8 { s.state }
+
+public fun conf_reserve<T>(s: &ConfidentialStream<T>): u64 { s.reserve.value() }
+
+public fun conf_remaining_commitment<T>(s: &ConfidentialStream<T>): vector<u8> {
+    s.remaining_commitment
+}
+
+public fun conf_earned_commitment<T>(s: &ConfidentialStream<T>): vector<u8> {
+    s.earned_commitment
 }

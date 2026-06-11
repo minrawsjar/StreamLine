@@ -87,6 +87,41 @@ fun assert_scalar(c: &vector<u8>) {
     assert!(c.length() == SCALAR_LEN, EBadCommitment);
 }
 
+// === Package-internal proof verifiers (reused by streamline::stream) ===
+
+/// wrap.circom — proves `commitment` opens to the public `amount`.
+public(package) fun verify_wrap(commitment: vector<u8>, amount: u64, proof: vector<u8>) {
+    let mut inputs = commitment;
+    inputs.append(u64_to_scalar(amount));
+    verify(WRAP_VK, inputs, proof);
+}
+
+/// transfer.circom — proves a hidden delta moved `old_from→new_from` and
+/// `old_to→new_to` with conservation + no underflow.
+public(package) fun verify_transfer(
+    old_from: vector<u8>,
+    new_from: vector<u8>,
+    old_to: vector<u8>,
+    new_to: vector<u8>,
+    proof: vector<u8>,
+) {
+    let mut inputs = old_from;
+    inputs.append(new_from);
+    inputs.append(old_to);
+    inputs.append(new_to);
+    verify(TRANSFER_VK, inputs, proof);
+}
+
+/// unwrap.circom — proves `commitment` opens to the public `value`.
+public(package) fun verify_unwrap(commitment: vector<u8>, value: u64, proof: vector<u8>) {
+    let mut inputs = commitment;
+    inputs.append(u64_to_scalar(value));
+    verify(UNWRAP_VK, inputs, proof);
+}
+
+/// 32-byte scalar length, for callers building commitments.
+public(package) fun scalar_len(): u64 { SCALAR_LEN }
+
 // === Operations ===
 
 /// Register an account with an initial commitment (e.g. a recipient's empty
@@ -113,10 +148,7 @@ public fun wrap<T>(
     let owner = ctx.sender();
     assert!(!pool.balances.contains(owner), EAccountExists);
 
-    let amount = coin.value();
-    let mut inputs = commitment;
-    inputs.append(u64_to_scalar(amount));
-    verify(WRAP_VK, inputs, proof);
+    verify_wrap(commitment, coin.value(), proof);
 
     pool.reserve.join(coin.into_balance());
     pool.balances.add(owner, commitment);
@@ -143,11 +175,7 @@ public fun confidential_transfer<T>(
     let old_from = *pool.balances.borrow(from);
     let old_to = *pool.balances.borrow(to);
 
-    let mut inputs = old_from;
-    inputs.append(new_from_commitment);
-    inputs.append(old_to);
-    inputs.append(new_to_commitment);
-    verify(TRANSFER_VK, inputs, proof);
+    verify_transfer(old_from, new_from_commitment, old_to, new_to_commitment, proof);
 
     *pool.balances.borrow_mut(from) = new_from_commitment;
     *pool.balances.borrow_mut(to) = new_to_commitment;
@@ -167,9 +195,7 @@ public fun unwrap<T>(
     assert!(pool.balances.contains(owner), ENoAccount);
     let commitment = *pool.balances.borrow(owner);
 
-    let mut inputs = commitment;
-    inputs.append(u64_to_scalar(value));
-    verify(UNWRAP_VK, inputs, proof);
+    verify_unwrap(commitment, value, proof);
 
     assert!(pool.reserve.value() >= value, EInsufficientReserve);
     pool.balances.remove(owner);
