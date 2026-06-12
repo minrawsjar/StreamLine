@@ -34,14 +34,21 @@ src/
 ├── components/
 │   ├── landing/                 # HeroSection, StatsStrip, HowItWorks, WhySui, Comparison, Footer, nav, cursor
 │   ├── hero/                    # BayerDitherHero (interactive water ripples), BayerDitherImage, shared shader
-│   ├── app/                     # AppShell, RoleSelect, ClientDashboard, FreelancerDashboard, StreamCreator
+│   ├── app/                     # AppShell, RoleSelect, Client/FreelancerDashboard, StreamCreator,
+│   │                            #   PrivateStreamsPanel, CompletedStreams, DisputeResolution,
+│   │                            #   YieldPanel, CollateralPanel, TokenBalance
 │   ├── wallet/                  # WalletButton, ConnectModal, AccountMenu, FaucetButton
 │   └── providers/               # SuiProviders, RegisterEnokiWallets
 │
 └── lib/
-    ├── networks.ts              # dApp Kit network config (mainnet/testnet/devnet)
-    ├── constants.ts             # Package IDs, test-USDC, RPC endpoints (no dApp Kit import — server-safe)
-    ├── streamline-tx.ts         # PTB builders: create_stream, raise/approve, drip, collateralize
+    ├── networks.ts              # dApp Kit network config (package, usdc, vault, pool, defining pkgs)
+    ├── constants.ts             # Package IDs, test-USDC, vault/pool ids, RPC (no dApp Kit import — server-safe)
+    ├── streamline-tx.ts         # PTB builders: create_stream(_v2), drip, dispute resolve, cancel, vault, lending
+    ├── confidential.ts          # Poseidon commit, in-browser Groth16 prove, byte serializer, conf PTBs
+    ├── seal.ts                  # Seal encrypt/decrypt of stream secrets + SessionKey management
+    ├── use-yield.ts             # Hook: vault state + owned VaultReceipts, live compounding value
+    ├── use-lending.ts           # Hook: pool state + owned LoanReceipts, live owed amount
+    ├── use-private-streams.ts   # Hook: discover confidential streams by role
     ├── stream-math.ts           # Accrual / drip-interval math (mirrors the Move contract)
     ├── stream-state.ts          # State-machine helpers + labels
     ├── use-gasless.ts           # Hook: sponsor + execute via the /api/sponsor proxy
@@ -49,6 +56,19 @@ src/
     ├── indexer.ts               # REST + WebSocket client for the Rust indexer
     └── format.ts                # USDC / address / duration formatting
 ```
+
+### App surface (receiver = freelancer · payer = client)
+
+- **Dashboard** — numbered stream tabs (public + private 🔒) with a live earn
+  counter; a **Completed** tab parks fully-settled streams and reveals the
+  counterparty. Paused streams show the **mutual dispute-resolution** panel.
+- **Create stream** — milestones, splits, and a **Private amounts** toggle
+  (Groth16 + Seal). The yield-flagged split % becomes on-chain auto-yield via
+  `create_stream_v2`.
+- **Yield** — deposit into the Scallop-shaped vault and watch it compound live
+  (auto-yield receipts from streams show here too).
+- **Collateral** — borrow against a dripping stream's present value; repay with
+  live-accruing interest.
 
 ## Gasless transactions
 

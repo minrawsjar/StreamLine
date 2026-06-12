@@ -6,7 +6,7 @@ A Cargo workspace of off-chain services for the StreamLine protocol.
 | --- | --- |
 | `streamline-core` | Shared domain types, drip math, and a thin Sui JSON-RPC client (no heavy `sui-sdk` dep). |
 | `streamline-indexer` | Ingests on-chain events into Postgres; serves a REST + WebSocket API the frontend reads. |
-| `streamline-keeper` | Permissionless settlement worker: submits `drip` once the gasless floor accrues and `auto_approve`s milestones past their review window. |
+| `streamline-keeper` | Permissionless settlement worker: submits `drip` (or `drip_with_yield` when a vault is configured) once the gasless floor accrues, and `auto_approve`s milestones past their review window. |
 
 ## Prerequisites
 
@@ -63,11 +63,29 @@ STREAMLINE_PACKAGE_ID=0x<deployed-package> \
 | `SUI_CLOCK_ID` | `0x6` | Shared Clock object. |
 | `KEEPER_GAS_BUDGET` | `100000000` | Gas budget per settlement tx (MIST). |
 | `KEEPER_POLL_INTERVAL_MS` | `5000` | How often to scan for due streams. |
-| `KEEPER_COOLDOWN_MS` | `30000` | Per-stream wait before re-acting (lets the indexer catch up). |
+| `KEEPER_COOLDOWN_MS` | `120000` | Per-stream wait before re-acting (lets the indexer catch up). |
+| `YIELD_VAULT_ID` | `0x0` | When set, drips use `drip_with_yield` so yield-flagged splits auto-deposit. |
 | `KEEPER_DRY_RUN` | `false` | Log intended actions without submitting. |
 
 Tip: start with `KEEPER_DRY_RUN=true` to watch which streams it would settle
 before letting it spend gas.
+
+> **Package id, two values.** The keeper *calls* functions, so its
+> `STREAMLINE_PACKAGE_ID` must be the **latest** package (v8 — it has
+> `drip_with_yield`). The **indexer** instead filters events by `MoveEventModule`
+> on the **original** id, because object types keep their type-origin across
+> upgrades. They're separate services, so set them independently.
+>
+> **Auto-yield.** Set `YIELD_VAULT_ID` (and a v8 `STREAMLINE_PACKAGE_ID`) and the
+> keeper calls `drip_with_yield(stream, vault, clock)`: the yield-flagged split
+> leg of every drip is deposited into the vault, minting the freelancer a
+> `VaultReceipt` that compounds. Without it, the keeper uses plain `drip`.
+>
+> **Sui CLI version.** Testnet runs protocol 126; the bundled CLI must be
+> **≥ testnet-v1.73.1** or every call panics. The Dockerfile pins this.
+> Point the CLI's RPC (via `SUI_RPC_URL`) at a node that serves **gRPC** with no
+> auth header — the official `https://fullnode.testnet.sui.io:443` works; keyed
+> JSON-RPC-only endpoints (e.g. Ankr REST) do **not**.
 
 ## Test
 
