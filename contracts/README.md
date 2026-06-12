@@ -10,6 +10,30 @@ transition aborts the whole transaction.
 - **Edition:** Sui Move `2024.beta`
 - **Modules:** `streamline::stream` (public + confidential streams, dispute resolution, auto-yield), `streamline::confidential_balance` (Groth16-verified pools), `streamline::yield_vault` (Scallop-shaped vault), `streamline::collateral` (present value + lending pool)
 
+## Layout
+
+```
+contracts/
+├── sources/
+│   ├── stream.move               # Stream<T> + ConfidentialStream<T>: state machine, drip /
+│   │                             #   drip_with_yield, create_stream(_v2), dispute resolution,
+│   │                             #   confidential_drip, seal_approve policy
+│   ├── confidential_balance.move # ConfidentialPool<T>; Groth16 verify_wrap/transfer/unwrap (embedded VKs)
+│   ├── yield_vault.move          # Scallop-shaped YieldVault<T> (deposit/redeem, compounding index)
+│   └── collateral.move           # present_value, CollateralReceipt, LendingPool<T> (borrow/repay)
+├── tests/                        # 19 unit tests (sui move test)
+│   ├── stream_tests.move         #   milestone flow + mutual dispute resolution
+│   ├── confidential_stream_tests.move
+│   ├── confidential_balance_tests.move
+│   ├── yield_vault_tests.move
+│   ├── lending_tests.move
+│   └── auto_yield_tests.move     #   create_stream_v2 + drip_with_yield
+├── Move.toml                     # package manifest (named address + published-at)
+├── Move.lock
+├── Published.toml                # per-network published ids (original, latest, version)
+└── deployment.testnet.json       # machine-readable deploy record
+```
+
 ## Deployments
 
 The package has been upgraded through **v8** (one `UpgradeCap`, original id is the

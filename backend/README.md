@@ -8,6 +8,40 @@ A Cargo workspace of off-chain services for the StreamLine protocol.
 | `streamline-indexer` | Ingests on-chain events into Postgres; serves a REST + WebSocket API the frontend reads. |
 | `streamline-keeper` | Permissionless settlement worker: submits `drip` (or `drip_with_yield` when a vault is configured) once the gasless floor accrues, and `auto_approve`s milestones past their review window. |
 
+## Layout
+
+```
+backend/
+├── crates/
+│   ├── core/                  # shared library (no binary)
+│   │   └── src/
+│   │       ├── types.rs       #   domain types: StreamState, USDC_BASE, MIN_DRIP_BASE
+│   │       ├── math.rs        #   accrual + gasless-floor drip interval (mirrors the Move contract)
+│   │       ├── events.rs      #   on-chain event payload structs
+│   │       ├── sui.rs         #   thin Sui JSON-RPC client (query_events via MoveEventModule, getObject)
+│   │       └── lib.rs
+│   ├── indexer/               # web service: events → Postgres, REST + WebSocket
+│   │   └── src/
+│   │       ├── main.rs
+│   │       ├── poller.rs      #   event poll loop + state reconciliation (re-reads PAUSED → resolved)
+│   │       ├── db.rs          #   sqlx queries (list_streams, set_stream_state, …)
+│   │       ├── api.rs         #   axum routes (/streams, /stream/{id}/drips, /ws)
+│   │       ├── state.rs       #   shared app state + WebSocket broadcast
+│   │       ├── config.rs
+│   │       └── schema.sql     #   auto-applied on boot
+│   └── keeper/                # worker: drip / drip_with_yield / auto_approve
+│       └── src/
+│           ├── main.rs        #   poll loop (cooldown + due-check)
+│           ├── sui_cli.rs     #   shells out to the sui CLI (drip / drip_with_yield)
+│           ├── db.rs
+│           └── config.rs      #   env: package id, YIELD_VAULT_ID, gas budget, cooldown
+├── Dockerfile                 # one image, two services; bundles sui v1.73.1 (protocol 126)
+├── keeper-entrypoint.sh       # provisions the keeper keystore from env, then launches it
+├── railway.json
+├── .env.example
+└── Cargo.toml                 # workspace manifest
+```
+
 ## Prerequisites
 
 - Rust (stable)

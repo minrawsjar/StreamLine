@@ -8,6 +8,19 @@ A minimal, mintable USDC clone for demoing StreamLine on **Sui testnet**. Six de
 - **Module:** `mock_usdc::mock_usdc`
 - **Coin type:** `<package>::mock_usdc::MOCK_USDC` (6 decimals)
 
+## Layout
+
+```
+mock-usdc/
+├── sources/
+│   └── mock_usdc.move        # MOCK_USDC currency; init shares the TreasuryCap;
+│                             #   faucet (mint to caller) + composable mint (returns the Coin)
+├── Move.toml                 # package manifest
+├── Move.lock
+├── Published.toml            # published id per network
+└── deployment.testnet.json   # machine-readable deploy record
+```
+
 ## Deployment (testnet)
 
 | Item | ID |
