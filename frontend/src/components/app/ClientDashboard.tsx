@@ -17,6 +17,7 @@ import {
 } from "@/lib/streamline-tx";
 import { PrivateStreamsPanel } from "./PrivateStreamsPanel";
 import { CompletedStreams } from "./CompletedStreams";
+import { DisputeResolution } from "./DisputeResolution";
 import { USDC_BASE } from "@/lib/stream-math";
 import {
   BarChart,
@@ -231,10 +232,8 @@ export function ClientDashboard() {
                 const pct =
                   s.total > 0 ? ((s.total - s.remaining) / s.total) * 100 : 0;
                 return (
-                  <div
-                    key={s.id}
-                    className="grid grid-cols-1 gap-4 border-t border-[#2b2a5e]/10 p-5 md:grid-cols-[1fr_auto] md:items-center"
-                  >
+                  <div key={s.id} className="border-t border-[#2b2a5e]/10 p-5">
+                    <div className="grid grid-cols-1 gap-4 md:grid-cols-[1fr_auto] md:items-center">
                     <div className="flex flex-col gap-2">
                       <div className="flex flex-wrap items-center gap-3">
                         <span className="font-mono text-[13px]">{short(s.id)}</span>
@@ -298,6 +297,17 @@ export function ClientDashboard() {
                         </button>
                       )}
                     </div>
+                    </div>
+                    {s.state === "paused" && (
+                      <DisputeResolution
+                        streamId={s.id}
+                        packageId={packageId}
+                        usdcType={usdcType}
+                        me={account?.address ?? ""}
+                        remainingBase={s.remaining}
+                        onResolved={refetch}
+                      />
+                    )}
                   </div>
                 );
               })}

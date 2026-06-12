@@ -10,6 +10,7 @@ import { usePrivateStreams } from "@/lib/use-private-streams";
 import { buildRaiseCompletion } from "@/lib/streamline-tx";
 import { PrivateStreamsPanel } from "./PrivateStreamsPanel";
 import { CompletedStreams } from "./CompletedStreams";
+import { DisputeResolution } from "./DisputeResolution";
 import { USDC_BASE, formatInterval } from "@/lib/stream-math";
 import {
   completedMilestones,
@@ -241,6 +242,10 @@ export function FreelancerDashboard() {
               status={status}
               bars={bars}
               onRaise={() => onRaise(activePublic.id)}
+              packageId={packageId}
+              usdcType={usdcType}
+              me={account?.address ?? ""}
+              onResolved={refetch}
             />
           ) : null}
         </>
@@ -256,6 +261,10 @@ function PublicStreamView({
   status,
   bars,
   onRaise,
+  packageId,
+  usdcType,
+  me,
+  onResolved,
 }: {
   active: StreamRecord;
   now: number;
@@ -263,6 +272,10 @@ function PublicStreamView({
   status: string | null;
   bars: BarDatum[];
   onRaise: () => void;
+  packageId: string;
+  usdcType: string;
+  me: string;
+  onResolved: () => void;
 }) {
   const rate = active.duration_ms > 0 ? active.total / active.duration_ms : 0;
   const ratePerSec = (rate * 1000) / USDC_BASE;
@@ -306,6 +319,16 @@ function PublicStreamView({
           </div>
 
           <MilestoneAction stream={active} isPending={isPending} onRaise={onRaise} />
+          {view === "paused" && (
+            <DisputeResolution
+              streamId={active.id}
+              packageId={packageId}
+              usdcType={usdcType}
+              me={me}
+              remainingBase={active.remaining}
+              onResolved={onResolved}
+            />
+          )}
           {status && <p className="mt-4 text-[11px] text-[#2b2a5e]/70">{status}</p>}
         </Card>
 
