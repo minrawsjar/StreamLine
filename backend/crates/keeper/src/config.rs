@@ -40,7 +40,7 @@ impl Config {
             clock_id: env_or("SUI_CLOCK_ID", "0x6"),
             gas_budget: env_parse("KEEPER_GAS_BUDGET", 100_000_000),
             poll_interval_ms: env_parse("KEEPER_POLL_INTERVAL_MS", 5_000),
-            cooldown_ms: env_parse("KEEPER_COOLDOWN_MS", 30_000),
+            cooldown_ms: env_parse("KEEPER_COOLDOWN_MS", 120_000),
             dry_run: env_parse("KEEPER_DRY_RUN", false),
         }
     }

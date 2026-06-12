@@ -47,17 +47,17 @@ mod tests {
 
     #[test]
     fn interval_matches_spec() {
-        // $500 / month → ~52s interval (per the spec table).
+        // $500 / month at the 1.00 USDC floor → ~86 min interval.
         let total = 500 * USDC_BASE;
         let interval = drip_interval_ms(total, MONTH_MS);
-        assert!((50_000..=55_000).contains(&interval), "got {interval}ms");
+        assert!((5_100_000..=5_250_000).contains(&interval), "got {interval}ms");
     }
 
     #[test]
     fn interval_scales_with_rate() {
-        // $5000/month → ~5.2s.
+        // $5000/month → ~8.6 min (10x the rate → 1/10th the interval).
         let interval = drip_interval_ms(5000 * USDC_BASE, MONTH_MS);
-        assert!((5_000..=5_500).contains(&interval), "got {interval}ms");
+        assert!((510_000..=525_000).contains(&interval), "got {interval}ms");
     }
 
     #[test]

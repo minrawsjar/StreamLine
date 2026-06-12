@@ -1,13 +1,14 @@
 /**
- * Streaming math from the StreamLine spec. The gasless floor is 0.01 USDC per
+ * Streaming math from the StreamLine spec. The gasless floor is 1.00 USDC per
  * transfer, so the drip *interval* adapts to the rate instead of the drip size:
- *   drip_interval_s = ceil(0.01 / (total_usdc / duration_s))
+ *   drip_interval_s = ceil(1.00 / (total_usdc / duration_s))
+ * Kept in sync with `MIN_DRIP_BASE` in backend `core/types.rs`.
  */
 
 export const USDC_DECIMALS = 6;
 export const USDC_BASE = 10 ** USDC_DECIMALS; // 1 USDC = 1_000_000 base units
-export const MIN_DRIP_USDC = 0.01;
-export const MIN_DRIP_BASE = Math.round(MIN_DRIP_USDC * USDC_BASE); // 10_000
+export const MIN_DRIP_USDC = 1.0;
+export const MIN_DRIP_BASE = Math.round(MIN_DRIP_USDC * USDC_BASE); // 1_000_000
 
 export type DurationUnit = "hours" | "days" | "weeks";
 
@@ -27,7 +28,7 @@ export function ratePerSecond(totalUsdc: number, durationMs: number): number {
   return totalUsdc / (durationMs / 1000);
 }
 
-/** Milliseconds between gasless drips: time to accrue 0.01 USDC. */
+/** Milliseconds between gasless drips: time to accrue 1.00 USDC. */
 export function dripIntervalMs(totalUsdc: number, durationMs: number): number {
   if (totalUsdc <= 0 || durationMs <= 0) return 0;
   return Math.ceil((MIN_DRIP_USDC / totalUsdc) * durationMs);

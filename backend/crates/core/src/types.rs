@@ -6,8 +6,10 @@ use serde::{Deserialize, Serialize};
 /// USDC has 6 decimals on Sui. 1 USDC = 1_000_000 base units.
 pub const USDC_DECIMALS: u32 = 6;
 pub const USDC_BASE: u64 = 1_000_000;
-/// Gasless floor: 0.01 USDC per transfer = 10_000 base units.
-pub const MIN_DRIP_BASE: u64 = 10_000;
+/// Gasless floor: 1.00 USDC per transfer = 1_000_000 base units. Set so each
+/// on-chain drip moves enough value that the ~0.004 SUI settlement gas is <1% of
+/// it; at the old 0.01 USDC floor, gas rivalled the amount being streamed.
+pub const MIN_DRIP_BASE: u64 = 1_000_000;
 
 /// On-chain stream state machine (LOCKED → PENDING → DRIPPING → PAUSED → DONE).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
