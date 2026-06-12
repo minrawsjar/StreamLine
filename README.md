@@ -1,12 +1,21 @@
 # StreamLine
 
-**Programmable micropayments on Sui — gasless, milestone-gated, composable**
+**Programmable, _private_ micropayments on Sui — gasless, milestone-gated, confidential, composable**
 
-StreamLine turns paying someone into a continuous, milestone-gated financial flow. Instead of lump sums on arbitrary schedules, money drips in real time — split automatically across wallets, yield, and savings — with **zero transfer fees** for the end user.
+StreamLine turns paying someone into a continuous, milestone-gated financial flow. Instead of lump sums on arbitrary schedules, money drips in real time — split automatically across wallets, yield, and savings — with **zero transfer fees** for the end user, and **amounts that can be hidden on-chain with zero-knowledge proofs**.
 
 > A client locks **$800** across 4 milestones. The freelancer watches money arrive in real time as they work. When a milestone is done they raise it on-chain; the client approves (or a keeper auto-approves after 48h). They can even **borrow against the live stream** before it's fully paid out — or flip on **Private amounts** so only the two of them ever see the numbers.
 
 Built for **Sui Overflow 2026 · DeFi & Payments track**.
+
+### Three pillars
+
+| 🔁 Real-time streaming | 🔒 Private by design | 🧩 Composable DeFi |
+|---|---|---|
+| Money accrues by the second and settles gasless, milestone-gated, on-chain — no invoice, no middleman. | Toggle **Private amounts** and balances/drips become **ZK commitments**; only the two parties ever see the numbers. A first-class mode, not an afterthought. | The instant value is earned it can **auto-compound in a yield vault** or **back a loan** — in place, no bridge. |
+| [Why a stream →](#why-a-stream-not-a-payment--and-why-a-card-physically-cant-do-this) | [Privacy →](#privacy) | [DeFi →](#composable-defi--where-the-money-goes) |
+
+**Privacy is a headline feature of StreamLine, not a roadmap item** — confidential amounts (Groth16 zk-SNARKs), encrypted metadata (Seal), and identity/gasless privacy (zkLogin) all run live on Sui testnet today. See **[Privacy](#privacy)**.
 
 ---
 
