@@ -6,12 +6,13 @@
  */
 
 // Deployed StreamLine package on testnet (see contracts/Published.toml).
-// v6 (2026-06-12) adds the Scallop-shaped yield_vault.
+// v7 (2026-06-12) adds the lending pool (borrow against a stream).
+// v6 added the Scallop-shaped yield_vault.
 // v5 added mutual dispute resolution (propose/accept resolution).
 // v3 added Seal secrets + confidential milestone review.
 // v2 added confidential_balance + ConfidentialStream.
 const TESTNET_PACKAGE =
-  "0xa7f9660959260133040f4e5aaea56fdd61ab37a58515a007e4f3ae852d906217";
+  "0x39280c40c6ce4b7fb9ac5f836709edd44e8c9d96b8ea1a6a74ef5d52eccb528c";
 
 export const PACKAGE_IDS = {
   mainnet: process.env.NEXT_PUBLIC_PACKAGE_ID_MAINNET ?? "0x0",
@@ -64,6 +65,17 @@ export const YIELD_VAULT = {
   testnet:
     "0x8ae9d8805682aabbd00ff0582d93b88f2f86482bcabed194a88a6ded99a88406",
   mainnet: process.env.NEXT_PUBLIC_YIELD_VAULT_MAINNET ?? "0x0",
+  devnet: "0x0",
+} as const;
+
+/**
+ * Lending pool for borrowing against a live stream (12% borrow APR, seeded with
+ * mock-USDC liquidity). Testnet stand-in for Scallop/NAVI lending.
+ */
+export const LENDING_POOL = {
+  testnet:
+    "0x0518d5d77a3069ebab9df5b46e60fed4589c16dc6e48cd694a02c9350f312ea2",
+  mainnet: process.env.NEXT_PUBLIC_LENDING_POOL_MAINNET ?? "0x0",
   devnet: "0x0",
 } as const;
 

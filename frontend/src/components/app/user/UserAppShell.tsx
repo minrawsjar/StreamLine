@@ -8,6 +8,7 @@ import { StreamCreator } from "../StreamCreator";
 import { FreelancerDashboard } from "../FreelancerDashboard";
 import { ClientDashboard } from "../ClientDashboard";
 import { YieldPanel } from "../YieldPanel";
+import { CollateralPanel } from "../CollateralPanel";
 import { RoleSelect, type Role } from "./RoleSelect";
 
 // Privacy is a per-stream toggle in the Create flow (not a separate tab);
@@ -85,20 +86,7 @@ export function UserAppShell() {
       {tab === "dashboard" && <ClientDashboard />}
       {tab === "earn" && <FreelancerDashboard />}
       {tab === "yield" && <YieldPanel />}
-      {tab === "collateral" && <ComingSoon title="Collateral panel" />}
-    </div>
-  );
-}
-
-function ComingSoon({ title }: { title: string }) {
-  return (
-    <div className="border border-dashed border-[#2b2a5e]/25 px-8 py-20 text-center">
-      <p className="text-[13px] uppercase tracking-[0.16em] text-[#2b2a5e]/50">
-        {title}
-      </p>
-      <p className="mt-2 text-[13px] text-[#2b2a5e]/50">
-        Lands next: live earn counter, milestone approvals, collateral panel.
-      </p>
+      {tab === "collateral" && <CollateralPanel />}
     </div>
   );
 }

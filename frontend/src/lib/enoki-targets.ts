@@ -37,6 +37,9 @@ export function allowedMoveCallTargets(network: NetworkName): string[] {
   if (pkg && pkg !== "0x0") {
     for (const fn of STREAM_FUNCTIONS) targets.push(`${pkg}::stream::${fn}`);
     targets.push(`${pkg}::collateral::collateralize`);
+    // Borrow against a stream (gasless borrow/repay).
+    targets.push(`${pkg}::collateral::borrow`);
+    targets.push(`${pkg}::collateral::repay`);
     // Scallop-shaped yield vault (gasless deposit/redeem).
     targets.push(`${pkg}::yield_vault::deposit`);
     targets.push(`${pkg}::yield_vault::redeem`);

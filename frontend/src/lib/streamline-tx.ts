@@ -96,6 +96,61 @@ export function buildVaultRedeem(
   return tx;
 }
 
+// === Lending pool (borrow against a stream) ===
+
+export type PoolRef = { packageId: string; usdcType: string; poolId: string };
+
+/**
+ * Borrow `principalBase` against a dripping stream's present value. The borrowed
+ * coin and the LoanReceipt both go to the signer.
+ */
+export function buildBorrow(
+  a: PoolRef & { sender: string; streamId: string; principalBase: bigint }
+): Transaction {
+  const tx = new Transaction();
+  tx.setSenderIfNotSet(a.sender);
+  const coin = tx.moveCall({
+    target: `${a.packageId}::collateral::borrow`,
+    typeArguments: [a.usdcType],
+    arguments: [
+      tx.object(a.poolId),
+      tx.object(a.streamId),
+      tx.pure.u64(a.principalBase),
+      tx.object(CLOCK),
+    ],
+  });
+  tx.transferObjects([coin], a.sender);
+  return tx;
+}
+
+/**
+ * Repay a loan in full. `owedBase` is the client-computed amount due; we add a
+ * tiny buffer so per-second interest drift can't underpay (the change comes
+ * back to the signer).
+ */
+export function buildRepay(
+  a: PoolRef & { sender: string; loanId: string; owedBase: bigint }
+): Transaction {
+  const tx = new Transaction();
+  tx.setSenderIfNotSet(a.sender);
+  const payment = coinWithBalance({
+    type: a.usdcType,
+    balance: a.owedBase + 10_000n, // +0.01 USDC interest-drift buffer
+  });
+  const change = tx.moveCall({
+    target: `${a.packageId}::collateral::repay`,
+    typeArguments: [a.usdcType],
+    arguments: [
+      tx.object(a.poolId),
+      tx.object(a.loanId),
+      payment,
+      tx.object(CLOCK),
+    ],
+  });
+  tx.transferObjects([change], a.sender);
+  return tx;
+}
+
 type StreamRef = { packageId: string; usdcType: string; streamId: string };
 
 /** Freelancer signals the current milestone is complete. */
