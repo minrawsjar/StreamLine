@@ -10,9 +10,40 @@ use tokio::process::Command;
 
 use crate::config::Config;
 
-/// Call `stream::drip<T>(stream, clock)`. Returns the transaction digest.
+/// Settle a stream. With a yield vault configured, calls
+/// `stream::drip_with_yield<T>(stream, vault, clock)` so yield-flagged splits
+/// auto-deposit; otherwise plain `stream::drip<T>(stream, clock)`.
 pub async fn drip(cfg: &Config, coin_type: &str, stream_id: &str) -> Result<String> {
-    call(cfg, "drip", coin_type, stream_id).await
+    if cfg.has_yield_vault() {
+        call_with_yield(cfg, coin_type, stream_id).await
+    } else {
+        call(cfg, "drip", coin_type, stream_id).await
+    }
+}
+
+/// `drip_with_yield<T>(stream, vault, clock)` — extra `vault` arg before clock.
+async fn call_with_yield(cfg: &Config, coin_type: &str, stream_id: &str) -> Result<String> {
+    let output = Command::new(&cfg.sui_bin)
+        .arg("client")
+        .arg("call")
+        .arg("--package")
+        .arg(&cfg.package_id)
+        .arg("--module")
+        .arg(&cfg.module)
+        .arg("--function")
+        .arg("drip_with_yield")
+        .arg("--type-args")
+        .arg(coin_type)
+        .arg("--args")
+        .arg(stream_id)
+        .arg(&cfg.yield_vault_id)
+        .arg(&cfg.clock_id)
+        .arg("--gas-budget")
+        .arg(cfg.gas_budget.to_string())
+        .arg("--json")
+        .output()
+        .await?;
+    parse_call_output(output, "drip_with_yield")
 }
 
 /// Call `stream::auto_approve<T>(stream, clock)` once the review window lapses.
@@ -40,7 +71,11 @@ async fn call(cfg: &Config, function: &str, coin_type: &str, stream_id: &str) ->
         .arg("--json")
         .output()
         .await?;
+    parse_call_output(output, function)
+}
 
+/// Shared output handling: surface a real error on failure, else the digest.
+fn parse_call_output(output: std::process::Output, function: &str) -> Result<String> {
     if !output.status.success() {
         // Surface stderr AND stdout (the CLI prints panics/protocol errors to
         // stderr, but some failures land on stdout) plus the exit code, so the

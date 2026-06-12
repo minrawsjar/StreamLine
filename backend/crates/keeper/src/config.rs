@@ -17,6 +17,10 @@ pub struct Config {
     pub cooldown_ms: u64,
     /// When true, log intended actions without submitting any transaction.
     pub dry_run: bool,
+    /// Yield vault for auto-yield splits. When set, drips use `drip_with_yield`
+    /// so yield-flagged legs auto-deposit. Requires `package_id` to be a version
+    /// that has `drip_with_yield` (v8+).
+    pub yield_vault_id: String,
 }
 
 fn env_or(key: &str, default: &str) -> String {
@@ -42,7 +46,13 @@ impl Config {
             poll_interval_ms: env_parse("KEEPER_POLL_INTERVAL_MS", 5_000),
             cooldown_ms: env_parse("KEEPER_COOLDOWN_MS", 120_000),
             dry_run: env_parse("KEEPER_DRY_RUN", false),
+            yield_vault_id: env_or("YIELD_VAULT_ID", "0x0"),
         }
+    }
+
+    /// Whether auto-yield drips are enabled (vault configured).
+    pub fn has_yield_vault(&self) -> bool {
+        !self.yield_vault_id.is_empty() && self.yield_vault_id != "0x0"
     }
 
     /// Whether a real package id is configured (otherwise the keeper idles).

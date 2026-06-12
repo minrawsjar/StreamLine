@@ -15,7 +15,7 @@ import {
   type DurationUnit,
 } from "@/lib/stream-math";
 import {
-  buildCreateStream,
+  buildCreateStreamV2,
   splitMilestoneAmounts,
   DEFAULT_DISPUTE_WINDOW_MS,
 } from "@/lib/streamline-tx";
@@ -111,7 +111,13 @@ export function StreamCreator() {
       return;
     }
     const totalBase = toBaseUnits(amount);
-    const tx = buildCreateStream({
+    // Auto-yield: route the yield-flagged split %% into the vault on every drip.
+    const yieldBps = Math.round(
+      splits
+        .filter((s) => s.yield)
+        .reduce((a, s) => a + (Number(s.pct) || 0), 0) * 100
+    );
+    const tx = buildCreateStreamV2({
       packageId,
       usdcType,
       sender: account.address,
@@ -120,6 +126,7 @@ export function StreamCreator() {
       milestoneAmountsBase: splitMilestoneAmounts(totalBase, milestones.length),
       totalBase,
       durationMs,
+      yieldBps,
     });
     setStatus("Awaiting wallet signature…");
     execute(tx, {

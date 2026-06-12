@@ -151,6 +151,34 @@ export function buildRepay(
   return tx;
 }
 
+/**
+ * Like `buildCreateStream` but with an auto-yield split: `yieldBps` of every
+ * drip is auto-deposited into the vault (via the keeper's `drip_with_yield`),
+ * the rest paid as cash. Both legs go to the freelancer.
+ */
+export function buildCreateStreamV2(
+  a: CreateStreamArgs & { yieldBps: number }
+): Transaction {
+  const tx = new Transaction();
+  tx.setSenderIfNotSet(a.sender);
+  tx.moveCall({
+    target: `${a.packageId}::stream::create_stream_v2`,
+    typeArguments: [a.usdcType],
+    arguments: [
+      coinWithBalance({ type: a.usdcType, balance: a.totalBase }),
+      tx.pure.address(a.freelancer),
+      tx.pure.vector("string", a.milestoneNames),
+      tx.pure.vector("u64", a.milestoneAmountsBase),
+      tx.pure.u64(a.durationMs),
+      tx.pure.u64(a.disputeWindowMs ?? DEFAULT_DISPUTE_WINDOW_MS),
+      tx.pure.bool(a.revocable ?? true),
+      tx.pure.u64(BigInt(a.yieldBps)),
+      tx.object(CLOCK),
+    ],
+  });
+  return tx;
+}
+
 type StreamRef = { packageId: string; usdcType: string; streamId: string };
 
 /** Freelancer signals the current milestone is complete. */

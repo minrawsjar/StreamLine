@@ -6,13 +6,14 @@
  */
 
 // Deployed StreamLine package on testnet (see contracts/Published.toml).
-// v7 (2026-06-12) adds the lending pool (borrow against a stream).
+// v8 (2026-06-13) adds auto-yield (create_stream_v2 + drip_with_yield).
+// v7 added the lending pool (borrow against a stream).
 // v6 added the Scallop-shaped yield_vault.
 // v5 added mutual dispute resolution (propose/accept resolution).
 // v3 added Seal secrets + confidential milestone review.
 // v2 added confidential_balance + ConfidentialStream.
 const TESTNET_PACKAGE =
-  "0x39280c40c6ce4b7fb9ac5f836709edd44e8c9d96b8ea1a6a74ef5d52eccb528c";
+  "0x28506598eccbbde36bbfef6401936c1d907c21a7e8db77c56390b6b291fad0a2";
 
 export const PACKAGE_IDS = {
   mainnet: process.env.NEXT_PUBLIC_PACKAGE_ID_MAINNET ?? "0x0",
