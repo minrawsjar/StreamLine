@@ -15,6 +15,7 @@ import { RoleSelect, type Role } from "./RoleSelect";
 const PAYER_TABS = [
   { id: "dashboard", label: "Dashboard" },
   { id: "create", label: "Create stream" },
+  { id: "yield", label: "Yield" },
 ] as const;
 
 const RECEIVER_TABS = [
