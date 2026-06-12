@@ -51,6 +51,16 @@ const usd = (base: bigint) => `$${(Number(base) / 1e6).toFixed(2)}`;
 const short = (a: string) => `${a.slice(0, 8)}…${a.slice(-4)}`;
 const scan = (id: string) => `https://suiscan.xyz/testnet/object/${id}`;
 
+/** Reject after `ms` so a hung Seal/wallet call can't pin the UI in "busy". */
+function withTimeout<T>(p: Promise<T>, ms: number, message: string): Promise<T> {
+  return Promise.race([
+    p,
+    new Promise<T>((_, reject) =>
+      setTimeout(() => reject(new Error(message)), ms)
+    ),
+  ]);
+}
+
 type Role = "sender" | "freelancer";
 
 /** Map of stream id → owned StreamCap (original package type — see networks). */
@@ -195,22 +205,31 @@ export function PrivateStreamsPanel({
           setStatus("No Seal envelope on this stream — ask the other party to re-share.");
           return;
         }
-        setStatus("Requesting decryption keys from Seal…");
-        const sessionKey = await loadOrCreateSessionKey({
-          suiClient: client,
-          address: addr,
-          network: network as NetworkName,
-          sealNamespace: originalPackageId,
-          signPersonalMessage: (message) => signPersonalMessage({ message }),
-        });
-        const payload = await decryptSecrets({
-          suiClient: client,
-          currentPackageId: packageId,
-          envelopeBytes: stream.encryptedSecrets,
-          role,
-          sessionKey,
-          address: addr,
-        });
+        setStatus("Approve the Seal signature in your wallet (check for a popup)…");
+        const sessionKey = await withTimeout(
+          loadOrCreateSessionKey({
+            suiClient: client,
+            address: addr,
+            network: network as NetworkName,
+            sealNamespace: originalPackageId,
+            signPersonalMessage: (message) => signPersonalMessage({ message }),
+          }),
+          90_000,
+          "Wallet never signed the Seal session — no signature popup appeared. Reconnect the wallet (or use one that supports Sui personal-message signing) and retry."
+        );
+        setStatus("Fetching decryption keys from Seal key servers…");
+        const payload = await withTimeout(
+          decryptSecrets({
+            suiClient: client,
+            currentPackageId: packageId,
+            envelopeBytes: stream.encryptedSecrets,
+            role,
+            sessionKey,
+            address: addr,
+          }),
+          30_000,
+          "Seal key servers did not respond in time. Retry, or check the key-server status."
+        );
         setPayload(stream.id, payload);
         persistLocal(stream.id, payload);
         setStatus(null);
