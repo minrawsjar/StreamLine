@@ -15,6 +15,7 @@ use sui::coin::{Self, Coin};
 use sui::dynamic_field as df;
 use sui::event;
 use streamline::confidential_balance;
+use streamline::yield_vault::{Self, YieldVault};
 
 // === State machine ===
 const STATE_LOCKED: u8 = 0;
@@ -227,6 +228,80 @@ public fun create_stream<T>(
     transfer::share_object(stream);
 }
 
+/// Like `create_stream`, but bakes in an auto-yield split: `yield_bps` of each
+/// drip is deposited into the yield vault (by `drip_with_yield`) and the rest is
+/// paid to the freelancer as cash. Both legs target the freelancer; the yield
+/// leg just routes through the vault. `yield_bps` must be < 10000.
+#[allow(lint(self_transfer))]
+public fun create_stream_v2<T>(
+    payment: Coin<T>,
+    freelancer: address,
+    milestone_names: vector<String>,
+    milestone_amounts: vector<u64>,
+    duration_ms: u64,
+    dispute_window_ms: u64,
+    revocable: bool,
+    yield_bps: u64,
+    clock: &Clock,
+    ctx: &mut TxContext,
+) {
+    assert!(duration_ms > 0, EBadDuration);
+    assert!(yield_bps < BPS_DENOM, EBadSplits);
+    let n = milestone_amounts.length();
+    assert!(n > 0 && milestone_names.length() == n, ENoMilestones);
+
+    let total = payment.value();
+    let mut milestones: vector<Milestone> = vector[];
+    let mut sum = 0;
+    let mut i = 0;
+    while (i < n) {
+        let amount = milestone_amounts[i];
+        assert!(amount >= MIN_DRIP, EMilestoneTooSmall);
+        sum = sum + amount;
+        milestones.push_back(Milestone { name: milestone_names[i], amount });
+        i = i + 1;
+    };
+    assert!(sum == total, EBadSplits);
+
+    let drip_interval_ms =
+        ceil_div((MIN_DRIP as u128) * (duration_ms as u128), total as u128);
+    let sender = ctx.sender();
+    let now = clock.timestamp_ms();
+
+    let mut splits: vector<SplitLeg> = vector[];
+    if (yield_bps == 0) {
+        splits.push_back(SplitLeg { destination: freelancer, weight_bps: BPS_DENOM, yield_flag: false });
+    } else {
+        splits.push_back(SplitLeg {
+            destination: freelancer, weight_bps: BPS_DENOM - yield_bps, yield_flag: false,
+        });
+        splits.push_back(SplitLeg { destination: freelancer, weight_bps: yield_bps, yield_flag: true });
+    };
+
+    let stream = Stream<T> {
+        id: object::new(ctx),
+        sender,
+        freelancer,
+        balance: payment.into_balance(),
+        total,
+        state: STATE_LOCKED,
+        milestones,
+        current_milestone: 0,
+        milestone_paid: 0,
+        duration_ms,
+        drip_interval_ms,
+        last_drip_ms: now,
+        review_deadline_ms: 0,
+        dispute_window_ms,
+        splits,
+    };
+    let stream_id = object::id(&stream);
+    event::emit(StreamCreated { stream_id, sender, freelancer, total, n_milestones: n });
+    let cap = StreamCap { id: object::new(ctx), stream_id, revocable };
+    transfer::public_transfer(cap, sender);
+    transfer::share_object(stream);
+}
+
 /// Freelancer reconfigures where each drip is routed. Weights must sum to 10000.
 public fun set_splits<T>(
     stream: &mut Stream<T>,
@@ -352,6 +427,76 @@ public fun drip<T>(stream: &mut Stream<T>, clock: &Clock, ctx: &mut TxContext) {
         amount: pay,
         timestamp_ms: now,
     });
+
+    if (stream.milestone_paid >= milestone_amount) {
+        stream.milestone_paid = 0;
+        stream.current_milestone = stream.current_milestone + 1;
+        if (stream.current_milestone >= stream.milestones.length()) {
+            stream.state = STATE_DONE;
+        } else {
+            stream.state = STATE_LOCKED;
+        };
+    };
+}
+
+/// Settlement that auto-invests yield-flagged split legs: identical to `drip`,
+/// but a leg with `yield_flag` is deposited into `vault` and the resulting
+/// `VaultReceipt` is sent to the leg destination (the freelancer) instead of
+/// cash. The keeper calls this (passing the coin's vault) so the configured
+/// yield % compounds automatically on every drip.
+#[allow(lint(self_transfer))]
+public fun drip_with_yield<T>(
+    stream: &mut Stream<T>,
+    vault: &mut YieldVault<T>,
+    clock: &Clock,
+    ctx: &mut TxContext,
+) {
+    assert!(stream.state == STATE_DRIPPING, EWrongState);
+    let now = clock.timestamp_ms();
+    let elapsed = now - stream.last_drip_ms;
+    let accrued =
+        (((stream.total as u128) * (elapsed as u128)) / (stream.duration_ms as u128)) as u64;
+    let milestone_amount = stream.milestones[stream.current_milestone].amount;
+    let milestone_remaining = milestone_amount - stream.milestone_paid;
+    let mut pay = accrued;
+    if (pay > milestone_remaining) pay = milestone_remaining;
+    let bal = stream.balance.value();
+    if (pay > bal) pay = bal;
+    assert!(pay >= MIN_DRIP, ENotDue);
+
+    let tip = pay * TIP_BPS / BPS_DENOM;
+    let distributable = pay - tip;
+
+    let n = stream.splits.length();
+    let mut distributed = 0;
+    let mut i = 0;
+    while (i < n) {
+        let leg = stream.splits[i];
+        let amount = if (i + 1 == n) {
+            distributable - distributed
+        } else {
+            ((distributable as u128) * (leg.weight_bps as u128) / (BPS_DENOM as u128)) as u64
+        };
+        distributed = distributed + amount;
+        if (amount > 0) {
+            let part = coin::from_balance(stream.balance.split(amount), ctx);
+            if (leg.yield_flag) {
+                let receipt = yield_vault::deposit(vault, part, clock, ctx);
+                transfer::public_transfer(receipt, leg.destination);
+            } else {
+                transfer::public_transfer(part, leg.destination);
+            };
+        };
+        i = i + 1;
+    };
+    if (tip > 0) {
+        let part = stream.balance.split(tip);
+        transfer::public_transfer(coin::from_balance(part, ctx), ctx.sender());
+    };
+
+    stream.milestone_paid = stream.milestone_paid + pay;
+    stream.last_drip_ms = now;
+    event::emit(StreamDripped { stream_id: object::id(stream), amount: pay, timestamp_ms: now });
 
     if (stream.milestone_paid >= milestone_amount) {
         stream.milestone_paid = 0;
