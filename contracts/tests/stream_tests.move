@@ -74,6 +74,126 @@ fun full_milestone_flow() {
     ts::end(sc);
 }
 
+/// Drive a stream to DRIPPING, then raise a dispute → PAUSED. Returns the scenario.
+fun paused_stream(sc: &mut ts::Scenario, clk: &sui::clock::Clock) {
+    let total = 200 * MIN_DRIP;
+    let amounts = vector[100 * MIN_DRIP, 100 * MIN_DRIP];
+    {
+        let pay = coin::mint_for_testing<SUI>(total, ts::ctx(sc));
+        stream::create_stream<SUI>(
+            pay, FREELANCER, names(), amounts, 1_000, 1_000, true, clk, ts::ctx(sc),
+        );
+    };
+    ts::next_tx(sc, FREELANCER);
+    {
+        let mut s = ts::take_shared<Stream<SUI>>(sc);
+        stream::raise_completion<SUI>(&mut s, clk, ts::ctx(sc));
+        ts::return_shared(s);
+    };
+    ts::next_tx(sc, CLIENT);
+    {
+        let cap = ts::take_from_sender<StreamCap>(sc);
+        let mut s = ts::take_shared<Stream<SUI>>(sc);
+        stream::approve_milestone<SUI>(&cap, &mut s, clk);
+        ts::return_shared(s);
+        ts::return_to_sender(sc, cap);
+    };
+    ts::next_tx(sc, FREELANCER);
+    {
+        let mut s = ts::take_shared<Stream<SUI>>(sc);
+        stream::raise_dispute<SUI>(&mut s, ts::ctx(sc));
+        assert!(stream::state(&s) == 3, 0); // PAUSED
+        ts::return_shared(s);
+    };
+}
+
+#[test]
+fun dispute_resolve_resume() {
+    let mut sc = ts::begin(CLIENT);
+    let clk = clock::create_for_testing(ts::ctx(&mut sc));
+    paused_stream(&mut sc, &clk);
+
+    // client proposes resume
+    ts::next_tx(&mut sc, CLIENT);
+    {
+        let mut s = ts::take_shared<Stream<SUI>>(&sc);
+        stream::propose_resolution<SUI>(&mut s, true, 0, ts::ctx(&mut sc));
+        assert!(stream::has_proposal(&s), 0);
+        ts::return_shared(s);
+    };
+    // freelancer accepts → DRIPPING
+    ts::next_tx(&mut sc, FREELANCER);
+    {
+        let mut s = ts::take_shared<Stream<SUI>>(&sc);
+        stream::accept_resolution<SUI>(&mut s, &clk, ts::ctx(&mut sc));
+        assert!(stream::state(&s) == 2, 1); // DRIPPING
+        assert!(!stream::has_proposal(&s), 2);
+        ts::return_shared(s);
+    };
+    clock::destroy_for_testing(clk);
+    ts::end(sc);
+}
+
+#[test]
+fun dispute_resolve_split() {
+    let mut sc = ts::begin(CLIENT);
+    let clk = clock::create_for_testing(ts::ctx(&mut sc));
+    paused_stream(&mut sc, &clk);
+
+    // freelancer proposes a 50/50 split of the remaining balance
+    ts::next_tx(&mut sc, FREELANCER);
+    {
+        let mut s = ts::take_shared<Stream<SUI>>(&sc);
+        stream::propose_resolution<SUI>(&mut s, false, 5_000, ts::ctx(&mut sc));
+        ts::return_shared(s);
+    };
+    // client accepts → DONE, balance split
+    ts::next_tx(&mut sc, CLIENT);
+    {
+        let mut s = ts::take_shared<Stream<SUI>>(&sc);
+        stream::accept_resolution<SUI>(&mut s, &clk, ts::ctx(&mut sc));
+        assert!(stream::state(&s) == 4, 0); // DONE
+        assert!(stream::remaining(&s) == 0, 1);
+        ts::return_shared(s);
+    };
+    // both parties received half of the 200*MIN_DRIP locked
+    ts::next_tx(&mut sc, FREELANCER);
+    {
+        let c = ts::take_from_address<coin::Coin<SUI>>(&sc, FREELANCER);
+        assert!(coin::value(&c) == 100 * MIN_DRIP, 2);
+        ts::return_to_address(FREELANCER, c);
+        let c2 = ts::take_from_address<coin::Coin<SUI>>(&sc, CLIENT);
+        assert!(coin::value(&c2) == 100 * MIN_DRIP, 3);
+        ts::return_to_address(CLIENT, c2);
+    };
+    clock::destroy_for_testing(clk);
+    ts::end(sc);
+}
+
+#[test]
+#[expected_failure(abort_code = streamline::stream::ENotAuthorized)]
+fun cannot_accept_own_proposal() {
+    let mut sc = ts::begin(CLIENT);
+    let clk = clock::create_for_testing(ts::ctx(&mut sc));
+    paused_stream(&mut sc, &clk);
+
+    ts::next_tx(&mut sc, CLIENT);
+    {
+        let mut s = ts::take_shared<Stream<SUI>>(&sc);
+        stream::propose_resolution<SUI>(&mut s, true, 0, ts::ctx(&mut sc));
+        ts::return_shared(s);
+    };
+    // same party tries to accept its own proposal → abort
+    ts::next_tx(&mut sc, CLIENT);
+    {
+        let mut s = ts::take_shared<Stream<SUI>>(&sc);
+        stream::accept_resolution<SUI>(&mut s, &clk, ts::ctx(&mut sc));
+        ts::return_shared(s);
+    };
+    clock::destroy_for_testing(clk);
+    ts::end(sc);
+}
+
 #[test]
 #[expected_failure(abort_code = streamline::stream::EWrongState)]
 fun cannot_drip_while_locked() {

@@ -97,6 +97,38 @@ export function buildRaiseDispute(r: StreamRef): Transaction {
   return tx;
 }
 
+/**
+ * Propose how to end a dispute on a PAUSED stream. `resume` returns it to
+ * dripping; otherwise the remaining balance splits, `freelancerBps` to the
+ * freelancer and the rest back to the client. The counterparty must accept.
+ */
+export function buildProposeResolution(
+  r: StreamRef & { resume: boolean; freelancerBps: number }
+): Transaction {
+  const tx = new Transaction();
+  tx.moveCall({
+    target: `${r.packageId}::stream::propose_resolution`,
+    typeArguments: [r.usdcType],
+    arguments: [
+      tx.object(r.streamId),
+      tx.pure.bool(r.resume),
+      tx.pure.u64(BigInt(r.freelancerBps)),
+    ],
+  });
+  return tx;
+}
+
+/** Accept the counterparty's pending resolution, executing the agreed outcome. */
+export function buildAcceptResolution(r: StreamRef): Transaction {
+  const tx = new Transaction();
+  tx.moveCall({
+    target: `${r.packageId}::stream::accept_resolution`,
+    typeArguments: [r.usdcType],
+    arguments: [tx.object(r.streamId), tx.object(CLOCK)],
+  });
+  return tx;
+}
+
 export type SetSplitsArgs = StreamRef & {
   destinations: string[];
   weightsBps: number[];

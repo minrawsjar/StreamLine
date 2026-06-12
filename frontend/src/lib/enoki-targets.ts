@@ -11,6 +11,8 @@ const STREAM_FUNCTIONS = [
   "approve_milestone",
   "drip",
   "raise_dispute",
+  "propose_resolution",
+  "accept_resolution",
   "set_splits",
   // Confidential streaming (amounts hidden, Groth16-verified on-chain).
   "create_confidential_stream",
@@ -19,6 +21,8 @@ const STREAM_FUNCTIONS = [
   "confidential_drip_v2",
   "claim",
   "confidential_dispute",
+  "conf_propose_resolution",
+  "conf_accept_resolution",
   "conf_raise_completion",
   "conf_approve_milestone",
   "conf_auto_approve",

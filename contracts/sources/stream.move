@@ -119,6 +119,33 @@ public struct StreamPaused has copy, drop {
     stream_id: ID,
 }
 
+/// A proposed way out of a PAUSED dispute. Mutual resolve: one party proposes,
+/// the *other* party accepts identical terms — neither side can settle alone.
+/// Stored in a dynamic field so it never changes the `Stream` struct layout.
+public struct ResolutionProposal has store, copy, drop {
+    proposer: address,
+    /// true → resume the stream (back to DRIPPING); false → split the remaining
+    /// locked balance and close.
+    resume: bool,
+    /// On a split, the bps of the remaining balance paid to the freelancer; the
+    /// rest is refunded to the client. Ignored when `resume`.
+    freelancer_bps: u64,
+}
+
+public struct ResolutionProposed has copy, drop {
+    stream_id: ID,
+    proposer: address,
+    resume: bool,
+    freelancer_bps: u64,
+}
+
+public struct DisputeResolved has copy, drop {
+    stream_id: ID,
+    resumed: bool,
+    freelancer_amount: u64,
+    sender_amount: u64,
+}
+
 // === Lifecycle ===
 
 /// Lock the full amount and create a shared milestone stream. The client
@@ -363,6 +390,89 @@ public fun cancel<T>(cap: StreamCap, stream: &mut Stream<T>, ctx: &mut TxContext
     id.delete();
 }
 
+// === Dispute resolution (mutual) ===
+
+const PROPOSAL_KEY: vector<u8> = b"dispute_proposal";
+
+/// Propose how to end a dispute on a PAUSED stream — either resume it, or split
+/// the remaining locked balance (`freelancer_bps` to the freelancer, the rest
+/// refunded to the client). Overwrites any prior proposal. The counterparty must
+/// `accept_resolution` for it to take effect.
+public fun propose_resolution<T>(
+    stream: &mut Stream<T>,
+    resume: bool,
+    freelancer_bps: u64,
+    ctx: &TxContext,
+) {
+    let who = ctx.sender();
+    assert!(who == stream.sender || who == stream.freelancer, ENotAuthorized);
+    assert!(stream.state == STATE_PAUSED, EWrongState);
+    assert!(resume || freelancer_bps <= BPS_DENOM, EBadSplits);
+    let proposal = ResolutionProposal { proposer: who, resume, freelancer_bps };
+    if (df::exists(&stream.id, PROPOSAL_KEY)) {
+        *df::borrow_mut(&mut stream.id, PROPOSAL_KEY) = proposal;
+    } else {
+        df::add(&mut stream.id, PROPOSAL_KEY, proposal);
+    };
+    event::emit(ResolutionProposed {
+        stream_id: object::id(stream),
+        proposer: who,
+        resume,
+        freelancer_bps,
+    });
+}
+
+/// Accept the counterparty's pending proposal, executing the agreed resolution.
+/// The accepter must be the *other* party — agreement needs both sides.
+public fun accept_resolution<T>(
+    stream: &mut Stream<T>,
+    clock: &Clock,
+    ctx: &mut TxContext,
+) {
+    let who = ctx.sender();
+    assert!(who == stream.sender || who == stream.freelancer, ENotAuthorized);
+    assert!(stream.state == STATE_PAUSED, EWrongState);
+    assert!(df::exists(&stream.id, PROPOSAL_KEY), EWrongState);
+    let proposal: ResolutionProposal = df::remove(&mut stream.id, PROPOSAL_KEY);
+    assert!(who != proposal.proposer, ENotAuthorized);
+
+    if (proposal.resume) {
+        stream.state = STATE_DRIPPING;
+        // Don't retroactively pay for the paused gap: reset the watermark to now.
+        stream.last_drip_ms = clock.timestamp_ms();
+        event::emit(DisputeResolved {
+            stream_id: object::id(stream),
+            resumed: true,
+            freelancer_amount: 0,
+            sender_amount: 0,
+        });
+    } else {
+        let total = stream.balance.value();
+        let to_freelancer = mul_bps(total, proposal.freelancer_bps);
+        if (to_freelancer > 0) {
+            let part = stream.balance.split(to_freelancer);
+            transfer::public_transfer(coin::from_balance(part, ctx), stream.freelancer);
+        };
+        let to_sender = stream.balance.value();
+        if (to_sender > 0) {
+            let part = stream.balance.split(to_sender);
+            transfer::public_transfer(coin::from_balance(part, ctx), stream.sender);
+        };
+        stream.state = STATE_DONE;
+        event::emit(DisputeResolved {
+            stream_id: object::id(stream),
+            resumed: false,
+            freelancer_amount: to_freelancer,
+            sender_amount: to_sender,
+        });
+    }
+}
+
+/// Whether a stream currently has a pending resolution proposal.
+public fun has_proposal<T>(stream: &Stream<T>): bool {
+    df::exists(&stream.id, PROPOSAL_KEY)
+}
+
 // === Views ===
 
 public fun state<T>(s: &Stream<T>): u8 { s.state }
@@ -381,6 +491,11 @@ public fun total<T>(s: &Stream<T>): u64 { s.total }
 
 fun ceil_div(a: u128, b: u128): u64 {
     (((a + b - 1) / b) as u64)
+}
+
+/// `amount * bps / 10_000`, computed in u128 to avoid overflow.
+fun mul_bps(amount: u64, bps: u64): u64 {
+    (((amount as u128) * (bps as u128) / (BPS_DENOM as u128)) as u64)
 }
 
 // === Confidential streaming (amounts hidden via Groth16) ===
@@ -726,6 +841,75 @@ public fun confidential_dispute<T>(stream: &mut ConfidentialStream<T>, ctx: &TxC
     assert!(stream.state == STATE_DRIPPING, EWrongState);
     stream.state = STATE_PAUSED;
     event::emit(StreamPaused { stream_id: object::id(stream) });
+}
+
+/// Propose a mutual resolution for a PAUSED confidential stream. A split divides
+/// the *public* reserve by `freelancer_bps` (the hidden commitments are moot once
+/// the agreed figure settles); resume returns it to DRIPPING.
+public fun conf_propose_resolution<T>(
+    stream: &mut ConfidentialStream<T>,
+    resume: bool,
+    freelancer_bps: u64,
+    ctx: &TxContext,
+) {
+    let who = ctx.sender();
+    assert!(who == stream.sender || who == stream.freelancer, ENotAuthorized);
+    assert!(stream.state == STATE_PAUSED, EWrongState);
+    assert!(resume || freelancer_bps <= BPS_DENOM, EBadSplits);
+    let proposal = ResolutionProposal { proposer: who, resume, freelancer_bps };
+    if (df::exists(&stream.id, PROPOSAL_KEY)) {
+        *df::borrow_mut(&mut stream.id, PROPOSAL_KEY) = proposal;
+    } else {
+        df::add(&mut stream.id, PROPOSAL_KEY, proposal);
+    };
+    event::emit(ResolutionProposed {
+        stream_id: object::id(stream),
+        proposer: who,
+        resume,
+        freelancer_bps,
+    });
+}
+
+/// Accept the counterparty's pending confidential resolution.
+public fun conf_accept_resolution<T>(
+    stream: &mut ConfidentialStream<T>,
+    ctx: &mut TxContext,
+) {
+    let who = ctx.sender();
+    assert!(who == stream.sender || who == stream.freelancer, ENotAuthorized);
+    assert!(stream.state == STATE_PAUSED, EWrongState);
+    assert!(df::exists(&stream.id, PROPOSAL_KEY), EWrongState);
+    let proposal: ResolutionProposal = df::remove(&mut stream.id, PROPOSAL_KEY);
+    assert!(who != proposal.proposer, ENotAuthorized);
+
+    if (proposal.resume) {
+        stream.state = STATE_DRIPPING;
+        event::emit(DisputeResolved {
+            stream_id: object::id(stream),
+            resumed: true,
+            freelancer_amount: 0,
+            sender_amount: 0,
+        });
+    } else {
+        let total = stream.reserve.value();
+        let to_freelancer = mul_bps(total, proposal.freelancer_bps);
+        if (to_freelancer > 0) {
+            let part = stream.reserve.split(to_freelancer);
+            transfer::public_transfer(coin::from_balance(part, ctx), stream.freelancer);
+        };
+        let to_sender = stream.reserve.value();
+        if (to_sender > 0) {
+            let part = stream.reserve.split(to_sender);
+            transfer::public_transfer(coin::from_balance(part, ctx), stream.sender);
+        };
+        stream.state = STATE_DONE;
+        event::emit(DisputeResolved {
+            stream_id: object::id(stream),
+            resumed: false,
+            freelancer_amount: to_freelancer,
+            sender_amount: to_sender,
+        });
+    }
 }
 
 // Confidential views
