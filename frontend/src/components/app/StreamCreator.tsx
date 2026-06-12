@@ -30,6 +30,7 @@ import {
   addSecret,
   findCreatedConfidentialStream,
 } from "@/lib/confidential-store";
+import { DITHER_HATCH } from "./dashboard-ui";
 
 type SplitRow = { label: string; address: string; pct: number; yield: boolean };
 
@@ -87,6 +88,8 @@ export function StreamCreator() {
   }, [amount, durationValue, milestones.length, splitSum, isPrivate, freelancer]);
 
   const canCreate = errors.length === 0 && !!account;
+  const recipientInvalid =
+    isPrivate && !/^0x[0-9a-fA-F]{1,64}$/.test(freelancer.trim());
 
   const updateMilestone = (i: number, v: string) =>
     setMilestones((m) => m.map((x, j) => (j === i ? v : x)));
@@ -244,7 +247,11 @@ export function StreamCreator() {
             value={freelancer}
             onChange={(e) => setFreelancer(e.target.value)}
             placeholder="0x…"
-            className="w-full border border-[#2b2a5e]/20 bg-white px-3 py-2.5 font-mono text-[13px] outline-none focus:border-[#5b54e6]"
+            className={`w-full border bg-white px-3 py-2.5 font-mono text-[13px] outline-none focus:border-[#5b54e6] ${
+              recipientInvalid
+                ? "border-[#c0533a] bg-[#c0533a]/[0.03]"
+                : "border-[#2b2a5e]/20"
+            }`}
           />
         </Field>
 
@@ -377,7 +384,7 @@ export function StreamCreator() {
         )}
       </div>
 
-      <aside className="flex flex-col gap-4 border border-[#2b2a5e]/15 bg-white p-6">
+      <aside className="flex flex-col gap-4 border border-[#2b2a5e]/15 bg-white p-6 lg:min-h-[480px]">
         <p className="text-[11px] uppercase tracking-[0.18em] text-[#2b2a5e]/50">
           PTB preview
         </p>
@@ -409,11 +416,9 @@ export function StreamCreator() {
           </div>
         )}
         {isPrivate ? (
-          <p className="text-[11px] leading-relaxed text-[#5b54e6]">
-            Amounts hidden via Poseidon commitments; every transition proven
-            with Groth16 in your browser. Secrets are Seal-encrypted to both
-            wallets, so the recipient can drip, raise and claim on their own.
-            Gas is sponsored — milestone names stay off-chain.
+          <p className="text-[11px] leading-relaxed text-[#2b2a5e]/60">
+            Amounts stay off-chain. Groth16 proofs in your browser; secrets
+            Seal-encrypted to you and the recipient.
           </p>
         ) : (
           <p className="text-[11px] leading-relaxed text-[#1d9e75]">
@@ -421,20 +426,15 @@ export function StreamCreator() {
           </p>
         )}
 
-        {errors.length > 0 && (
-          <ul className="flex flex-col gap-1 text-[11px] text-[#c0533a]">
-            {errors.map((e) => (
-              <li key={e}>• {e}</li>
-            ))}
-          </ul>
-        )}
+        <div className="flex-1" />
 
-        <CreateStreamButton
+        <StreamCreateAction
           isPrivate={isPrivate}
           amount={amount}
           milestones={milestones.length}
-          canCreate={canCreate && !!deployed}
+          ready={canCreate && !!deployed}
           busy={isPending || proving}
+          blockReason={errors[0]}
           onClick={onCreate}
         />
         {!deployed && (
@@ -471,111 +471,122 @@ function Summary({ label, value }: { label: string; value: string }) {
   );
 }
 
-function CreateStreamButton({
+const DOT_FIELD =
+  "radial-gradient(rgba(255,255,255,0.22) 1px, transparent 1px)";
+
+function StreamCreateAction({
   isPrivate,
   amount,
   milestones,
-  canCreate,
+  ready,
   busy,
+  blockReason,
   onClick,
 }: {
   isPrivate: boolean;
   amount: number;
   milestones: number;
-  canCreate: boolean;
+  ready: boolean;
   busy: boolean;
+  blockReason?: string;
   onClick: () => void;
 }) {
   const locked = formatUsd(amount);
-  const perMilestone = formatUsd(amount / Math.max(milestones, 1));
+  const each = formatUsd(amount / Math.max(milestones, 1));
+  const accent = isPrivate ? "#5b54e6" : "#2b2a5e";
 
-  const title = busy
-    ? isPrivate
-      ? "Proving & creating…"
-      : "Creating stream…"
-    : isPrivate
-      ? "Create private stream"
-      : "Create stream";
+  if (busy) {
+    return (
+      <div
+        className="relative overflow-hidden p-5 text-white"
+        style={{ background: accent }}
+      >
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-0 opacity-60"
+          style={{ backgroundImage: DOT_FIELD, backgroundSize: "7px 7px" }}
+        />
+        <div className="relative">
+          <p className="text-[10px] uppercase tracking-[0.16em] text-white/75">
+            {isPrivate ? "Private stream" : "Creating stream"}
+          </p>
+          <p className="mt-2 text-[32px] font-black tabular leading-none tracking-[-0.02em]">
+            {locked}
+          </p>
+          <p className="mt-4 animate-pulse text-[13px] font-medium text-white/90">
+            {isPrivate
+              ? "Generating proof & encrypting secrets…"
+              : "Awaiting wallet signature…"}
+          </p>
+        </div>
+      </div>
+    );
+  }
 
-  const subtitle = busy
-    ? isPrivate
-      ? "Groth16 proof + Seal encryption in your browser"
-      : "Awaiting wallet signature"
-    : isPrivate
-      ? `Lock ${locked} hidden · ${milestones} milestones · Seal-encrypted`
-      : `Lock ${locked} · gasless · ${perMilestone} per milestone`;
-
-  const enabled = canCreate && !busy;
+  if (!ready) {
+    return (
+      <div
+        className="border-2 border-dashed border-[#2b2a5e]/25 px-5 py-5"
+        style={{ backgroundImage: DITHER_HATCH }}
+      >
+        <p className="text-[10px] uppercase tracking-[0.16em] text-[#2b2a5e]/45">
+          {isPrivate ? "Private stream preview" : "Stream preview"}
+        </p>
+        <p className="mt-2 text-[36px] font-black tabular leading-none tracking-[-0.02em] text-[#2b2a5e]">
+          {locked}
+        </p>
+        <p className="mt-2 text-[12px] text-[#2b2a5e]/55">
+          {milestones} milestones
+          {isPrivate ? " · hidden on-chain" : ` · ${each} each · gasless`}
+        </p>
+        <div className="mt-5 border-t border-[#2b2a5e]/12 pt-4">
+          <p className="text-[13px] font-semibold text-[#2b2a5e]">
+            {isPrivate ? "Create private stream" : "Create stream"}
+          </p>
+          <p className="mt-1.5 text-[12px] leading-relaxed text-[#c0533a]">
+            {blockReason ?? "Complete the form above"}
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="mt-4 border-t border-[#2b2a5e]/10 pt-5">
-      <button
-        type="button"
-        onClick={onClick}
-        disabled={!canCreate || busy}
-        className={[
-          "group relative w-full overflow-hidden px-5 py-4 text-left transition-all duration-200",
-          enabled
-            ? isPrivate
-              ? "bg-[#2b2a5e] text-white shadow-[0_8px_24px_rgba(43,42,94,0.28)] hover:-translate-y-px hover:shadow-[0_12px_32px_rgba(43,42,94,0.34)] active:translate-y-0"
-              : "bg-[#2b2a5e] text-white shadow-[0_8px_24px_rgba(43,42,94,0.22)] hover:-translate-y-px hover:shadow-[0_12px_32px_rgba(43,42,94,0.3)] active:translate-y-0"
-            : "cursor-not-allowed border border-[#2b2a5e]/12 bg-[#f4f3f8] text-[#2b2a5e]/45",
-        ].join(" ")}
+    <button
+      type="button"
+      onClick={onClick}
+      className="group w-full text-left transition-transform duration-150 hover:-translate-y-0.5 active:translate-y-0"
+    >
+      <div
+        className="relative overflow-hidden p-5 text-white shadow-[0_10px_30px_rgba(43,42,94,0.2)] transition-shadow group-hover:shadow-[0_14px_36px_rgba(43,42,94,0.28)]"
+        style={{ background: accent }}
       >
-        {enabled && isPrivate && (
-          <span
-            aria-hidden
-            className="pointer-events-none absolute inset-y-0 right-0 w-24 bg-gradient-to-l from-[#5b54e6]/35 to-transparent"
-          />
-        )}
-        <span className="relative flex items-center gap-3">
-          <span
-            className={[
-              "flex h-9 w-9 shrink-0 items-center justify-center text-[15px]",
-              enabled
-                ? isPrivate
-                  ? "bg-[#5b54e6]/25 ring-1 ring-[#5b54e6]/40"
-                  : "bg-white/10 ring-1 ring-white/15"
-                : "bg-[#2b2a5e]/06 text-[#2b2a5e]/30",
-            ].join(" ")}
-          >
-            {busy ? "…" : isPrivate ? "🔒" : "→"}
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-0"
+          style={{ backgroundImage: DOT_FIELD, backgroundSize: "7px 7px" }}
+        />
+        <div className="relative flex items-end justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-[10px] uppercase tracking-[0.16em] text-white/75">
+              {isPrivate ? "Private · Seal encrypted" : "Gasless · no SUI needed"}
+            </p>
+            <p className="mt-1 text-[40px] font-black tabular leading-none tracking-[-0.03em]">
+              {locked}
+            </p>
+            <p className="mt-2 text-[12px] text-white/80">
+              {milestones} milestones
+              {!isPrivate && ` · ${each} each`}
+            </p>
+          </div>
+          <span className="flex h-11 w-11 shrink-0 items-center justify-center bg-white/15 text-[20px] ring-1 ring-white/25 transition-transform group-hover:translate-x-1">
+            →
           </span>
-          <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-            <span
-              className={[
-                "text-[13px] font-semibold uppercase tracking-[0.08em]",
-                enabled ? "text-white" : "",
-              ].join(" ")}
-            >
-              {title}
-            </span>
-            <span
-              className={[
-                "truncate text-[11px] leading-snug",
-                enabled ? "text-white/75" : "text-[#2b2a5e]/40",
-              ].join(" ")}
-            >
-              {subtitle}
-            </span>
-          </span>
-          {enabled && (
-            <span
-              aria-hidden
-              className="shrink-0 text-[18px] text-white/50 transition-transform group-hover:translate-x-0.5"
-            >
-              ›
-            </span>
-          )}
-        </span>
-      </button>
-      {!canCreate && !busy && (
-        <p className="mt-2.5 text-center text-[10px] text-[#2b2a5e]/45">
-          {isPrivate
-            ? "Enter a valid recipient address to continue"
-            : "Fix the fields above to continue"}
+        </div>
+        <p className="relative mt-4 border-t border-white/20 pt-3.5 text-[14px] font-bold tracking-[-0.01em]">
+          {isPrivate ? "Create private stream" : "Create stream"}
         </p>
-      )}
-    </div>
+      </div>
+    </button>
   );
 }
