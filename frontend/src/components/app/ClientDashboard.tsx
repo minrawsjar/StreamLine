@@ -13,6 +13,7 @@ import {
 } from "@/lib/stream-state";
 import {
   buildApproveMilestone,
+  buildCancel,
   buildRaiseDispute,
 } from "@/lib/streamline-tx";
 import { PrivateStreamsPanel } from "./PrivateStreamsPanel";
@@ -129,6 +130,26 @@ export function ClientDashboard() {
   const dispute = (s: StreamRecord) => {
     setBusy(s.id);
     execute(buildRaiseDispute({ packageId, usdcType, streamId: s.id }), {
+      onSettled: () => setBusy(null),
+      onSuccess: () => refetch(),
+    });
+  };
+
+  const cancel = (s: StreamRecord) => {
+    const capId = caps.get(s.id);
+    if (!capId) {
+      setBusy(`${s.id}:no-cap`);
+      return;
+    }
+    if (
+      !window.confirm(
+        `Cancel this stream and reclaim the unstreamed $${usd(s.remaining)}? ` +
+          `This closes the stream for good.`
+      )
+    )
+      return;
+    setBusy(s.id);
+    execute(buildCancel({ packageId, usdcType, streamId: s.id, capId }), {
       onSettled: () => setBusy(null),
       onSuccess: () => refetch(),
     });
@@ -294,6 +315,16 @@ export function ClientDashboard() {
                           className="border border-[#c0533a] px-4 py-2 text-[11px] uppercase tracking-[0.1em] text-[#c0533a] hover:bg-[#c0533a]/[0.06] disabled:opacity-40"
                         >
                           dispute
+                        </button>
+                      )}
+                      {s.state !== "done" && (
+                        <button
+                          onClick={() => cancel(s)}
+                          disabled={isPending}
+                          title="Reclaim the unstreamed balance and close the stream (revocable streams only)"
+                          className="border border-[#2b2a5e]/30 px-4 py-2 text-[11px] uppercase tracking-[0.1em] text-[#2b2a5e]/70 hover:border-[#c0533a] hover:text-[#c0533a] disabled:opacity-40"
+                        >
+                          {busy === s.id ? "…" : "cancel"}
                         </button>
                       )}
                     </div>

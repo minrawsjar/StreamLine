@@ -109,6 +109,20 @@ export function buildRaiseCompletion(r: StreamRef): Transaction {
   return tx;
 }
 
+/**
+ * Client cancels a revocable stream via the StreamCap: the unstreamed balance is
+ * refunded to the client and the stream closes. The cap is consumed.
+ */
+export function buildCancel(r: StreamRef & { capId: string }): Transaction {
+  const tx = new Transaction();
+  tx.moveCall({
+    target: `${r.packageId}::stream::cancel`,
+    typeArguments: [r.usdcType],
+    arguments: [tx.object(r.capId), tx.object(r.streamId)],
+  });
+  return tx;
+}
+
 /** Client approves the raised milestone via the StreamCap. */
 export function buildApproveMilestone(r: StreamRef & { capId: string }): Transaction {
   const tx = new Transaction();

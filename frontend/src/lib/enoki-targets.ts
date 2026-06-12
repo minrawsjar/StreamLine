@@ -9,6 +9,7 @@ const STREAM_FUNCTIONS = [
   "create_stream",
   "raise_completion",
   "approve_milestone",
+  "cancel",
   "drip",
   "raise_dispute",
   "propose_resolution",
