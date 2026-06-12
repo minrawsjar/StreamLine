@@ -239,13 +239,13 @@ export function StreamCreator() {
             role="switch"
             aria-checked={isPrivate}
             onClick={() => setIsPrivate((v) => !v)}
-            className={`relative h-6 w-11 shrink-0 transition-colors ${
-              isPrivate ? "bg-[#5b54e6]" : "bg-[#2b2a5e]/20"
+            className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${
+              isPrivate ? "bg-[#5b54e6]" : "bg-[#2b2a5e]/25"
             }`}
           >
             <span
-              className={`absolute top-0.5 h-5 w-5 bg-white transition-transform ${
-                isPrivate ? "translate-x-[22px]" : "translate-x-0.5"
+              className={`absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition-transform ${
+                isPrivate ? "translate-x-5" : "translate-x-0"
               }`}
             />
           </button>
