@@ -8,7 +8,6 @@ import {
   useSuiClientContext,
   useSuiClientQuery,
 } from "@mysten/dapp-kit";
-import { useQuery } from "@tanstack/react-query";
 import { toBase64 } from "@mysten/sui/utils";
 
 import { useNetworkVariable, type NetworkName } from "@/lib/networks";
@@ -30,11 +29,8 @@ import {
   loadOrCreateSessionKey,
   type PrivateStreamPayload,
 } from "@/lib/seal";
-import {
-  fetchPrivateStream,
-  findPrivateStreamIds,
-  type PrivateStreamOnChain,
-} from "@/lib/private-streams";
+import { type PrivateStreamOnChain } from "@/lib/private-streams";
+import { usePrivateStreams } from "@/lib/use-private-streams";
 import {
   loadSecrets,
   saveSecrets,
@@ -83,38 +79,6 @@ function useStreamCaps(originalPackageId: string) {
   }, [data]);
 }
 
-/**
- * Private streams for the connected wallet, in either role. Reads the chain
- * directly (no indexer): discovery via ConfStreamCreated events + the local
- * secrets cache, state via object reads.
- */
-function usePrivateStreams(role: Role) {
-  const account = useCurrentAccount();
-  const client = useSuiClient();
-  const confPackageId = useNetworkVariable("confPackageId");
-  const addr = account?.address;
-
-  return useQuery({
-    queryKey: ["private-streams", addr, role],
-    enabled: !!addr && confPackageId !== "0x0",
-    refetchInterval: 15_000,
-    queryFn: async (): Promise<PrivateStreamOnChain[]> => {
-      const eventIds = await findPrivateStreamIds(client, confPackageId, addr!);
-      const localIds = loadSecrets(addr!).map((s) => s.streamId);
-      const ids = [...new Set([...eventIds, ...localIds])];
-      const streams = await Promise.all(
-        ids.map((id) => fetchPrivateStream(client, id).catch(() => null))
-      );
-      return streams
-        .filter((s): s is PrivateStreamOnChain => !!s)
-        .filter((s) =>
-          role === "sender" ? s.sender === addr : s.freelancer === addr
-        )
-        .filter((s) => s.state !== 4 || s.reserve > 0n);
-    },
-  });
-}
-
 function payloadFromLocal(s: PrivateStreamSecret): PrivateStreamPayload {
   return {
     v: 1,
@@ -137,7 +101,14 @@ async function matchesChain(
   return toBase64(c) === toBase64(stream.remainingCommitment);
 }
 
-export function PrivateStreamsPanel({ role }: { role: Role }) {
+export function PrivateStreamsPanel({
+  role,
+  only,
+}: {
+  role: Role;
+  /** Render just this one stream (for the unified stream-tabs view). */
+  only?: string;
+}) {
   const account = useCurrentAccount();
   const client = useSuiClient();
   const { network } = useSuiClientContext();
@@ -465,9 +436,11 @@ export function PrivateStreamsPanel({ role }: { role: Role }) {
     [execute, packageId, refetch]
   );
 
+  const shown = (streams ?? []).filter((s) => (only ? s.id === only : true));
+
   if (!addr) return null;
   if (isLoading) return null;
-  if (!streams || streams.length === 0) return null;
+  if (shown.length === 0) return null;
 
   return (
     <Card title="Private streams 🔒" padded={false}>
@@ -476,7 +449,7 @@ export function PrivateStreamsPanel({ role }: { role: Role }) {
         {role === "freelancer" ? " via Seal" : ""} and never leave this device.
       </p>
       <div className="flex flex-col">
-        {streams.map((s) => {
+        {shown.map((s) => {
           const payload = unlocked.get(s.id);
           const working = busy === s.id || isPending;
           const stateLabel = STATE_LABELS[s.state] ?? "locked";

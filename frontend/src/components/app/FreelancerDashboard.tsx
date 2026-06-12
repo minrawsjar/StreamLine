@@ -6,6 +6,7 @@ import { useCurrentAccount } from "@mysten/dapp-kit";
 import { useNetworkVariable } from "@/lib/networks";
 import { useGaslessExecute } from "@/lib/use-gasless";
 import { useStreams, useLiveUpdates, type StreamRecord } from "@/lib/indexer";
+import { usePrivateStreams } from "@/lib/use-private-streams";
 import { buildRaiseCompletion } from "@/lib/streamline-tx";
 import { PrivateStreamsPanel } from "./PrivateStreamsPanel";
 import { USDC_BASE, formatInterval } from "@/lib/stream-math";
@@ -27,14 +28,21 @@ import {
   type BarDatum,
 } from "./dashboard-ui";
 
+const PRIV_STATE = [
+  "locked",
+  "pending_review",
+  "dripping",
+  "paused",
+  "done",
+] as const;
+
 /** Earned base units = already paid + (live accrual while dripping). */
 function earnedBase(s: StreamRecord, nowMs: number): number {
   const paid = s.total - s.remaining;
   if (effectiveState(s) !== "dripping" || s.duration_ms <= 0) return paid;
-  const rate = s.total / s.duration_ms; // base units per ms
+  const rate = s.total / s.duration_ms;
   const accrued = Math.max(0, (nowMs - s.last_drip_ms) * rate);
-  const milestoneCeiling = milestoneCeilingBase(s, s.current_milestone);
-  return Math.min(paid + accrued, milestoneCeiling, s.total);
+  return Math.min(paid + accrued, milestoneCeilingBase(s, s.current_milestone), s.total);
 }
 
 const usd = (base: number) => (base / USDC_BASE).toFixed(2);
@@ -47,86 +55,87 @@ export function FreelancerDashboard() {
   const { data: streams, isLoading, refetch } = useStreams({
     freelancer: account?.address,
   });
+  const { data: privStreams } = usePrivateStreams("freelancer");
 
-  const [selected, setSelected] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
   const [status, setStatus] = useState<string | null>(null);
 
-  // 100ms client-side tick drives the live counter (no chain reads).
   useEffect(() => {
     const t = setInterval(() => setNow(Date.now()), 100);
     return () => clearInterval(t);
   }, []);
-
   useLiveUpdates(() => refetch());
 
-  const list = useMemo(() => streams ?? [], [streams]);
-  const active = useMemo(
-    () => list.find((s) => s.id === selected) ?? list[0],
-    [list, selected]
+  const publicList = useMemo(() => streams ?? [], [streams]);
+  const privList = useMemo(() => privStreams ?? [], [privStreams]);
+
+  // Unified, numbered tabs — public + private in one switcher.
+  const tabs = useMemo(
+    () => [
+      ...publicList.map((s, i) => ({
+        id: s.id,
+        n: i + 1,
+        isPrivate: false,
+        state: effectiveState(s),
+      })),
+      ...privList.map((s, i) => ({
+        id: s.id,
+        n: publicList.length + i + 1,
+        isPrivate: true,
+        state: PRIV_STATE[s.state] ?? "locked",
+      })),
+    ],
+    [publicList, privList]
+  );
+
+  const current = useMemo(
+    () => tabs.find((t) => t.id === selectedId) ?? tabs[0],
+    [tabs, selectedId]
+  );
+  const activePublic = useMemo(
+    () =>
+      current && !current.isPrivate
+        ? publicList.find((s) => s.id === current.id)
+        : undefined,
+    [current, publicList]
   );
 
   const totals = useMemo(() => {
-    const earnedAll = list.reduce((a, s) => a + earnedBase(s, now), 0);
-    const locked = list.reduce((a, s) => a + s.total, 0);
-    const dripping = list.filter((s) => effectiveState(s) === "dripping").length;
+    const earnedAll = publicList.reduce((a, s) => a + earnedBase(s, now), 0);
+    const locked = publicList.reduce((a, s) => a + s.total, 0);
+    const dripping =
+      publicList.filter((s) => effectiveState(s) === "dripping").length +
+      privList.filter((s) => s.state === 2).length;
     return { earnedAll, locked, dripping };
-  }, [list, now]);
+  }, [publicList, privList, now]);
 
   const bars: BarDatum[] = useMemo(
     () =>
-      list.slice(0, 8).map((s) => ({
+      publicList.slice(0, 8).map((s) => ({
         label: short(s.id).slice(0, 4),
         value: earnedBase(s, now),
         active: effectiveState(s) === "dripping" || s.state === "pending_review",
       })),
-    [list, now]
+    [publicList, now]
   );
 
-  if (isLoading) return <EmptyPanel>Loading your streams…</EmptyPanel>;
-
-  if (list.length === 0)
-    return (
-      <div>
-        <DashboardHeader
-          eyebrow="Receiver console"
-          title="Freelancer dashboard"
-          subtitle="Watch money arrive in real time and raise milestones in one click."
-        />
-        <div className="flex flex-col gap-6">
-          <EmptyPanel>
-            No streams yet. When a client creates one for{" "}
-            <span className="font-mono">{short(account?.address)}</span>, it
-            appears here and starts earning live.
-          </EmptyPanel>
-          <PrivateStreamsPanel role="freelancer" />
-        </div>
-      </div>
-    );
-
-  const rate = active.duration_ms > 0 ? active.total / active.duration_ms : 0; // base/ms
-  const ratePerSec = (rate * 1000) / USDC_BASE;
-  const earned = earnedBase(active, now) / USDC_BASE;
-  const activeProgress =
-    active.total > 0 ? (earnedBase(active, now) / active.total) * 100 : 0;
-
-  const onRaise = () => {
+  const onRaise = (streamId: string) => {
     setStatus("Awaiting signature…");
-    execute(
-      buildRaiseCompletion({ packageId, usdcType, streamId: active.id }),
-      {
-        onSuccess: (r) => {
-          setStatus(`Milestone raised — ${r.digest.slice(0, 10)}…`);
-          refetch();
-        },
-        onError: (e) => setStatus(e.message),
-      }
-    );
+    execute(buildRaiseCompletion({ packageId, usdcType, streamId }), {
+      onSuccess: (r) => {
+        setStatus(`Milestone raised — ${r.digest.slice(0, 10)}…`);
+        refetch();
+      },
+      onError: (e) => setStatus(e.message),
+    });
   };
 
-  const view = effectiveState(active);
-  const done = completedMilestones(active);
-  const next = nextMilestoneNo(active);
+  if (isLoading && publicList.length === 0 && privList.length === 0) {
+    return <EmptyPanel>Loading your streams…</EmptyPanel>;
+  }
+
+  const empty = tabs.length === 0;
 
   return (
     <div>
@@ -136,115 +145,142 @@ export function FreelancerDashboard() {
         subtitle="Watch money arrive in real time and raise milestones in one click."
       />
 
-      {/* Stat row */}
       <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard
           tone="brand"
           label="Earned (all)"
           value={`$${totals.earnedAll === 0 ? "0.00" : (totals.earnedAll / USDC_BASE).toFixed(2)}`}
-          sub="live across streams"
+          sub="public streams, live"
         />
-        <StatCard
-          label="Incoming total"
-          value={`$${usd(totals.locked)}`}
-          sub="locked for you"
-        />
-        <StatCard
-          label="Active streams"
-          value={String(totals.dripping)}
-          sub="currently dripping"
-        />
-        <StatCard
-          label="Open streams"
-          value={String(list.length)}
-          sub="assigned to you"
-        />
+        <StatCard label="Incoming total" value={`$${usd(totals.locked)}`} sub="locked (public)" />
+        <StatCard label="Active" value={String(totals.dripping)} sub="currently dripping" />
+        <StatCard label="Streams" value={String(tabs.length)} sub="public + private 🔒" />
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
-        <div className="flex flex-col gap-6">
-          {/* Live earned hero */}
-          <Card>
-            <p className="text-[11px] uppercase tracking-[0.18em] text-[#2b2a5e]/50">
-              Earned so far · {short(active.id)}
-            </p>
-            <p className="mt-2 text-[clamp(38px,7vw,68px)] font-black leading-none tabular text-[#2b2a5e]">
-              ${earned.toFixed(6)}
-            </p>
-            <p className="mt-3 text-[13px] text-[#1d9e75]">
-              {view === "dripping"
-                ? `+$${ratePerSec.toFixed(6)} / sec · live, gasless`
-                : view === "locked"
-                  ? `Milestone ${done} finished — apply for milestone ${next}`
-                  : `Status: ${view.replace("_", " ")}`}
-            </p>
-
-            <div className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
-              <Stat
-                label="Milestone"
-                value={
-                  view === "locked"
-                    ? `${done}/${active.n_milestones} done · next ${next}`
-                    : `${next}/${active.n_milestones}`
-                }
-              />
-              <Stat
-                label="Settles every"
-                value={formatInterval(active.drip_interval_ms)}
-              />
-              <Stat label="Locked" value={`$${usd(active.total)}`} />
-              <Stat label="Remaining" value={`$${usd(active.remaining)}`} />
-            </div>
-
-            <MilestoneAction
-              stream={active}
-              isPending={isPending}
-              onRaise={onRaise}
-            />
-            {status && (
-              <p className="mt-4 text-[11px] text-[#2b2a5e]/70">{status}</p>
-            )}
-          </Card>
-
-          {/* Earnings analytics */}
-          <Card title="Earnings analytics">
-            <p className="-mt-2 mb-5 text-[11px] text-[#2b2a5e]/45">
-              Earned per stream (live + pending highlighted)
-            </p>
-            <BarChart data={bars} />
-          </Card>
-        </div>
-
-        {/* Right rail: progress + stream list */}
-        <aside className="flex flex-col gap-6">
-          <Card title="Stream progress">
-            <DonutProgress percent={activeProgress} caption="of this stream" size={180} />
-          </Card>
-
-          <Card title="Your streams" padded={false}>
-            <div className="flex flex-col">
-              {list.map((s) => (
+      {empty ? (
+        <EmptyPanel>
+          No streams yet. When a client creates one for{" "}
+          <span className="font-mono">{short(account?.address)}</span> — public or
+          private — it appears here as a new tab.
+        </EmptyPanel>
+      ) : (
+        <>
+          {/* Unified stream tabs */}
+          <div className="mb-6 flex flex-wrap gap-2">
+            {tabs.map((t) => {
+              const on = t.id === current?.id;
+              return (
                 <button
-                  key={s.id}
-                  onClick={() => setSelected(s.id)}
-                  className={`flex items-center justify-between gap-2 border-t border-[#2b2a5e]/10 px-4 py-3 text-left text-[12px] transition-colors ${
-                    s.id === active.id
-                      ? "bg-[#5b54e6]/[0.06]"
-                      : "hover:bg-[#2b2a5e]/[0.03]"
+                  key={t.id}
+                  onClick={() => setSelectedId(t.id)}
+                  className={`flex items-center gap-2 px-4 py-2.5 text-[12px] uppercase tracking-[0.08em] transition-colors ${
+                    on
+                      ? "bg-[#2b2a5e] text-white"
+                      : "border border-[#2b2a5e]/20 text-[#2b2a5e]/70 hover:border-[#5b54e6]"
                   }`}
                 >
-                  <span className="font-mono">{short(s.id)}</span>
-                  <StateBadge state={effectiveState(s)} />
+                  <span>
+                    Stream {t.n}
+                    {t.isPrivate && " 🔒"}
+                  </span>
+                  <StateBadge state={t.state} />
                 </button>
-              ))}
-            </div>
-          </Card>
-        </aside>
+              );
+            })}
+          </div>
+
+          {/* Selected stream */}
+          {current?.isPrivate ? (
+            <PrivateStreamsPanel role="freelancer" only={current.id} />
+          ) : activePublic ? (
+            <PublicStreamView
+              active={activePublic}
+              now={now}
+              isPending={isPending}
+              status={status}
+              bars={bars}
+              onRaise={() => onRaise(activePublic.id)}
+            />
+          ) : null}
+        </>
+      )}
+    </div>
+  );
+}
+
+function PublicStreamView({
+  active,
+  now,
+  isPending,
+  status,
+  bars,
+  onRaise,
+}: {
+  active: StreamRecord;
+  now: number;
+  isPending: boolean;
+  status: string | null;
+  bars: BarDatum[];
+  onRaise: () => void;
+}) {
+  const rate = active.duration_ms > 0 ? active.total / active.duration_ms : 0;
+  const ratePerSec = (rate * 1000) / USDC_BASE;
+  const earned = earnedBase(active, now) / USDC_BASE;
+  const activeProgress =
+    active.total > 0 ? (earnedBase(active, now) / active.total) * 100 : 0;
+  const view = effectiveState(active);
+  const done = completedMilestones(active);
+  const next = nextMilestoneNo(active);
+
+  return (
+    <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
+      <div className="flex flex-col gap-6">
+        <Card>
+          <p className="text-[11px] uppercase tracking-[0.18em] text-[#2b2a5e]/50">
+            Earned so far · {short(active.id)}
+          </p>
+          <p className="mt-2 text-[clamp(38px,7vw,68px)] font-black leading-none tabular text-[#2b2a5e]">
+            ${earned.toFixed(6)}
+          </p>
+          <p className="mt-3 text-[13px] text-[#1d9e75]">
+            {view === "dripping"
+              ? `+$${ratePerSec.toFixed(6)} / sec · live, gasless`
+              : view === "locked"
+                ? `Milestone ${done} finished — apply for milestone ${next}`
+                : `Status: ${view.replace("_", " ")}`}
+          </p>
+
+          <div className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
+            <Stat
+              label="Milestone"
+              value={
+                view === "locked"
+                  ? `${done}/${active.n_milestones} done · next ${next}`
+                  : `${next}/${active.n_milestones}`
+              }
+            />
+            <Stat label="Settles every" value={formatInterval(active.drip_interval_ms)} />
+            <Stat label="Locked" value={`$${usd(active.total)}`} />
+            <Stat label="Remaining" value={`$${usd(active.remaining)}`} />
+          </div>
+
+          <MilestoneAction stream={active} isPending={isPending} onRaise={onRaise} />
+          {status && <p className="mt-4 text-[11px] text-[#2b2a5e]/70">{status}</p>}
+        </Card>
+
+        <Card title="Earnings analytics">
+          <p className="-mt-2 mb-5 text-[11px] text-[#2b2a5e]/45">
+            Earned per stream (live + pending highlighted)
+          </p>
+          <BarChart data={bars} />
+        </Card>
       </div>
 
-      <div className="mt-6">
-        <PrivateStreamsPanel role="freelancer" />
-      </div>
+      <aside className="flex flex-col gap-6">
+        <Card title="Stream progress">
+          <DonutProgress percent={activeProgress} caption="of this stream" size={180} />
+        </Card>
+      </aside>
     </div>
   );
 }
@@ -265,7 +301,6 @@ function MilestoneAction({
 
   return (
     <div className="mt-6">
-      {/* Per-milestone tracker so every milestone is visible */}
       <div className="mb-4 flex flex-wrap gap-1.5">
         {Array.from({ length: total }).map((_, i) => {
           const isDone = i < done;
@@ -302,9 +337,7 @@ function MilestoneAction({
             disabled={isPending}
             className="self-start bg-[#5b54e6] px-6 py-3 text-[12px] uppercase tracking-[0.1em] text-white transition-opacity hover:opacity-90 disabled:opacity-40"
           >
-            {isPending
-              ? "submitting…"
-              : `apply for milestone ${next} — gasless`}
+            {isPending ? "submitting…" : `apply for milestone ${next} — gasless`}
           </button>
         </div>
       )}
