@@ -6,10 +6,11 @@
  */
 
 // Deployed StreamLine package on testnet (see contracts/Published.toml).
-// v3 (2026-06-12) adds Seal secrets + confidential milestone review.
+// v5 (2026-06-12) adds mutual dispute resolution (propose/accept resolution).
+// v3 added Seal secrets + confidential milestone review.
 // v2 added confidential_balance + ConfidentialStream.
 const TESTNET_PACKAGE =
-  "0x98175e041610f0f152a066233e7c477c63e8e484e80340561c63e1134134dbdb";
+  "0x110563fbfb080429abad15a8b402a3c980f0c80f2b66de7f3789e561f11827a9";
 
 export const PACKAGE_IDS = {
   mainnet: process.env.NEXT_PUBLIC_PACKAGE_ID_MAINNET ?? "0x0",

@@ -2,9 +2,12 @@
 name = "streamline"
 edition = "2024.beta"
 version = "0.1.0"
+# Latest on-chain package version (what we upgrade FROM). The named address below
+# stays the ORIGINAL package id (type origin), per Sui upgrade rules.
+published-at = "0x20eab08899170843439e7ccba025b113e2fecfc7c1e43b2910caa3d57d0fdb54"
 
 # The Sui / MoveStdlib framework dependencies are managed automatically by the
 # Sui CLI, pinned to the active environment's framework version.
 
 [addresses]
-streamline = "0x0"
+streamline = "0x9d6e7815d5e11424a68f827e26499078fead7648328f44fdbdeff6d34ed0b3a8"

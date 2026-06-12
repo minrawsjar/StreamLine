@@ -206,7 +206,7 @@ Deployed on **Sui testnet**. Full details in [`contracts/README.md`](contracts/R
 | Package / Object | ID | Description |
 |------------------|----|-------------|
 | **streamline** (original) | [`0x9d6e78…b3a8`](https://suiscan.xyz/testnet/object/0x9d6e7815d5e11424a68f827e26499078fead7648328f44fdbdeff6d34ed0b3a8) | Type-origin package — `stream` (+ `ConfidentialStream`), `confidential_balance`, `collateral` |
-| **streamline** (latest upgrade) | [`0x98175e…dbdb`](https://suiscan.xyz/testnet/object/0x98175e041610f0f152a066233e7c477c63e8e484e80340561c63e1134134dbdb) | Current package the frontend calls (upgrade of the original) |
+| **streamline** (latest, v5) | [`0x110563…27a9`](https://suiscan.xyz/testnet/object/0x110563fbfb080429abad15a8b402a3c980f0c80f2b66de7f3789e561f11827a9) | Current package the frontend calls (adds mutual dispute resolution) |
 | **mock_usdc** (package) | [`0xf6ce32…2ed3`](https://suiscan.xyz/testnet/object/0xf6ce32fe48338464f3947b9d15cd4a0befa0fe9b3926fd9daf6cee3658482ed3) | Mintable test USDC (6 decimals) |
 | **USDC TreasuryCap** (shared) | [`0xa7cb97…5330`](https://suiscan.xyz/testnet/object/0xa7cb971f4f93e5713c5703f63f3bc17fdf0f6bf1f9795dc010ac164827715330) | Permissionless faucet |
 
