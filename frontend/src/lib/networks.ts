@@ -8,6 +8,7 @@ import {
   PACKAGE_IDS,
   TEST_USDC,
   USDC_TYPE,
+  YIELD_VAULT,
   type NetworkName,
 } from "./constants";
 
@@ -36,6 +37,7 @@ export const { networkConfig, useNetworkVariable, useNetworkVariables } =
         usdcType: USDC_TYPE.mainnet,
         originalPackageId: ORIGINAL_PACKAGE_IDS.mainnet,
         confPackageId: CONF_DEFINING_PACKAGE_IDS.mainnet,
+        yieldVaultId: YIELD_VAULT.mainnet,
       },
     },
     testnet: {
@@ -45,6 +47,7 @@ export const { networkConfig, useNetworkVariable, useNetworkVariables } =
         usdcType: USDC_TYPE.testnet,
         originalPackageId: ORIGINAL_PACKAGE_IDS.testnet,
         confPackageId: CONF_DEFINING_PACKAGE_IDS.testnet,
+        yieldVaultId: YIELD_VAULT.testnet,
       },
     },
     devnet: {
@@ -54,6 +57,7 @@ export const { networkConfig, useNetworkVariable, useNetworkVariables } =
         usdcType: USDC_TYPE.devnet,
         originalPackageId: ORIGINAL_PACKAGE_IDS.devnet,
         confPackageId: CONF_DEFINING_PACKAGE_IDS.devnet,
+        yieldVaultId: YIELD_VAULT.devnet,
       },
     },
   });

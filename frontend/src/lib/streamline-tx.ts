@@ -51,6 +51,51 @@ export function buildCreateStream(a: CreateStreamArgs): Transaction {
   return tx;
 }
 
+// === Yield vault (Scallop-shaped) ===
+
+export type VaultRef = { packageId: string; usdcType: string; vaultId: string };
+
+/**
+ * Deposit `amountBase` of USDC into the yield vault. The returned share receipt
+ * is transferred back to the signer (Scallop's `mint` returns the sCoin).
+ */
+export function buildVaultDeposit(
+  a: VaultRef & { sender: string; amountBase: bigint }
+): Transaction {
+  const tx = new Transaction();
+  tx.setSenderIfNotSet(a.sender);
+  const receipt = tx.moveCall({
+    target: `${a.packageId}::yield_vault::deposit`,
+    typeArguments: [a.usdcType],
+    arguments: [
+      tx.object(a.vaultId),
+      coinWithBalance({ type: a.usdcType, balance: a.amountBase }),
+      tx.object(CLOCK),
+    ],
+  });
+  tx.transferObjects([receipt], a.sender);
+  return tx;
+}
+
+/** Redeem a vault receipt for principal + accrued interest, sent to the signer. */
+export function buildVaultRedeem(
+  a: VaultRef & { sender: string; receiptId: string }
+): Transaction {
+  const tx = new Transaction();
+  tx.setSenderIfNotSet(a.sender);
+  const coin = tx.moveCall({
+    target: `${a.packageId}::yield_vault::redeem`,
+    typeArguments: [a.usdcType],
+    arguments: [
+      tx.object(a.vaultId),
+      tx.object(a.receiptId),
+      tx.object(CLOCK),
+    ],
+  });
+  tx.transferObjects([coin], a.sender);
+  return tx;
+}
+
 type StreamRef = { packageId: string; usdcType: string; streamId: string };
 
 /** Freelancer signals the current milestone is complete. */

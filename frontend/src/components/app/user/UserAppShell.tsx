@@ -7,6 +7,7 @@ import { WalletButton } from "@/components/wallet/WalletButton";
 import { StreamCreator } from "../StreamCreator";
 import { FreelancerDashboard } from "../FreelancerDashboard";
 import { ClientDashboard } from "../ClientDashboard";
+import { YieldPanel } from "../YieldPanel";
 import { RoleSelect, type Role } from "./RoleSelect";
 
 // Privacy is a per-stream toggle in the Create flow (not a separate tab);
@@ -18,6 +19,7 @@ const PAYER_TABS = [
 
 const RECEIVER_TABS = [
   { id: "earn", label: "Dashboard" },
+  { id: "yield", label: "Yield" },
   { id: "collateral", label: "Collateral" },
 ] as const;
 
@@ -81,6 +83,7 @@ export function UserAppShell() {
       {tab === "create" && <StreamCreator />}
       {tab === "dashboard" && <ClientDashboard />}
       {tab === "earn" && <FreelancerDashboard />}
+      {tab === "yield" && <YieldPanel />}
       {tab === "collateral" && <ComingSoon title="Collateral panel" />}
     </div>
   );

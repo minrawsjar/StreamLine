@@ -36,6 +36,9 @@ export function allowedMoveCallTargets(network: NetworkName): string[] {
   if (pkg && pkg !== "0x0") {
     for (const fn of STREAM_FUNCTIONS) targets.push(`${pkg}::stream::${fn}`);
     targets.push(`${pkg}::collateral::collateralize`);
+    // Scallop-shaped yield vault (gasless deposit/redeem).
+    targets.push(`${pkg}::yield_vault::deposit`);
+    targets.push(`${pkg}::yield_vault::redeem`);
   }
 
   // Test-USDC faucet is only deployed (and only worth sponsoring) on testnet.
