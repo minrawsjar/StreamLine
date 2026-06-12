@@ -42,8 +42,17 @@ async fn call(cfg: &Config, function: &str, coin_type: &str, stream_id: &str) ->
         .await?;
 
     if !output.status.success() {
+        // Surface stderr AND stdout (the CLI prints panics/protocol errors to
+        // stderr, but some failures land on stdout) plus the exit code, so the
+        // real cause is never an empty message.
         let stderr = String::from_utf8_lossy(&output.stderr);
-        bail!("sui {function} failed: {}", stderr.trim());
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let detail = format!("{} {}", stderr.trim(), stdout.trim());
+        bail!(
+            "sui {function} failed (exit {}): {}",
+            output.status.code().unwrap_or(-1),
+            if detail.trim().is_empty() { "<no output — likely a CLI panic, e.g. protocol-version mismatch>" } else { detail.trim() }
+        );
     }
 
     let stdout = String::from_utf8_lossy(&output.stdout);

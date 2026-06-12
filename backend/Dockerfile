@@ -23,9 +23,11 @@ RUN cargo build --release --bin streamline-indexer --bin streamline-keeper
 FROM debian:bookworm-slim AS runtime
 WORKDIR /app
 
-# Pin the Sui CLI release used by the keeper. Override at build time with
-# --build-arg SUI_VERSION=testnet-vX.Y.Z to match your network.
-ARG SUI_VERSION=testnet-v1.73.0
+# Pin the Sui CLI release used by the keeper. Must support the testnet protocol
+# version — testnet is on protocol 126, which v1.73.0 (max 125) cannot handle, so
+# every CLI call panics. Keep this >= the network's release. Override with
+# --build-arg SUI_VERSION=testnet-vX.Y.Z.
+ARG SUI_VERSION=testnet-v1.73.1
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates curl \
