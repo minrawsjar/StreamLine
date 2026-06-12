@@ -9,6 +9,7 @@ import { useStreams, useLiveUpdates, type StreamRecord } from "@/lib/indexer";
 import { usePrivateStreams } from "@/lib/use-private-streams";
 import { buildRaiseCompletion } from "@/lib/streamline-tx";
 import { PrivateStreamsPanel } from "./PrivateStreamsPanel";
+import { CompletedStreams } from "./CompletedStreams";
 import { USDC_BASE, formatInterval } from "@/lib/stream-math";
 import {
   completedMilestones,
@@ -70,10 +71,20 @@ export function FreelancerDashboard() {
   const publicList = useMemo(() => streams ?? [], [streams]);
   const privList = useMemo(() => privStreams ?? [], [privStreams]);
 
-  // Unified, numbered tabs — public + private in one switcher.
+  // Fully-settled public streams retire to the Completed tab and stay.
+  const activePublicList = useMemo(
+    () => publicList.filter((s) => effectiveState(s) !== "done"),
+    [publicList]
+  );
+  const completedPublicList = useMemo(
+    () => publicList.filter((s) => effectiveState(s) === "done"),
+    [publicList]
+  );
+
+  // Unified, numbered tabs — active public + private in one switcher.
   const tabs = useMemo(
     () => [
-      ...publicList.map((s, i) => ({
+      ...activePublicList.map((s, i) => ({
         id: s.id,
         n: i + 1,
         isPrivate: false,
@@ -81,17 +92,20 @@ export function FreelancerDashboard() {
       })),
       ...privList.map((s, i) => ({
         id: s.id,
-        n: publicList.length + i + 1,
+        n: activePublicList.length + i + 1,
         isPrivate: true,
         state: PRIV_STATE[s.state] ?? "locked",
       })),
     ],
-    [publicList, privList]
+    [activePublicList, privList]
   );
 
+  const showCompleted =
+    selectedId === "completed" ||
+    (tabs.length === 0 && completedPublicList.length > 0);
   const current = useMemo(
-    () => tabs.find((t) => t.id === selectedId) ?? tabs[0],
-    [tabs, selectedId]
+    () => (showCompleted ? undefined : tabs.find((t) => t.id === selectedId) ?? tabs[0]),
+    [tabs, selectedId, showCompleted]
   );
   const activePublic = useMemo(
     () =>
@@ -135,7 +149,7 @@ export function FreelancerDashboard() {
     return <EmptyPanel>Loading your streams…</EmptyPanel>;
   }
 
-  const empty = tabs.length === 0;
+  const empty = tabs.length === 0 && completedPublicList.length === 0;
 
   return (
     <div>
@@ -154,7 +168,15 @@ export function FreelancerDashboard() {
         />
         <StatCard label="Incoming total" value={`$${usd(totals.locked)}`} sub="locked (public)" />
         <StatCard label="Active" value={String(totals.dripping)} sub="currently dripping" />
-        <StatCard label="Streams" value={String(tabs.length)} sub="public + private 🔒" />
+        <StatCard
+          value={String(tabs.length + completedPublicList.length)}
+          label="Streams"
+          sub={
+            completedPublicList.length > 0
+              ? `${completedPublicList.length} completed`
+              : "public + private 🔒"
+          }
+        />
       </div>
 
       {empty ? (
@@ -187,10 +209,29 @@ export function FreelancerDashboard() {
                 </button>
               );
             })}
+            {completedPublicList.length > 0 && (
+              <button
+                onClick={() => setSelectedId("completed")}
+                className={`flex items-center gap-2 px-4 py-2.5 text-[12px] uppercase tracking-[0.08em] transition-colors ${
+                  showCompleted
+                    ? "bg-[#1d9e75] text-white"
+                    : "border border-[#1d9e75]/40 text-[#1d9e75] hover:border-[#1d9e75]"
+                }`}
+              >
+                <span>Completed</span>
+                <span className="tabular opacity-80">{completedPublicList.length}</span>
+              </button>
+            )}
           </div>
 
           {/* Selected stream */}
-          {current?.isPrivate ? (
+          {showCompleted ? (
+            <CompletedStreams
+              streams={completedPublicList}
+              counterpartyLabel="Client"
+              counterpartyOf={(s) => s.sender}
+            />
+          ) : current?.isPrivate ? (
             <PrivateStreamsPanel role="freelancer" only={current.id} />
           ) : activePublic ? (
             <PublicStreamView

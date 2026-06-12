@@ -16,6 +16,7 @@ import {
   buildRaiseDispute,
 } from "@/lib/streamline-tx";
 import { PrivateStreamsPanel } from "./PrivateStreamsPanel";
+import { CompletedStreams } from "./CompletedStreams";
 import { USDC_BASE } from "@/lib/stream-math";
 import {
   BarChart,
@@ -77,6 +78,14 @@ export function ClientDashboard() {
   useLiveUpdates(() => refetch());
 
   const list = useMemo(() => streams ?? [], [streams]);
+  const activeList = useMemo(
+    () => list.filter((s) => s.state !== "done"),
+    [list]
+  );
+  const completedList = useMemo(
+    () => list.filter((s) => s.state === "done"),
+    [list]
+  );
 
   const totals = useMemo(() => {
     const locked = list.reduce((a, s) => a + s.total, 0);
@@ -213,7 +222,12 @@ export function ClientDashboard() {
           {/* Stream table */}
           <Card title="Your streams" padded={false}>
             <div className="flex flex-col">
-              {list.map((s) => {
+              {activeList.length === 0 && (
+                <p className="border-t border-[#2b2a5e]/10 p-5 text-[12px] text-[#2b2a5e]/45">
+                  No active streams — all settled. See completed below.
+                </p>
+              )}
+              {activeList.map((s) => {
                 const pct =
                   s.total > 0 ? ((s.total - s.remaining) / s.total) * 100 : 0;
                 return (
@@ -289,6 +303,14 @@ export function ClientDashboard() {
               })}
             </div>
           </Card>
+
+          {completedList.length > 0 && (
+            <CompletedStreams
+              streams={completedList}
+              counterpartyLabel="Paid to"
+              counterpartyOf={(s) => s.freelancer}
+            />
+          )}
 
           <PrivateStreamsPanel role="sender" />
         </div>
