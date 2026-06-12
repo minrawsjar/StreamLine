@@ -184,6 +184,10 @@ export async function loadOrCreateSessionKey(args: {
     session.getPersonalMessage()
   );
   await session.setPersonalMessageSignature(signature);
-  sessionStorage.setItem(storageKey, JSON.stringify(session.export()));
+  // SessionKey.export() returns an object with a non-enumerable toJSON that
+  // throws ("This object is not serializable") to guard the secret key from
+  // accidental JSON.stringify. Spread to keep only the enumerable fields so it
+  // persists (and SessionKey.import can restore it).
+  sessionStorage.setItem(storageKey, JSON.stringify({ ...session.export() }));
   return session;
 }
