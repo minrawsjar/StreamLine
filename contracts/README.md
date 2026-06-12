@@ -8,32 +8,39 @@ the state machine — every transition asserts the current state, so an illegal
 transition aborts the whole transaction.
 
 - **Edition:** Sui Move `2024.beta`
-- **Modules:** `streamline::stream` (public + confidential streams), `streamline::confidential_balance` (Groth16-verified pools), `streamline::collateral`
+- **Modules:** `streamline::stream` (public + confidential streams, dispute resolution, auto-yield), `streamline::confidential_balance` (Groth16-verified pools), `streamline::yield_vault` (Scallop-shaped vault), `streamline::collateral` (present value + lending pool)
 
 ## Deployments
 
-| Network | Package ID | Published | Explorer |
-| --- | --- | --- | --- |
-| **testnet** | `0x9d6e7815d5e11424a68f827e26499078fead7648328f44fdbdeff6d34ed0b3a8` | 2026-06-08 | [SuiScan ↗](https://suiscan.xyz/testnet/object/0x9d6e7815d5e11424a68f827e26499078fead7648328f44fdbdeff6d34ed0b3a8) |
-| mainnet | _not deployed_ | — | — |
-
-### testnet deployment details
+The package has been upgraded through **v8** (one `UpgradeCap`, original id is the
+type-origin). Object types stay pinned to the version that introduced them.
 
 | Item | Value |
 | --- | --- |
-| Package ID | `0x9d6e7815d5e11424a68f827e26499078fead7648328f44fdbdeff6d34ed0b3a8` |
-| `UpgradeCap` (owned by deployer) | `0x351ff70fa0639fb0c1bf61bbb5402314c4b2d853f22e7274adbec4dba7f5447e` |
-| Publish tx digest | [`EgeLX5dN3FEfzNgpPZsA92XJn7LHRwJSGpaMoW4HUbrY`](https://suiscan.xyz/testnet/tx/EgeLX5dN3FEfzNgpPZsA92XJn7LHRwJSGpaMoW4HUbrY) |
-| Deployer address | `0x046d80ecab635be43d5e0b7b3ac896388e5e19f37829080ce2e06614e80ad5f0` |
-| Modules | `stream`, `confidential_balance`, `collateral` |
+| **Original (type-origin)** | `0x9d6e7815d5e11424a68f827e26499078fead7648328f44fdbdeff6d34ed0b3a8` |
+| **Latest (v8) — call this** | `0x28506598eccbbde36bbfef6401936c1d907c21a7e8db77c56390b6b291fad0a2` |
+| `UpgradeCap` | `0x351ff70fa0639fb0c1bf61bbb5402314c4b2d853f22e7274adbec4dba7f5447e` |
+| Deployer / keeper address | `0x046d80ecab635be43d5e0b7b3ac896388e5e19f37829080ce2e06614e80ad5f0` |
+| YieldVault (shared, 8% APR) | `0x8ae9d8805682aabbd00ff0582d93b88f2f86482bcabed194a88a6ded99a88406` |
+| LendingPool (shared, 12% APR) | `0x0518d5d77a3069ebab9df5b46e60fed4589c16dc6e48cd694a02c9350f312ea2` |
+| mainnet | _not deployed_ |
 
-A machine-readable copy lives in [`deployment.testnet.json`](./deployment.testnet.json).
-The package ID is baked into the frontend's testnet default
-(`frontend/src/lib/networks.ts`) and read by the backend indexer from
-`backend/.env` (`STREAMLINE_PACKAGE_ID`).
+### Version history
 
-> The `UpgradeCap` controls future upgrades of this package — keep it safe.
-> The package itself is immutable; upgrades publish a new version.
+| v | Package id (tail) | Adds |
+| --- | --- | --- |
+| v1 | `…b3a8` | `stream`, `collateral` (present value + `CollateralReceipt`) |
+| v2 | — | `confidential_balance`, `ConfidentialStream` |
+| v3 | — | Seal secrets + confidential milestone review |
+| v5 | `…27a9` | Mutual dispute resolution (`propose_resolution` / `accept_resolution`) |
+| v6 | `…d906217` | `yield_vault` (`VaultReceipt` type-origin) |
+| v7 | `…ccb528c` | Lending pool (`LendingPool`, `LoanReceipt` type-origin) |
+| v8 | `…91fad0a2` | Auto-yield (`create_stream_v2`, `drip_with_yield`) |
+
+> **Who calls which id:** the **frontend** and **keeper** call the *latest* (v8);
+> the **indexer** filters events by `MoveEventModule` on the *original* id; the app
+> queries `VaultReceipt`/`LoanReceipt` by their *defining* packages (v6 / v7).
+> The `UpgradeCap` controls upgrades — published versions are immutable.
 
 ## State machine
 
@@ -69,14 +76,18 @@ LOCKED ──raise_completion──▶ PENDING_REVIEW ──approve/auto_approve
 
 | Function | Signer | Effect |
 | --- | --- | --- |
-| `create_stream<T>(payment, freelancer, milestone_names, milestone_amounts, duration_ms, dispute_window_ms, revocable, clock, ctx)` | Client | Locks `payment` into a shared `Stream`, transfers a `StreamCap` to the client. |
+| `create_stream<T>(payment, freelancer, names, amounts, duration_ms, window, revocable, clock, ctx)` | Client | Locks `payment` into a shared `Stream` (100%-cash split), transfers a `StreamCap` to the client. |
+| `create_stream_v2<T>(…, yield_bps, clock, ctx)` | Client | Same, but bakes in an auto-yield split: `yield_bps` routes through the vault on drip, the rest is cash. |
 | `set_splits<T>(stream, destinations, weights_bps, yield_flags, ctx)` | Freelancer | Reconfigure drip routing (weights sum to 10000). |
 | `raise_completion<T>(stream, clock, ctx)` | Freelancer | `LOCKED → PENDING_REVIEW`; sets the review deadline. |
 | `approve_milestone<T>(cap, stream, clock)` | Client | `PENDING_REVIEW → DRIPPING`. |
 | `auto_approve<T>(stream, clock)` | Anyone (keeper) | `PENDING_REVIEW → DRIPPING` once the deadline passes. |
-| `drip<T>(stream, clock, ctx)` | Anyone (keeper) | Settles accrued funds (≥ `MIN_DRIP`) across splits, minus a 1 bps tip to the caller; relocks when the milestone is exhausted. |
+| `drip<T>(stream, clock, ctx)` | Anyone (keeper) | Settles accrued funds (≥ `MIN_DRIP`) across splits, minus a 1 bps tip; relocks when the milestone is exhausted. |
+| `drip_with_yield<T>(stream, vault, clock, ctx)` | Anyone (keeper) | Like `drip`, but yield-flagged legs deposit into `vault` and send the freelancer a `VaultReceipt`. |
 | `raise_dispute<T>(stream, ctx)` | Client or freelancer | `PENDING_REVIEW`/`DRIPPING → PAUSED`. |
-| `cancel<T>(cap, stream, ctx)` | Client | Reclaims the unstreamed balance; consumes the cap; `→ DONE`. |
+| `propose_resolution<T>(stream, resume, freelancer_bps, ctx)` | Client or freelancer | Propose how to end a `PAUSED` dispute (stored in a dynamic field). |
+| `accept_resolution<T>(stream, clock, ctx)` | The *other* party | Execute the agreed resolution: `resume → DRIPPING`, or split the remainder + `→ DONE`. |
+| `cancel<T>(cap, stream, ctx)` | Client | Reclaims the unstreamed balance (revocable streams); consumes the cap; `→ DONE`. |
 
 ### Accrual
 
@@ -90,7 +101,24 @@ drip_interval_ms = ceil(MIN_DRIP * duration_ms / total)
 
 ### Views
 
-`state`, `is_dripping`, `remaining`, `current_milestone`, `drip_interval_ms`, `total`.
+`state`, `is_dripping`, `remaining`, `current_milestone`, `drip_interval_ms`, `total`, `has_proposal`.
+
+### Dispute resolution (mutual)
+
+A `PAUSED` stream exits only by mutual agreement. `propose_resolution` writes a
+`ResolutionProposal { proposer, resume, freelancer_bps }` into a **dynamic field**
+(so no struct-layout change — upgrade-safe); `accept_resolution` asserts the
+caller is the party that *didn't* propose, then either resumes (`→ DRIPPING`,
+watermark reset so the paused gap isn't paid) or splits the remaining balance
+(`freelancer_bps` to the freelancer, the rest refunded) and closes (`→ DONE`).
+
+### Auto-yield
+
+`create_stream_v2` builds a two-leg split `[freelancer cash (10000−yield_bps),
+freelancer yield (yield_bps, yield_flag)]`. On `drip_with_yield`, the yield-flagged
+leg is deposited into the `YieldVault<T>` and the resulting `VaultReceipt` is sent
+to the freelancer instead of cash — so the configured % compounds from the second
+it's earned.
 
 ### Events
 
@@ -155,16 +183,34 @@ verifiers run natively via `sui::groth16` (BN254) — enabled on testnet/mainnet
 The confidential paths are covered by `tests/confidential_stream_tests.move` and
 `tests/confidential_balance_tests.move`.
 
+## `streamline::yield_vault` (Scallop-shaped vault)
+
+Testnet stand-in for Scallop's lending pool — same `deposit`/`redeem` shape, so a
+mainnet build swaps these calls 1:1 for `scallop_protocol::mint`/`redeem`.
+
+- **`YieldVault<T>`** — shared; holds a `reserve: Balance<T>`, `total_shares`, a
+  compounding `index` (1e12-scaled), and `apr_bps`.
+- **`VaultReceipt<T>`** — `key, store`; a deposit's `shares` (Scallop's `Coin<MarketCoin<T>>` analog).
+- `create_vault<T>(apr_bps, clock, ctx)` · `fund<T>(vault, coin)` (seed the interest buffer).
+- `deposit<T>(vault, coin, clock, ctx) → VaultReceipt<T>` — accrue, mint shares at the current index.
+- `redeem<T>(vault, receipt, clock, ctx) → Coin<T>` — principal + accrued interest.
+- `value_of` / `receipt_value` views project the index to *now* for live valuation.
+
 ## `streamline::collateral`
 
 A live stream has a calculable present value, so a freelancer can borrow against it.
 
-- **`CollateralReceipt`** — `key` only (no `store`) → **non-transferable**. Records
-  `{ stream_id, lender, principal, auto_repay }`.
+**Position record (v1):**
+- **`CollateralReceipt`** — `key` only → **non-transferable**. Records `{ stream_id, lender, principal, auto_repay }`.
 - `present_value<T>(stream)` → `remaining * 90%`.
-- `collateralize<T>(stream, lender, principal, auto_repay, ctx)` — requires the
-  stream to be `DRIPPING` and `principal ≤ present_value`; mints the receipt and
-  emits `Collateralized`.
+- `collateralize<T>(stream, lender, principal, auto_repay, ctx)` — records a position (`DRIPPING`, `principal ≤ PV`).
+
+**Lending pool (v7) — concrete borrow/repay:**
+- **`LendingPool<T>`** — shared; `reserve`, `total_borrowed`, `borrow_apr_bps`. `create_pool` / `fund_pool` (lenders seed liquidity).
+- **`LoanReceipt<T>`** — `key, store`; `{ pool_id, borrower, stream_id, principal, opened_ms, borrow_apr_bps }`.
+- `borrow<T>(pool, stream, principal, clock, ctx) → Coin<T>` — `principal ≤ present_value` and `≤ reserve`; mints a `LoanReceipt`, pays cash now.
+- `owed<T>(loan, now)` → principal + borrow-APR interest.
+- `repay<T>(pool, loan, payment, clock, ctx) → Coin<T>` — pay `owed` in full, change returned. Lender yield = borrower interest.
 
 ## Build, test, publish
 
