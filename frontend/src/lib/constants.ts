@@ -6,11 +6,12 @@
  */
 
 // Deployed StreamLine package on testnet (see contracts/Published.toml).
-// v5 (2026-06-12) adds mutual dispute resolution (propose/accept resolution).
+// v6 (2026-06-12) adds the Scallop-shaped yield_vault.
+// v5 added mutual dispute resolution (propose/accept resolution).
 // v3 added Seal secrets + confidential milestone review.
 // v2 added confidential_balance + ConfidentialStream.
 const TESTNET_PACKAGE =
-  "0x110563fbfb080429abad15a8b402a3c980f0c80f2b66de7f3789e561f11827a9";
+  "0xa7f9660959260133040f4e5aaea56fdd61ab37a58515a007e4f3ae852d906217";
 
 export const PACKAGE_IDS = {
   mainnet: process.env.NEXT_PUBLIC_PACKAGE_ID_MAINNET ?? "0x0",
@@ -53,6 +54,17 @@ export const TEST_USDC = {
     "0xa7cb971f4f93e5713c5703f63f3bc17fdf0f6bf1f9795dc010ac164827715330",
   coinType:
     "0xf6ce32fe48338464f3947b9d15cd4a0befa0fe9b3926fd9daf6cee3658482ed3::mock_usdc::MOCK_USDC",
+} as const;
+
+/**
+ * Scallop-shaped yield vault for the streamed coin (testnet stand-in for
+ * Scallop's lending pool). 8% APR, seeded with a mock-USDC interest buffer.
+ */
+export const YIELD_VAULT = {
+  testnet:
+    "0x8ae9d8805682aabbd00ff0582d93b88f2f86482bcabed194a88a6ded99a88406",
+  mainnet: process.env.NEXT_PUBLIC_YIELD_VAULT_MAINNET ?? "0x0",
+  devnet: "0x0",
 } as const;
 
 /** USDC is the primary streamed asset. Testnet uses our mintable test USDC. */
