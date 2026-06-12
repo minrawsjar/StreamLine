@@ -47,7 +47,9 @@ export function useYieldVault(): YieldVaultState {
   const account = useCurrentAccount();
   const vaultId = useNetworkVariable("yieldVaultId");
   const usdcType = useNetworkVariable("usdcType");
-  const packageId = useNetworkVariable("packageId");
+  // VaultReceipt's type is pinned to the package that introduced it (v6), not
+  // the latest — so the owned-object filter must use the defining package.
+  const definingPkg = useNetworkVariable("yieldDefiningPackage");
 
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
@@ -63,7 +65,7 @@ export function useYieldVault(): YieldVaultState {
     { enabled, refetchInterval: 15_000 }
   );
 
-  const receiptType = `${packageId}::yield_vault::VaultReceipt<${usdcType}>`;
+  const receiptType = `${definingPkg}::yield_vault::VaultReceipt<${usdcType}>`;
   const receiptsQ = useSuiClientQuery(
     "getOwnedObjects",
     {

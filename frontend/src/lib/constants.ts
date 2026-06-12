@@ -80,6 +80,25 @@ export const LENDING_POOL = {
   devnet: "0x0",
 } as const;
 
+/**
+ * Packages that *introduced* the DeFi receipt structs. A struct's type address
+ * is pinned to the version that defined it (not the latest), so owned-object
+ * filters for receipts must use these, not the current package id.
+ *   VaultReceipt → v6 (yield_vault added); LoanReceipt → v7 (lending added).
+ */
+export const YIELD_DEFINING_PACKAGE = {
+  testnet:
+    "0xa7f9660959260133040f4e5aaea56fdd61ab37a58515a007e4f3ae852d906217",
+  mainnet: "0x0",
+  devnet: "0x0",
+} as const;
+export const LENDING_DEFINING_PACKAGE = {
+  testnet:
+    "0x39280c40c6ce4b7fb9ac5f836709edd44e8c9d96b8ea1a6a74ef5d52eccb528c",
+  mainnet: "0x0",
+  devnet: "0x0",
+} as const;
+
 /** USDC is the primary streamed asset. Testnet uses our mintable test USDC. */
 export const USDC_TYPE = {
   mainnet:

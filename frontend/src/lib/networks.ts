@@ -10,6 +10,8 @@ import {
   USDC_TYPE,
   YIELD_VAULT,
   LENDING_POOL,
+  YIELD_DEFINING_PACKAGE,
+  LENDING_DEFINING_PACKAGE,
   type NetworkName,
 } from "./constants";
 
@@ -40,6 +42,8 @@ export const { networkConfig, useNetworkVariable, useNetworkVariables } =
         confPackageId: CONF_DEFINING_PACKAGE_IDS.mainnet,
         yieldVaultId: YIELD_VAULT.mainnet,
         lendingPoolId: LENDING_POOL.mainnet,
+        yieldDefiningPackage: YIELD_DEFINING_PACKAGE.mainnet,
+        lendingDefiningPackage: LENDING_DEFINING_PACKAGE.mainnet,
       },
     },
     testnet: {
@@ -51,6 +55,8 @@ export const { networkConfig, useNetworkVariable, useNetworkVariables } =
         confPackageId: CONF_DEFINING_PACKAGE_IDS.testnet,
         yieldVaultId: YIELD_VAULT.testnet,
         lendingPoolId: LENDING_POOL.testnet,
+        yieldDefiningPackage: YIELD_DEFINING_PACKAGE.testnet,
+        lendingDefiningPackage: LENDING_DEFINING_PACKAGE.testnet,
       },
     },
     devnet: {
@@ -62,6 +68,8 @@ export const { networkConfig, useNetworkVariable, useNetworkVariables } =
         confPackageId: CONF_DEFINING_PACKAGE_IDS.devnet,
         yieldVaultId: YIELD_VAULT.devnet,
         lendingPoolId: LENDING_POOL.devnet,
+        yieldDefiningPackage: YIELD_DEFINING_PACKAGE.devnet,
+        lendingDefiningPackage: LENDING_DEFINING_PACKAGE.devnet,
       },
     },
   });

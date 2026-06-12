@@ -35,7 +35,8 @@ export function useLending(): LendingState {
   const account = useCurrentAccount();
   const poolId = useNetworkVariable("lendingPoolId");
   const usdcType = useNetworkVariable("usdcType");
-  const packageId = useNetworkVariable("packageId");
+  // LoanReceipt's type is pinned to the package that introduced it (v7).
+  const definingPkg = useNetworkVariable("lendingDefiningPackage");
 
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
@@ -51,7 +52,7 @@ export function useLending(): LendingState {
     { enabled, refetchInterval: 15_000 }
   );
 
-  const loanType = `${packageId}::collateral::LoanReceipt<${usdcType}>`;
+  const loanType = `${definingPkg}::collateral::LoanReceipt<${usdcType}>`;
   const loansQ = useSuiClientQuery(
     "getOwnedObjects",
     {
