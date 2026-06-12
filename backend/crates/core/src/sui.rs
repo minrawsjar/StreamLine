@@ -173,6 +173,13 @@ impl SuiClient {
     }
 
     /// Query events emitted by a given package + module, oldest first.
+    ///
+    /// Uses `MoveEventModule` (not `MoveModule`): it matches on the package that
+    /// *defines* the event type — the type-origin — which stays the ORIGINAL
+    /// package id across upgrades. `MoveModule` matches the package that *emitted*
+    /// the call (the latest upgraded id), so after a package upgrade it silently
+    /// drops every stream created against the new id. `package` here must be the
+    /// original/defining package.
     pub async fn query_events(
         &self,
         package: &str,
@@ -180,7 +187,7 @@ impl SuiClient {
         cursor: Option<&EventId>,
         limit: u32,
     ) -> Result<EventPage> {
-        let filter = json!({ "MoveModule": { "package": package, "module": module } });
+        let filter = json!({ "MoveEventModule": { "package": package, "module": module } });
         let cursor = cursor
             .map(|c| json!({ "txDigest": c.tx_digest, "eventSeq": c.event_seq }))
             .unwrap_or(Value::Null);
