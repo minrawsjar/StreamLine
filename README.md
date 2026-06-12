@@ -94,14 +94,16 @@ Even on-chain, every settlement tick costs *some* computation gas, so truly per-
 
 ## Privacy
 
-Privacy in StreamLine isn't a separate mode bolted on the side — it's a per-stream toggle woven into the normal create/approve/drip flow. It attacks the four things a payment leaks, each with a primitive that is **live on Sui testnet** (no devnet-only crypto):
+Privacy in StreamLine isn't a separate mode bolted on the side — it's a per-stream toggle woven into the normal create/approve/drip flow. It attacks the things a payment leaks, each with a primitive that is **live on Sui testnet** (no devnet-only crypto):
 
 | Layer | What it hides | How |
 |-------|---------------|-----|
 | **Identity** | *who* is paying/getting paid | zkLogin / Enoki — Google sign-in maps to a fresh Sui address, no linkable wallet |
 | **Gasless** | the gas-payer's footprint | Enoki sponsorship — the user never submits a gas coin |
-| **Metadata** | milestone terms & deliverables | **Seal** threshold encryption (+ Walrus blob storage), gated by an on-chain `seal_approve` policy |
-| **Amounts** | balances, rate, drip sizes | **Groth16 zk-SNARKs** (`sui::groth16`, BN254) over **Poseidon** commitments |
+| **Amounts** | balances, rate, drip sizes | **Groth16 zk-SNARKs** (`sui::groth16`, BN254) over **Poseidon** commitments — with **Seal** privately delivering the secret openings to the two parties (see below) |
+| **Metadata** | milestone terms & deliverables (files) | **Seal** encryption + **Walrus** blob storage, gated by the same `seal_approve` policy — *roadmap* |
+
+Identity, gasless, and amounts (including Seal for the secret openings) are **live on testnet**; the metadata/deliverables layer (encrypted files in Walrus) is the one **roadmap** piece.
 
 ### What it aims to solve
 
@@ -116,10 +118,24 @@ The obvious tool for confidential balances on Sui is the `contra`/confidential-t
 1. **Commitments, not values.** A `ConfidentialStream<T>` keeps a *public* USDC reserve (the locked pool) but stores `remaining` and `earned` as **Poseidon commitments** — `commit(value, blinding)`. The chain sees a hash, never the amount.
 2. **Every drip carries a proof.** `confidential_drip` accepts a **Groth16 transfer proof** showing the new commitments are a valid debit/credit of the old ones *and* that the moved amount sits in a **64-bit range** (`v ∈ [0, 2⁶⁴)`), so nobody can over-withdraw — all without revealing a single number. The Move verifier (`verify_wrap` / `verify_transfer` / `verify_unwrap`, embedded verifying keys) checks it natively.
 3. **Wrap → stream → unwrap.** A `ConfidentialPool<T>` lets value enter (`wrap`), move between commitments (`confidential_transfer`), and exit (`unwrap`) — homomorphic add/sub on commitments, each gated by a range proof.
-4. **The freelancer can read their own balance.** The per-stream blinding factors are sealed to the recipient with **Seal**; they decrypt locally in the browser, so their dashboard shows real dollars while the chain shows only commitments. Decryption never leaves the device.
+4. **The two parties can read their own balance.** The secret openings (values + blinding factors) are **Seal-encrypted to both wallets** and decrypted locally — see [Seal](#how-seal--walrus-fit) below.
 5. **Milestone state stays public.** Which milestone is active, approvals, and auto-approve timing remain on-chain in the clear — only the *amounts* are hidden — so the trust/escrow guarantees are unchanged.
 
 Proofs are generated in-browser with **circom 2.2.3 + snarkjs** (Poseidon via circomlibjs). The circuits — `wrap`, `transfer`, `unwrap` — are validated both in `sui move test` (Groth16 verifies on-chain) and against the Rust arkworks serializer to guarantee the JS-produced bytes are byte-identical to what the Move verifier expects.
+
+### How Seal & Walrus fit
+
+**Seal** is threshold identity-based encryption with **on-chain access control**: you encrypt data *to a wallet identity*, and Seal's key servers release the decryption key only if an on-chain Move policy (`seal_approve`) confirms the requester is that identity (1-of-N threshold — no single server can decrypt or censor). **Walrus** is decentralized blob storage for larger files. They play different roles in the two stream types:
+
+**Confidential streams — Seal carries the ZK secrets (shipped).**
+The chain only stores Poseidon *commitments*, but the two parties still need the real values + blindings — the freelancer to see their balance, and whoever drips to generate the next Groth16 proof. Those secrets can't be on-chain in the clear and can't be re-derived, so Seal is the private channel for them:
+- At creation, the payload `{ total, remaining, earned, blindings… }` is Seal-encrypted **twice** — to the client and to the freelancer — and packed into one envelope `{ s, f }`.
+- The envelope is stored **on-chain** as a dynamic field on the `ConfidentialStream` (it's a few hundred bytes — small enough that it doesn't need Walrus yet).
+- To read, a party asks Seal's key servers, which run `seal_approve(id)` (asserts `id == sender`) so only the encrypted-to wallet gets the key; decryption happens in the browser and **never leaves the device**.
+- Each drip changes the blindings, so the envelope is rotated via `update_confidential_secrets`.
+
+**Public streams — Seal + Walrus for deliverables (roadmap).**
+Public-stream *amounts* are plaintext by design, so Seal isn't needed for the money. The remaining leak is **metadata** — the brief, the terms, and the actual **deliverables** (designs, code), which shouldn't be on-chain at all. The intended pattern: Seal-encrypt the file to both parties, store the ciphertext in **Walrus**, and gate access with the same `seal_approve` policy — so a stream can have **visible amounts but a confidential work product**. This applies to confidential streams too, and is **not yet wired** (Walrus integration is a roadmap item).
 
 ### Honest limitations
 
@@ -139,7 +155,7 @@ Proofs are generated in-browser with **circom 2.2.3 + snarkjs** (Poseidon via ci
 | **Move object ownership** | Funds are physically locked inside a shared object, reachable only via entry functions. No reentrancy, no approval games. |
 | **zkLogin** | Google OAuth → a Sui address directly. Onboarding with no seed phrase. |
 | **`sui::groth16` native** | On-chain zk-SNARK verification (BN254), enabled on testnet/mainnet — the basis for **confidential amounts**. No devnet-only crypto required. |
-| **Seal + Walrus** | Threshold-encrypted milestone terms with an on-chain access policy; ciphertext stored off-chain in Walrus. |
+| **Seal** | Threshold encryption with an **on-chain** `seal_approve` access policy — delivers the confidential-stream secrets only to the two parties (Walrus blob storage for deliverables is roadmap). |
 
 ### Why Sui specifically (not "just any chain")
 
@@ -422,7 +438,7 @@ The testnet package ID and test-USDC type are baked into `frontend/src/lib/const
 - **Non-custodial keeper** — the keeper only *triggers* permissionless functions; it never holds user funds. Its gas is reimbursed by the 1 bps tip, so users stay gasless.
 - **Server-side secrets** — the Enoki sponsor key lives only in the Next.js route handler; the browser never sees it.
 - **Confidential amounts** — balances/drips are Poseidon commitments; `confidential_drip` verifies a Groth16 transfer + 64-bit range proof on-chain, so a hidden amount can't exceed the committed balance. See [Privacy](#privacy).
-- **Encrypted metadata** — milestone terms/deliverables are sealed with **Seal + Walrus**, released only to addresses that pass the on-chain `seal_approve` policy.
+- **Seal-gated secrets** — a confidential stream's secret openings are Seal-encrypted to the two parties and released only to a wallet that passes the on-chain `seal_approve` policy; decryption happens client-side. (Seal + Walrus for encrypted *deliverables* is a roadmap extension.)
 - **Mutual-only dispute settlement** — a `PAUSED` stream exits only when *both* parties accept the same proposal (`accept_resolution` asserts the accepter ≠ proposer), so neither can unilaterally seize funds and nothing locks forever.
 - **LTV-capped borrowing** — `borrow` asserts `principal ≤ present_value` (90% of remaining) and `≤ pool liquidity`, so a loan can't exceed the stream backing it.
 
@@ -435,7 +451,7 @@ The testnet package ID and test-USDC type are baked into `frontend/src/lib/const
 | **Sui** | Move 2024, shared objects, PTBs, Address Balances, on-chain Clock, `groth16` zk verifier |
 | **Mysten dApp Kit** | Wallet connection + transaction building |
 | **Enoki** | zkLogin (Google sign-in) + sponsored gasless transactions |
-| **Seal + Walrus** | Threshold-encrypted milestone terms & deliverables, on-chain `seal_approve` policy |
+| **Seal** | Threshold-encrypts the confidential-stream secrets to both parties; on-chain `seal_approve` policy (shipped). **Walrus** blob storage for encrypted deliverables (roadmap) |
 | **circom + snarkjs** | zk-SNARK circuits (`wrap`/`transfer`/`unwrap`) + in-browser proving for confidential amounts |
 | **Scallop / NAVI** | Yield vault + stream-backed lending — interface-compatible stand-ins on testnet (`yield_vault`, `LendingPool`), 1:1 swap to real Scallop on mainnet |
 
