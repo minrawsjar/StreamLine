@@ -96,12 +96,12 @@ Even on-chain, every settlement tick costs *some* computation gas, so truly per-
 
 Privacy in StreamLine isn't a separate mode bolted on the side — it's a per-stream toggle woven into the normal create/approve/drip flow. It attacks the four things a payment leaks, each with a primitive that is **live on Sui testnet** (no devnet-only crypto):
 
-| Layer | What it hides | How | Status |
-|-------|---------------|-----|--------|
-| **Identity** | *who* is paying/getting paid | zkLogin / Enoki — Google sign-in maps to a fresh Sui address, no linkable wallet | ✅ shipped |
-| **Gasless** | the gas-payer's footprint | Enoki sponsorship — the user never submits a gas coin | ✅ shipped |
-| **Metadata** | milestone terms & deliverables | **Seal** threshold encryption (+ Walrus blob storage), gated by an on-chain `seal_approve` policy | ✅ shipped |
-| **Amounts** | balances, rate, drip sizes | **Groth16 zk-SNARKs** (`sui::groth16`, BN254) over **Poseidon** commitments | ✅ shipped |
+| Layer | What it hides | How |
+|-------|---------------|-----|
+| **Identity** | *who* is paying/getting paid | zkLogin / Enoki — Google sign-in maps to a fresh Sui address, no linkable wallet |
+| **Gasless** | the gas-payer's footprint | Enoki sponsorship — the user never submits a gas coin |
+| **Metadata** | milestone terms & deliverables | **Seal** threshold encryption (+ Walrus blob storage), gated by an on-chain `seal_approve` policy |
+| **Amounts** | balances, rate, drip sizes | **Groth16 zk-SNARKs** (`sui::groth16`, BN254) over **Poseidon** commitments |
 
 ### What it aims to solve
 
