@@ -6,6 +6,7 @@ import { useCurrentAccount, useSuiClientContext } from "@mysten/dapp-kit";
 
 import { WalletButton } from "@/components/wallet/WalletButton";
 import { FaucetButton } from "@/components/wallet/FaucetButton";
+import { TokenBalance } from "@/components/wallet/TokenBalance";
 import { StreamLineMark } from "@/components/landing/StreamLineMark";
 
 export function AppChrome({ children }: { children: React.ReactNode }) {
@@ -61,6 +62,7 @@ export function AppChrome({ children }: { children: React.ReactNode }) {
           </span>
         </div>
         <div className="flex shrink-0 items-center gap-2">
+          {account && <TokenBalance dark={isPro} />}
           {account && !isPro && <FaucetButton amount={1000} />}
           <WalletButton
             className={
