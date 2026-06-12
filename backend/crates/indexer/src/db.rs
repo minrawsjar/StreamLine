@@ -165,17 +165,19 @@ pub async fn set_stream_state(
     state: &str,
     current_milestone: i64,
     review_deadline_ms: Option<i64>,
+    remaining: i64,
 ) -> Result<()> {
     sqlx::query(
         r#"UPDATE streams
            SET state = $2, current_milestone = $3,
-               review_deadline_ms = $4, updated_at = now()
+               review_deadline_ms = $4, remaining = $5, updated_at = now()
            WHERE id = $1"#,
     )
     .bind(id)
     .bind(state)
     .bind(current_milestone)
     .bind(review_deadline_ms)
+    .bind(remaining)
     .execute(pool)
     .await?;
     Ok(())
@@ -185,7 +187,10 @@ pub async fn set_stream_state(
 /// milestone fully paid out inside the last `drip` tx).
 pub async fn streams_needing_state_sync(pool: &PgPool) -> Result<Vec<String>> {
     let rows: Vec<(String,)> = sqlx::query_as(
-        r#"SELECT id FROM streams WHERE state IN ('dripping', 'pending_review', 'locked')
+        // `paused` is included so a dispute resolved on-chain (→ dripping on
+        // resume, or → done on split) gets re-read; otherwise the stream is
+        // stuck showing PAUSED in the UI forever.
+        r#"SELECT id FROM streams WHERE state IN ('dripping', 'pending_review', 'locked', 'paused')
            AND state <> 'done' LIMIT 50"#,
     )
     .fetch_all(pool)

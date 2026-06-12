@@ -213,6 +213,7 @@ async fn sync_stream_state(
     let code = u64_field(fields, "state");
     let milestone = u64_field(fields, "current_milestone") as i64;
     let deadline = u64_field(fields, "review_deadline_ms") as i64;
+    let remaining = u64_field(fields, "balance") as i64;
     let label = state_label(code);
     let review_deadline_ms = if label == "pending_review" && deadline > 0 {
         Some(deadline)
@@ -225,6 +226,7 @@ async fn sync_stream_state(
         label,
         milestone,
         review_deadline_ms,
+        remaining,
     )
     .await?;
     state.publish(LiveUpdate::State {
