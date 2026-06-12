@@ -8,7 +8,7 @@ the state machine — every transition asserts the current state, so an illegal
 transition aborts the whole transaction.
 
 - **Edition:** Sui Move `2024.beta`
-- **Modules:** `streamline::stream`, `streamline::collateral`
+- **Modules:** `streamline::stream` (public + confidential streams), `streamline::confidential_balance` (Groth16-verified pools), `streamline::collateral`
 
 ## Deployments
 
@@ -25,7 +25,7 @@ transition aborts the whole transaction.
 | `UpgradeCap` (owned by deployer) | `0x351ff70fa0639fb0c1bf61bbb5402314c4b2d853f22e7274adbec4dba7f5447e` |
 | Publish tx digest | [`EgeLX5dN3FEfzNgpPZsA92XJn7LHRwJSGpaMoW4HUbrY`](https://suiscan.xyz/testnet/tx/EgeLX5dN3FEfzNgpPZsA92XJn7LHRwJSGpaMoW4HUbrY) |
 | Deployer address | `0x046d80ecab635be43d5e0b7b3ac896388e5e19f37829080ce2e06614e80ad5f0` |
-| Modules | `stream`, `collateral` |
+| Modules | `stream`, `confidential_balance`, `collateral` |
 
 A machine-readable copy lives in [`deployment.testnet.json`](./deployment.testnet.json).
 The package ID is baked into the frontend's testnet default
@@ -116,6 +116,44 @@ drip_interval_ms = ceil(MIN_DRIP * duration_ms / total)
 | 4 | `EBadDuration` | `duration_ms == 0`. |
 | 5 | `ENoMilestones` | Empty / mismatched milestone vectors. |
 | 6 | `ENotDue` | Drip below the floor, or auto-approve before the deadline. |
+
+## Confidential streaming (`ConfidentialStream` + `streamline::confidential_balance`)
+
+The same milestone-gated stream, but with **amounts hidden on-chain**. Used when
+the *Private amounts* toggle is on. Only the dollar figures are confidential —
+milestone state, approvals, and auto-approve timing stay public, so the escrow
+guarantees are identical to a normal stream.
+
+### `ConfidentialStream<phantom T>` (in `stream`)
+
+- `key`, shared. Holds a **public** `reserve: Balance<T>` (the locked pool) plus
+  `remaining` and `earned` as **Poseidon commitments** (`commit(value, blinding)`),
+  the current milestone, and **Seal-encrypted secrets** (blinding factors sealed
+  to the recipient).
+- `create_confidential_stream` / `_v2` — lock the reserve and publish the initial
+  commitments.
+- `confidential_drip` / `_v2` — advance the stream by verifying a **Groth16 transfer
+  proof**: the new `remaining`/`earned` commitments are a valid debit/credit of the
+  old ones and the moved amount lies in `[0, 2⁶⁴)`. No amount is revealed.
+- `claim` — recipient withdraws settled value from the public reserve.
+- `conf_raise_completion` / `conf_approve_milestone` / `conf_auto_approve` — the
+  confidential mirror of the public milestone flow.
+- `seal_approve(id, ctx)` — the **Seal access policy** (entry): gates decryption of
+  the sealed secrets to authorized addresses. Mirrored by `seal_approve_for_testing`.
+
+### `streamline::confidential_balance`
+
+- **`ConfidentialPool<T>`** — a pooled public reserve plus registered commitments;
+  value enters with `wrap`, moves with `confidential_transfer`, and exits with `unwrap`
+  (homomorphic add/sub on commitments).
+- `verify_wrap` / `verify_transfer` / `verify_unwrap` — `public(package)` Groth16
+  verifiers with **embedded verifying keys** (one per circuit). Each checks a range
+  proof so a hidden value can never exceed the committed balance.
+
+Proofs are produced in-browser (`circuits/`, circom + snarkjs) and the Move
+verifiers run natively via `sui::groth16` (BN254) — enabled on testnet/mainnet.
+The confidential paths are covered by `tests/confidential_stream_tests.move` and
+`tests/confidential_balance_tests.move`.
 
 ## `streamline::collateral`
 
