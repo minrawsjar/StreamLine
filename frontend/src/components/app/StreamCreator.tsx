@@ -74,12 +74,14 @@ export function StreamCreator() {
     if (milestones.length === 0) e.push("Add at least one milestone.");
     if (amount / Math.max(milestones.length, 1) < 0.01)
       e.push("Each milestone must be ≥ 0.01 USDC.");
-    if (isPrivate) {
-      // Private streams encrypt the secrets to the recipient's wallet, so it
-      // must be a concrete address. Duration/splits don't apply (manual drips).
-      if (!/^0x[0-9a-fA-F]{1,64}$/.test(freelancer.trim()))
-        e.push("Private streams need a valid recipient address (0x…).");
-    } else {
+    // A Sui address is 0x + exactly 64 hex. A 40-hex Ethereum-style address
+    // looks valid but Sui zero-pads it to an address nobody controls, so the
+    // stream never reaches the recipient. Require the full form.
+    if (!/^0x[0-9a-fA-F]{64}$/.test(freelancer.trim()))
+      e.push(
+        "Recipient must be a full Sui address (0x + 64 hex). An Ethereum-style 40-character address won't work."
+      );
+    if (!isPrivate) {
       if (durationValue <= 0) e.push("Duration must be greater than 0.");
       if (splitSum !== 100)
         e.push(`Splits must total 100% (currently ${splitSum}%).`);
