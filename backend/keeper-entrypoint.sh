@@ -14,6 +14,9 @@ set -euo pipefail
 
 : "${KEEPER_SUI_PRIVATE_KEY:?set KEEPER_SUI_PRIVATE_KEY (suiprivkey1... from 'sui keytool export')}"
 RPC="${SUI_RPC_URL:-https://fullnode.testnet.sui.io:443}"
+# Strip any whitespace/newlines the value may have picked up from a dashboard
+# paste — a stray '\n' in the URL makes the CLI bail with "invalid uri character".
+RPC="${RPC//[$'\t\r\n ']/}"
 SCHEME="${KEEPER_KEY_SCHEME:-ed25519}"
 CFG="${HOME:-/root}/.sui/sui_config"
 
