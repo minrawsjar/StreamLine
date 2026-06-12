@@ -49,6 +49,38 @@ StreamLine locks the full project amount up front in a **Move shared object**. F
 
 **Confidential streaming** — Toggle *Private amounts* on any stream and the amounts never touch the chain in the clear. Balances and drip sizes become **Poseidon commitments**; every drip is justified by a **Groth16 zero-knowledge proof**; the freelancer decrypts their own figures locally via **Seal**. See [Privacy](#privacy).
 
+**Auto-yield + borrow** — Route a slice of every drip straight into a yield vault (it compounds the moment it's earned), and borrow cash against a live stream's future income. The money works the instant it's paid. See [Composable DeFi](#composable-defi--where-the-money-goes).
+
+**Mutual dispute resolution** — Either party can pause a stream; both then agree on-chain to resume it or split the remainder. No funds can be locked hostage and no single party can unilaterally seize them. See [Dispute resolution](#dispute-resolution).
+
+---
+
+## Why a stream, not a payment — and why a card *physically can't* do this
+
+The core insight is that **work is continuous but payment is discrete, and the discreteness is an artifact of cost, not desire.** You'd pay someone the instant they earned a cent if a transfer cost nothing and cleared instantly. It doesn't on legacy rails, so we batch into salaries, invoices, and net-30 terms — and every batch boundary is where trust, float, and disputes live.
+
+A stream removes the boundary. Money accrues by the **second** (`total × elapsed / duration`), settles in gasless increments, and the rules — milestones, approvals, splits — are enforced by the chain instead of a middleman.
+
+### Why card / bank rails can't be retrofitted into this
+
+This isn't a UX gap that a nicer app fixes — it's structural to how Web2 money moves:
+
+| Property | Card / ACH / wire | StreamLine on Sui |
+|---|---|---|
+| **Settlement** | Deferred & batched (auth now, funds T+1 to T+3; wires hours–days; cross-border 3–5 days) | Real-time, per-interval finality on every drip |
+| **Per-transfer cost** | 1.5–3.5% + fixed fee — so micro-settlement is economically impossible | Gasless for users (sponsored); only a tiny on-chain gas the protocol amortizes |
+| **Reversibility** | Chargebacks for ~120 days → merchants can't trust "paid" | Final on settlement; disputes are explicit, mutual, on-chain |
+| **Custody** | Funds sit with banks/processors (Stripe, Visa, ACH operator) between parties | Funds locked in a Move object only the rules can move — no intermediary holds them |
+| **Programmability** | None at the rail; "split this payment 70/30 into a yield account" is not a primitive | Native: one atomic PTB pays, splits, and invests |
+| **Composability** | A card payment can't *become* collateral or yield without leaving the rail | The same locked value is borrowable and investable in place |
+| **Identity / onboarding** | KYC, bank account, card issuance — excludes billions | Google sign-in → a real account, no bank, no seed phrase |
+
+Card networks were built to **move a fixed amount, once, with a reversal window** — the opposite of a continuous, final, programmable flow. You cannot "stream" a Visa transaction by sending thousands of tiny authorizations: the fees, batch windows, and chargeback model make it both unaffordable and untrustworthy. Streaming is only possible on a settlement layer where a transfer is **cheap, final, and programmable** — which is what a blockchain is, and (per [Why Sui](#why-sui)) what Sui is *especially* good at.
+
+### And why "just continuous" still has a floor
+
+Even on-chain, every settlement tick costs *some* computation gas, so truly per-second on-chain payment would be absurd. StreamLine resolves this with a **gasless floor**: a drip fires only once ~1 USDC has accrued (configurable), so gas stays a negligible fraction of value moved while the recipient's *displayed* balance still ticks every 100ms (client-side math, corrected by each confirmed drip). You get the feel of continuous pay with the economics of batched settlement — the best of both.
+
 ---
 
 ## Privacy
@@ -100,6 +132,47 @@ Proofs are generated in-browser with **circom 2.2.3 + snarkjs** (Poseidon via ci
 | **`sui::groth16` native** | On-chain zk-SNARK verification (BN254), enabled on testnet/mainnet — the basis for **confidential amounts**. No devnet-only crypto required. |
 | **Seal + Walrus** | Threshold-encrypted milestone terms with an on-chain access policy; ciphertext stored off-chain in Walrus. |
 
+### Why Sui specifically (not "just any chain")
+
+A payment stream is plausible on several chains, but each property StreamLine needs lines up with something Sui does natively that others bolt on or can't do:
+
+- **Gasless at the protocol, not the app.** Sui's **Address Balances** make stablecoin transfers gasless at the rail, and **Enoki sponsorship** covers the rest — so a user with *zero* SUI streams money. On EVM, "gasless" means meta-transactions/relayers and a paymaster you operate; every drip still burns gas someone pays for, and per-interval settlement is cost-prohibitive on L1.
+- **The object model is the escrow.** Funds live *inside* a `Stream` shared object reachable only through its entry functions. There's no allowance to over-approve, no balance mapping to reenter, no `transferFrom` foot-gun — a whole class of EVM payment-contract exploits simply doesn't exist. On Solana, the account model is fast but you hand-roll the same guarantees with PDAs and manual checks.
+- **PTBs give atomic composability for free.** Pay + split + deposit-to-yield is **one transaction that all-or-nothing reverts**. On EVM you'd write a bespoke router contract and pray about reentrancy across the legs; on Sui it's a Programmable Transaction Block composing existing modules.
+- **zkLogin removes the wallet.** Google → a real Sui address with no seed phrase, native to the chain — the single biggest onboarding unlock for the 2.5B people who'll never install a wallet extension.
+- **On-chain Groth16 is enabled on mainnet.** Confidential amounts verify a real zk-SNARK *on-chain* today. The comparable confidential-balance path (Bulletproofs/ristretto255) is devnet-only; Sui's `groth16` native is the production escape hatch.
+
+The throughline: Sui makes the **cheap, final, programmable, gasless** settlement that streaming requires the *default*, where other chains make it a project.
+
+---
+
+## Composable DeFi — where the money goes
+
+Streaming income is only half the story. The instant value is earned it should be able to **work** — and because StreamLine locks value in a Move object and settles via PTBs, the same dollars are investable and borrowable *in place*, with no bridge or withdrawal. (Scallop — Sui's largest lending protocol — is **mainnet-only**, so on testnet we ship interface-compatible stand-ins that swap 1:1 to the real thing on mainnet.)
+
+### 1. Yield vault — `streamline::yield_vault`
+A Scallop-shaped lending pool: deposit the streamed token, receive a share **`VaultReceipt`**, and watch it appreciate via a continuously-compounding `apr_bps` index; redeem for principal + interest. Maps 1:1 to Scallop's `mint`/`redeem` (`Coin<MarketCoin<T>>`).
+
+### 2. Auto-yield — `create_stream_v2` + `drip_with_yield`
+The headline: a stream created with a yield split (e.g. **70% cash / 30% yield**) auto-invests on **every drip**. The keeper calls `drip_with_yield`, which deposits the yield-flagged slice straight into the vault and hands the freelancer a `VaultReceipt` — so income compounds the moment it's earned, with zero extra clicks. *This is the thing a card payment fundamentally cannot do: a card can't deposit a fraction of itself into a money market as it settles.*
+
+### 3. Borrow against a stream — `streamline::collateral`
+A `DRIPPING` stream is guaranteed future income, so its **present value** (remaining × 90%) can back a loan today. The `LendingPool<T>` funds it: borrow up to PV, receive cash now + a `LoanReceipt`, and repay principal + borrow-APR interest later. Lender yield comes from borrower interest — a complete, if minimal, money market over stream cash flows.
+
+All three are gasless (Enoki-sponsored) and surfaced as **Yield** and **Collateral** tabs in the app.
+
+---
+
+## Dispute resolution
+
+Pay-on-completion lets a client stall; pay-upfront lets a freelancer vanish. StreamLine's milestone gate + 48h auto-approve handles the *silent* cases, and **mutual resolution** handles genuine disputes:
+
+1. Either party calls `raise_dispute` → the stream `PAUSED`, drips stop.
+2. One party **proposes** a resolution — `resume` (back to dripping) or a **split** of the remaining balance (`freelancer_bps` to the freelancer, the rest refunded to the client).
+3. The **other** party must `accept` identical terms — neither side can settle alone.
+
+The proposal lives in a dynamic field (no struct-layout change, upgrade-safe). Resume returns to `DRIPPING`; a split pays both out and closes the stream. Result: **funds can never be locked hostage, and no single party can unilaterally seize them.** (`cancel` remains the client-only escape for revocable streams to reclaim unstreamed funds.)
+
 ---
 
 ## Technical Architecture
@@ -108,8 +181,9 @@ Proofs are generated in-browser with **circom 2.2.3 + snarkjs** (Poseidon via ci
 
 | Technology | Purpose |
 |------------|---------|
-| **Sui Move 2024** | `Stream` / `StreamCap` / `CollateralReceipt` shared objects; the state machine. |
+| **Sui Move 2024** | `Stream` / `StreamCap` shared objects; state machine, drip math, dispute resolution. |
 | **`ConfidentialStream` + `ConfidentialPool`** | Poseidon-committed balances; Groth16-verified confidential drips; Seal-sealed secrets. |
+| **`YieldVault` + `LendingPool`** | Compounding yield vault + borrow-against-stream pool; auto-yield via `drip_with_yield`. |
 | **circom 2.2.3 + snarkjs** | `wrap` / `transfer` / `unwrap` zk circuits; in-browser proving (Poseidon via circomlibjs). |
 | **PTBs + Address Balances** | Atomic multi-step settlement; gasless transfers. |
 | **Rust + Tokio + Axum + sqlx** | Off-chain indexer (REST + WebSocket) and settlement keeper. |
@@ -151,9 +225,15 @@ The **Move layer is the only source of truth.** The keeper and indexer are state
 LOCKED ──raise_completion──▶ PENDING_REVIEW ──approve / auto_approve──▶ DRIPPING
   ▲                                │                                       │
   └──────── milestone exhausted ───┴──────── raise_dispute ──▶ PAUSED      │
+                                                                 │          │
+                                  propose_resolution + accept ───┤          │
+                                    ├─ resume ──────────────────▶ DRIPPING  │
+                                    └─ split ───────────────────▶ DONE      │
                                                                             ▼
                                                 all milestones exhausted ─▶ DONE
 ```
+
+States: `LOCKED` (0) · `PENDING_REVIEW` (1) · `DRIPPING` (2) · `PAUSED` (3) · `DONE` (4). The client may also `cancel` a *revocable* stream from any non-done state to reclaim the unstreamed balance.
 
 ---
 
@@ -165,10 +245,12 @@ StreamLine/
 ├── contracts/                  # Move package `streamline` (Sui Move 2024)
 │   ├── sources/
 │   │   ├── stream.move         #   Stream<T> + ConfidentialStream<T>, StreamCap, state machine,
-│   │   │                       #     drip math, confidential_drip, seal_approve policy
+│   │   │                       #     drip / drip_with_yield, create_stream_v2, dispute resolution,
+│   │   │                       #     confidential_drip, seal_approve policy
 │   │   ├── confidential_balance.move  # ConfidentialPool<T>, Groth16 verify_wrap/transfer/unwrap
-│   │   └── collateral.move     #   CollateralReceipt, borrow-against-stream
-│   └── tests/                  #   State machine, accrual, + confidential-stream/balance proofs
+│   │   ├── yield_vault.move    #   Scallop-shaped YieldVault<T> (deposit/redeem, compounding index)
+│   │   └── collateral.move     #   present value, CollateralReceipt, LendingPool<T> (borrow/repay)
+│   └── tests/                  #   State machine, accrual, dispute, yield, lending, ZK proofs (19)
 │
 ├── circuits/                   # zk-SNARK circuits (confidential amounts)
 │   ├── src/                    #   wrap / transfer / unwrap (circom) + lib/commitment (Poseidon)
@@ -205,12 +287,14 @@ Deployed on **Sui testnet**. Full details in [`contracts/README.md`](contracts/R
 
 | Package / Object | ID | Description |
 |------------------|----|-------------|
-| **streamline** (original) | [`0x9d6e78…b3a8`](https://suiscan.xyz/testnet/object/0x9d6e7815d5e11424a68f827e26499078fead7648328f44fdbdeff6d34ed0b3a8) | Type-origin package — `stream` (+ `ConfidentialStream`), `confidential_balance`, `collateral` |
-| **streamline** (latest, v5) | [`0x110563…27a9`](https://suiscan.xyz/testnet/object/0x110563fbfb080429abad15a8b402a3c980f0c80f2b66de7f3789e561f11827a9) | Current package the frontend calls (adds mutual dispute resolution) |
-| **mock_usdc** (package) | [`0xf6ce32…2ed3`](https://suiscan.xyz/testnet/object/0xf6ce32fe48338464f3947b9d15cd4a0befa0fe9b3926fd9daf6cee3658482ed3) | Mintable test USDC (6 decimals) |
-| **USDC TreasuryCap** (shared) | [`0xa7cb97…5330`](https://suiscan.xyz/testnet/object/0xa7cb971f4f93e5713c5703f63f3bc17fdf0f6bf1f9795dc010ac164827715330) | Permissionless faucet |
+| **streamline** (original / type-origin) | [`0x9d6e78…b3a8`](https://suiscan.xyz/testnet/object/0x9d6e7815d5e11424a68f827e26499078fead7648328f44fdbdeff6d34ed0b3a8) | `stream` (+ `ConfidentialStream`), `confidential_balance`, `collateral`. Object types stay pinned here across upgrades. |
+| **streamline** (latest, v8) | [`0x285065…d0a2`](https://suiscan.xyz/testnet/object/0x28506598eccbbde36bbfef6401936c1d907c21a7e8db77c56390b6b291fad0a2) | Package the frontend + keeper call. Adds, by version: v5 dispute resolution · v6 `yield_vault` · v7 lending pool · v8 auto-yield (`create_stream_v2`, `drip_with_yield`). |
+| **YieldVault** (shared) | [`0x8ae9d8…8406`](https://suiscan.xyz/testnet/object/0x8ae9d8805682aabbd00ff0582d93b88f2f86482bcabed194a88a6ded99a88406) | Mock-USDC yield vault, 8% APR, seeded buffer. |
+| **LendingPool** (shared) | [`0x0518d5…2ea2`](https://suiscan.xyz/testnet/object/0x0518d5d77a3069ebab9df5b46e60fed4589c16dc6e48cd694a02c9350f312ea2) | Borrow-against-stream pool, 12% APR, seeded liquidity. |
+| **mock_usdc** (package) | [`0xf6ce32…2ed3`](https://suiscan.xyz/testnet/object/0xf6ce32fe48338464f3947b9d15cd4a0befa0fe9b3926fd9daf6cee3658482ed3) | Mintable test USDC (6 decimals). |
+| **USDC TreasuryCap** (shared) | [`0xa7cb97…5330`](https://suiscan.xyz/testnet/object/0xa7cb971f4f93e5713c5703f63f3bc17fdf0f6bf1f9795dc010ac164827715330) | Permissionless faucet. |
 
-> Object **types** keep the original package id across upgrades, so the indexer filters events by `MoveEventModule` on `0x9d6e78…b3a8` to catch streams created against either id.
+> **Upgrade-safety note.** Sui pins each struct's type to the package version that *introduced* it. So the indexer filters events by `MoveEventModule` on the original `0x9d6e78…b3a8`, and the app queries `VaultReceipt`/`LoanReceipt` by their defining packages (v6 / v7) — never the latest — to keep catching objects across upgrades.
 
 ---
 
@@ -237,15 +321,47 @@ Stream is DRIPPING; enough time elapses to accrue the drip floor
   → milestone exhausted → relock (LOCKED) or finish (DONE)
 ```
 
+### Auto-yield settlement (keeper drip_with_yield)
+
+```
+Stream created with create_stream_v2(…, yield_bps = 3000)  // 30% auto-yield
+Stream is DRIPPING; keeper calls drip_with_yield(stream, vault, clock)
+  → 70% leg → cash to the freelancer
+  → 30% (yield_flag) → yield_vault::deposit → VaultReceipt to the freelancer
+  → the receipt compounds at the vault APR from that second on
+```
+
 ### Borrow against a stream
 
 ```
 Stream is DRIPPING
   → present_value = remaining * 90%
-  → collateralize<USDC>(stream, lender, principal ≤ PV, auto_repay)
-  → mint non-transferable CollateralReceipt
-  → Collateralized event
+  → collateral::borrow<USDC>(pool, stream, principal ≤ PV, clock)
+  → cash sent now + LoanReceipt minted
+  → later: collateral::repay(pool, loan, principal + borrow-APR interest)
 ```
+
+---
+
+## Roadmap — the future of StreamLine
+
+StreamLine is built and verified end-to-end on **testnet**; the path to mainnet is mostly swapping testnet stand-ins for the production primitives that already exist on Sui mainnet.
+
+### Mainnet deployment
+- **Real Address Balances + USDC.** Replace mock-USDC with native/bridged **USDC** and settle drips over mainnet **Address Balances** for true protocol-level gasless transfers (live on Sui mainnet since May 2026).
+- **Real Scallop / NAVI.** Swap `yield_vault` and the `LendingPool` for **Scallop**'s `mint`/`redeem` and lending markets (mainnet-only today) — the interfaces were built to map 1:1, so it's a call-site change, not a redesign.
+- **Walrus deliverables.** Store milestone deliverables (designs, code, files) as **Walrus** blobs, Seal-encrypted, with the on-chain `seal_approve` policy gating access — turning StreamLine into the escrow *and* the handoff.
+- **Production trusted setup.** Replace the single-party Groth16 ceremony with a multi-party (perpetual-powers-of-tau) setup for the confidential-amount circuits.
+
+### Protocol hardening
+- **Decentralized keeper network.** Today one permissionless keeper drips and auto-approves; mainnet wants a competitive keeper set (anyone can drip for the 1 bps tip) so settlement has no single operator.
+- **Arbiter-backed disputes.** Add an optional staked arbiter as a fallback to mutual resolution, plus keeper-enforced timeout defaults so a stream can never sit `PAUSED` forever.
+- **Auto-repay from drips.** Wire the keeper to route a borrower's drips to their loan, so stream-backed loans self-repay (the `auto_repay` flag is recorded today; enforcement is the next step).
+
+### Product surface
+- **Payroll & subscriptions.** The same primitive is recurring payroll, SaaS subscriptions, vesting, and grants — milestones become pay periods or unlock cliffs.
+- **Mobile + zkLogin everywhere.** Push the Google-sign-in, no-wallet flow to a mobile app for the cross-border payroll users who are the core market.
+- **Confidential composability.** Today confidential streams trade away yield/lending (encrypted balances aren't readable by Scallop). A future direction is zk-attested deposits so private streams can earn too.
 
 ---
 
@@ -298,6 +414,8 @@ The testnet package ID and test-USDC type are baked into `frontend/src/lib/const
 - **Server-side secrets** — the Enoki sponsor key lives only in the Next.js route handler; the browser never sees it.
 - **Confidential amounts** — balances/drips are Poseidon commitments; `confidential_drip` verifies a Groth16 transfer + 64-bit range proof on-chain, so a hidden amount can't exceed the committed balance. See [Privacy](#privacy).
 - **Encrypted metadata** — milestone terms/deliverables are sealed with **Seal + Walrus**, released only to addresses that pass the on-chain `seal_approve` policy.
+- **Mutual-only dispute settlement** — a `PAUSED` stream exits only when *both* parties accept the same proposal (`accept_resolution` asserts the accepter ≠ proposer), so neither can unilaterally seize funds and nothing locks forever.
+- **LTV-capped borrowing** — `borrow` asserts `principal ≤ present_value` (90% of remaining) and `≤ pool liquidity`, so a loan can't exceed the stream backing it.
 
 ---
 
@@ -310,7 +428,7 @@ The testnet package ID and test-USDC type are baked into `frontend/src/lib/const
 | **Enoki** | zkLogin (Google sign-in) + sponsored gasless transactions |
 | **Seal + Walrus** | Threshold-encrypted milestone terms & deliverables, on-chain `seal_approve` policy |
 | **circom + snarkjs** | zk-SNARK circuits (`wrap`/`transfer`/`unwrap`) + in-browser proving for confidential amounts |
-| **Scallop / NAVI** | Yield routing + stream-backed lending (composability target; public streams only) |
+| **Scallop / NAVI** | Yield vault + stream-backed lending — interface-compatible stand-ins on testnet (`yield_vault`, `LendingPool`), 1:1 swap to real Scallop on mainnet |
 
 ---
 
