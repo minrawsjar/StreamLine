@@ -13,6 +13,7 @@ type SceneTextPanelProps = {
   panelMode?: PanelMode;
   storeCard?: StorePlatform;
   compact?: boolean;
+  stacked?: boolean;
 };
 
 const PANEL_W = "w-full max-w-[360px] min-h-[280px]";
@@ -43,9 +44,29 @@ export function SceneTextPanel({
   panelMode = "full",
   storeCard,
   compact,
+  stacked,
 }: SceneTextPanelProps) {
   const isPro = theme === "pro";
   const isTiles = panelMode === "tiles";
+
+  const titleSize = isPro
+    ? stacked
+      ? "text-[2.4rem] lg:text-[2.85rem]"
+      : "text-[2.85rem] lg:text-[3.6rem]"
+    : stacked
+      ? "text-[2rem] lg:text-[2.35rem]"
+      : "text-[2.65rem] lg:text-[3.35rem]";
+
+  const bodySize = isPro
+    ? stacked
+      ? "text-[13px]"
+      : "text-[14px]"
+    : stacked
+      ? "text-[12px]"
+      : "text-[13px]";
+
+  const labelSize = isPro ? "text-[11px]" : "text-[10px]";
+  const bulletSize = isPro ? "text-[13px]" : "text-[12px]";
 
   if (storeCard) {
     return (
@@ -83,8 +104,8 @@ export function SceneTextPanel({
         <h2
           className={`font-semibold leading-[1.06] tracking-[-0.03em] ${
             compact
-              ? "mt-1.5 text-[1.05rem]"
-              : "mt-1 text-[clamp(2.25rem,4.5vw,3.9rem)] lg:mt-1.5"
+              ? "mt-1.5 text-[1.2rem]"
+              : "mt-1 text-[clamp(2.5rem,5vw,4.35rem)] lg:mt-1.5"
           } ${isPro ? "font-medium text-white" : "font-bold text-[#111]"}`}
         >
           {content.headline}
@@ -108,17 +129,17 @@ export function SceneTextPanel({
 
   return (
     <div
-      className={`${PANEL_W} flex flex-col transition-all duration-500 ease-out ${
+      className={`${stacked ? "w-full max-w-[340px]" : PANEL_W} flex flex-col transition-all duration-500 ease-out ${
         side === "left"
           ? "items-center text-center lg:items-end lg:text-right"
           : "items-center text-center lg:items-start lg:text-left"
       } ${visible ? "translate-y-0 opacity-100" : "translate-y-4 opacity-0"} ${
         isPro ? "font-[family-name:var(--font-inter)]" : ""
-      }`}
+      } ${stacked ? "min-h-0" : ""}`}
     >
       {content.label ? (
         <p
-          className={`h-4 text-[10px] font-semibold uppercase tracking-[0.22em] ${
+          className={`h-4 font-semibold uppercase tracking-[0.22em] ${labelSize} ${
             isPro ? "text-white/50" : "text-black/40"
           }`}
         >
@@ -129,7 +150,7 @@ export function SceneTextPanel({
       )}
 
       <h2
-        className={`${content.label ? "mt-4" : "mt-0"} text-[1.625rem] font-semibold leading-[1.12] tracking-[-0.02em] lg:text-[1.75rem] ${
+        className={`${content.label ? "mt-4" : "mt-0"} font-semibold leading-[1.06] tracking-[-0.035em] ${titleSize} ${
           isPro ? "font-medium text-white" : "font-bold text-[#111]"
         }`}
       >
@@ -139,7 +160,7 @@ export function SceneTextPanel({
 
       {!compact && (
         <p
-          className={`mt-4 text-[13px] leading-[1.65] ${
+          className={`mt-4 leading-[1.65] ${bodySize} ${
             isPro ? "font-normal text-white/60" : "font-medium text-[#555]"
           }`}
         >
@@ -149,14 +170,14 @@ export function SceneTextPanel({
 
       {!compact && content.bullets.length > 0 && (
         <ul
-          className={`mt-5 space-y-2 ${
+          className={`space-y-2 ${stacked ? "mt-3" : "mt-5"} ${
             side === "left" ? "lg:text-right" : "lg:text-left"
           }`}
         >
           {content.bullets.map((b) => (
             <li
               key={b}
-              className={`flex items-start gap-2 text-[12px] leading-snug ${
+              className={`flex items-start gap-2 leading-snug ${bulletSize} ${
                 side === "left" ? "lg:flex-row-reverse" : ""
               } ${isPro ? "text-white/45" : "text-[#666]"}`}
             >

@@ -1,8 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
-
-import { QRCodeSVG } from "qrcode.react";
+import { useEffect, useState, type ReactNode } from "react";
 
 import { StreamLineMark } from "./StreamLineMark";
 import { PhoneAppShell } from "@/components/app/phone/PhoneAppShell";
@@ -38,20 +36,61 @@ function PhoneWallpaper() {
   );
 }
 
-function PhoneHeader({ pro = false }: { pro?: boolean }) {
+function PhoneHeader({
+  pro = false,
+  trailing,
+}: {
+  pro?: boolean;
+  trailing?: ReactNode;
+}) {
   return (
-    <div className="flex shrink-0 items-center gap-2">
-      <StreamLineMark size="sm" variant={pro ? "pro" : "default"} />
-      <span
-        className={`text-sm font-semibold tracking-tight ${
-          pro
-            ? "font-[family-name:var(--font-inter)] text-white"
-            : "font-bold text-[#111]"
-        }`}
-      >
-        streamline{pro && <span className="text-white/40">.pro</span>}
-      </span>
+    <div className="flex shrink-0 items-center justify-between gap-2">
+      <div className="flex items-center gap-2">
+        <StreamLineMark size="sm" variant={pro ? "pro" : "default"} />
+        <span
+          className={`text-sm font-semibold tracking-tight ${
+            pro
+              ? "font-[family-name:var(--font-inter)] text-white"
+              : "font-bold text-[#111]"
+          }`}
+        >
+          streamline{pro && <span className="text-white/40">.pro</span>}
+        </span>
+      </div>
+      {trailing}
     </div>
+  );
+}
+
+function ScanIconButton({ pro = false }: { pro?: boolean }) {
+  return (
+    <button
+      type="button"
+      className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full border backdrop-blur-md transition-colors ${
+        pro
+          ? "border-white/15 bg-white/8 text-white/70 hover:bg-white/12"
+          : "border-black/8 bg-white/70 text-[#333] hover:bg-white/90"
+      }`}
+      aria-label="Scan QR code"
+    >
+      <svg
+        width="16"
+        height="16"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.75"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden
+      >
+        <path d="M3 7V5a2 2 0 0 1 2-2h2" />
+        <path d="M17 3h2a2 2 0 0 1 2 2v2" />
+        <path d="M21 17v2a2 2 0 0 1-2 2h-2" />
+        <path d="M7 21H5a2 2 0 0 1-2-2v-2" />
+        <path d="M7 12h10" />
+      </svg>
+    </button>
   );
 }
 
@@ -59,8 +98,50 @@ const DASHBOARD_BASE_EARNED = 142.5;
 const DASHBOARD_EARN_PER_SEC = 0.5;
 
 const BACK_CARD_LAYERS = [
-  { tone: "bg-white/38 border-white/30", inset: "mx-4", top: 6 },
-  { tone: "bg-white/50 border-white/42", inset: "mx-2", top: 20 },
+  { tone: "bg-white/38 border-white/30", inset: "mx-5", top: 0 },
+  { tone: "bg-white/50 border-white/42", inset: "mx-2", top: 24, showLabel: true },
+] as const;
+
+const DASHBOARD_SECTION_GAP = "mb-7";
+
+const DASHBOARD_ACTIONS = [
+  {
+    id: "transfer",
+    label: "Transfer",
+    icon: (
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+        <path d="M7 17 17 7" />
+        <path d="M7 7h10v10" />
+      </svg>
+    ),
+  },
+  {
+    id: "withdraw",
+    label: "Withdraw",
+    icon: (
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+        <path d="M12 3v12" />
+        <path d="m8 11 4 4 4-4" />
+        <path d="M5 21h14" />
+      </svg>
+    ),
+  },
+  {
+    id: "request",
+    label: "Request",
+    icon: (
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+        <path d="M12 5v14" />
+        <path d="M5 12h14" />
+      </svg>
+    ),
+  },
+] as const;
+
+const DASHBOARD_ACTIVITY = [
+  { time: "2m ago", text: "Drip received", amount: "+$0.50" },
+  { time: "1h ago", text: "Milestone 3 approved", amount: null },
+  { time: "Yesterday", text: "Split to yield wallet", amount: "$42.00" },
 ] as const;
 
 function DashboardScreen() {
@@ -81,8 +162,8 @@ function DashboardScreen() {
   });
 
   return (
-    <div className="mt-1 flex min-h-0 flex-1 flex-col gap-3">
-      <div className="relative mx-0.5">
+    <div className="mt-1 flex min-h-0 flex-1 flex-col">
+      <div className={`relative mx-0.5 ${DASHBOARD_SECTION_GAP}`}>
         {BACK_CARD_LAYERS.map((layer, i) => (
           <div
             key={i}
@@ -91,14 +172,20 @@ function DashboardScreen() {
             aria-hidden
           >
             <div
-              className={`h-[88px] rounded-2xl border shadow-[0_4px_16px_rgba(0,0,0,0.04)] backdrop-blur-md ${layer.tone}`}
-            />
+              className={`flex h-[88px] items-start rounded-2xl border px-4 pt-3.5 shadow-[0_4px_16px_rgba(0,0,0,0.04)] backdrop-blur-md ${layer.tone}`}
+            >
+              {"showLabel" in layer && layer.showLabel && (
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-[#666]/40">
+                  Private Stream
+                </p>
+              )}
+            </div>
           </div>
         ))}
 
-        <div className="relative z-10 mt-[46px] rounded-2xl border border-white/70 bg-white/88 p-4 shadow-[0_10px_32px_rgba(0,0,0,0.1)] backdrop-blur-md">
+        <div className="relative z-10 mt-[54px] rounded-2xl border border-white/70 bg-white/88 p-4 shadow-[0_10px_32px_rgba(0,0,0,0.1)] backdrop-blur-md">
           <p className="text-[10px] font-semibold uppercase tracking-wider text-[#888]">
-            Video Editing Gig
+            Work Stream
           </p>
           <p className="mt-1.5 text-[1.85rem] font-bold tabular-nums leading-none text-[#111]">
             {formatted}
@@ -112,35 +199,46 @@ function DashboardScreen() {
         </div>
       </div>
 
-      <div className="mt-auto grid grid-cols-3 gap-2">
-        <div className="rounded-xl border border-white/50 bg-white/65 p-2.5 backdrop-blur-md">
-          <p className="text-[8px] font-medium uppercase tracking-wider text-[#888]">
-            Split
-          </p>
-          <p className="mt-0.5 text-[11px] font-bold text-[#111]">70 / 30</p>
-          <p className="mt-0.5 text-[8px] text-[#888]">wallet · yield</p>
-        </div>
-        <div className="rounded-xl border border-white/50 bg-white/65 p-2.5 backdrop-blur-md">
-          <p className="text-[8px] font-medium uppercase tracking-wider text-[#888]">
-            Next drip
-          </p>
-          <p className="mt-0.5 text-[11px] font-bold text-[#111]">~90s</p>
-          <p className="mt-0.5 text-[8px] text-[#888]">gasless</p>
-        </div>
-        <div className="flex flex-col items-center rounded-xl border border-white/50 bg-white/65 p-2 backdrop-blur-md">
-          <p className="text-[8px] font-medium uppercase tracking-wider text-[#888]">
-            Share
-          </p>
-          <QRCodeSVG
-            value="https://streamline.app/gig/video-editing"
-            size={44}
-            level="M"
-            marginSize={0}
-            bgColor="#ffffff"
-            fgColor="#111111"
-            className="mt-1 rounded-sm"
-            title="Share gig QR code"
-          />
+      <div className={`grid grid-cols-3 gap-2 ${DASHBOARD_SECTION_GAP}`}>
+        {DASHBOARD_ACTIONS.map((action) => (
+          <button
+            key={action.id}
+            type="button"
+            className="flex flex-col items-center gap-1.5 rounded-2xl border border-white/80 bg-white px-1 py-3.5 shadow-[0_4px_16px_rgba(0,0,0,0.05)] backdrop-blur-md transition-colors hover:bg-white"
+          >
+            <span className="flex h-8 w-8 items-center justify-center text-[#111]">
+              {action.icon}
+            </span>
+            <span className="text-[9px] font-semibold text-[#111]">
+              {action.label}
+            </span>
+          </button>
+        ))}
+      </div>
+
+      <div className="overflow-hidden rounded-xl border border-white/50 bg-white/60 backdrop-blur-md">
+        <p className="border-b border-black/6 px-3 py-2 text-[8px] font-semibold uppercase tracking-wider text-[#888]">
+          Activity
+        </p>
+        <div className="divide-y divide-black/5">
+          {DASHBOARD_ACTIVITY.map((item) => (
+            <div
+              key={`${item.time}-${item.text}`}
+              className="flex items-center justify-between gap-2 px-3 py-2"
+            >
+              <div className="min-w-0">
+                <p className="truncate text-[10px] font-medium text-[#111]">
+                  {item.text}
+                </p>
+                <p className="text-[8px] text-[#999]">{item.time}</p>
+              </div>
+              {item.amount && (
+                <p className="shrink-0 text-[10px] font-semibold tabular-nums text-[#111]">
+                  {item.amount}
+                </p>
+              )}
+            </div>
+          ))}
         </div>
       </div>
     </div>
@@ -464,7 +562,16 @@ export function PhoneMockup({
               />
             ) : (
               <>
-                {!isLaunchScene && <PhoneHeader pro={useDarkGlass} />}
+                {!isLaunchScene && (
+                  <PhoneHeader
+                    pro={useDarkGlass}
+                    trailing={
+                      scene === "dashboard" && !inApp ? (
+                        <ScanIconButton pro={useDarkGlass} />
+                      ) : undefined
+                    }
+                  />
+                )}
                 <PhoneScreenContent
                   scene={scene}
                   sceneProgress={sceneProgress}

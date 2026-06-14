@@ -275,15 +275,15 @@ body {
 .sl-shiny-dark {
   background-image: linear-gradient(
     to right,
-    #1a0800 0%,
-    #7c2d12 12%,
-    #ea580c 28%,
-    #fbbf24 42%,
-    #f08030 50%,
-    #fbbf24 58%,
-    #ea580c 72%,
-    #9a3412 88%,
-    #1a0800 100%
+    #f97316 0%,
+    #fb923c 12%,
+    #fbbf24 28%,
+    #fde68a 40%,
+    #fcd34d 50%,
+    #fde68a 60%,
+    #fbbf24 72%,
+    #fb923c 86%,
+    #f97316 100%
   );
 }
 
