@@ -31,6 +31,7 @@ import {
   short,
   type BarDatum,
 } from "./dashboard-ui";
+import { usePhoneEmbedded } from "./phone/PhoneEmbeddedContext";
 
 /**
  * Map of stream id → owned StreamCap object id, so the client can approve.
@@ -67,6 +68,7 @@ const usd = (base: number) => (base / USDC_BASE).toFixed(2);
 
 export function ClientDashboard() {
   const account = useCurrentAccount();
+  const embedded = usePhoneEmbedded();
   const packageId = useNetworkVariable("packageId");
   const originalPackageId = useNetworkVariable("originalPackageId");
   const usdcType = useNetworkVariable("usdcType");
@@ -175,7 +177,13 @@ export function ClientDashboard() {
       ) : (
         <div className="flex flex-col gap-6">
           {/* Stat row */}
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div
+            className={
+              embedded
+                ? "grid grid-cols-2 gap-2"
+                : "grid gap-4 sm:grid-cols-2 lg:grid-cols-4"
+            }
+          >
             <StatCard
               tone="flow"
               label="Locked total"
@@ -204,7 +212,7 @@ export function ClientDashboard() {
           </div>
 
           {/* Analytics + reminders */}
-          <div className="grid gap-6 lg:grid-cols-[1fr_360px]">
+          <div className={embedded ? "flex flex-col gap-4" : "grid gap-6 lg:grid-cols-[1fr_360px]"}>
             <Card title="Stream analytics">
               <p className="-mt-2 mb-5 text-[11px] text-[#2b2a5e]/45">
                 Streamed-out per stream (live + pending highlighted)
@@ -253,7 +261,10 @@ export function ClientDashboard() {
                 const pct =
                   s.total > 0 ? ((s.total - s.remaining) / s.total) * 100 : 0;
                 return (
-                  <div key={s.id} className="border-t border-[#2b2a5e]/10 p-5">
+                  <div
+                    key={s.id}
+                    className={`border-t border-[#2b2a5e]/10 p-5 ${embedded ? "!p-3" : ""}`}
+                  >
                     <div className="grid grid-cols-1 gap-4 md:grid-cols-[1fr_auto] md:items-center">
                     <div className="flex flex-col gap-2">
                       <div className="flex flex-wrap items-center gap-3">

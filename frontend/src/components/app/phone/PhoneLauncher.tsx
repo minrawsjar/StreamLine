@@ -8,11 +8,12 @@ import type { PhoneAppRoute } from "./types";
 
 const APPS: {
   route: PhoneAppRoute;
-  subtitle: string;
+  label: string;
+  segment: string;
   pro?: boolean;
 }[] = [
-  { route: "user", subtitle: "User" },
-  { route: "pro", subtitle: "Business", pro: true },
+  { route: "user", label: "Stream", segment: "B2C" },
+  { route: "pro", label: "Stream.pro", segment: "B2B", pro: true },
 ];
 
 type PhoneLauncherProps = {
@@ -32,20 +33,18 @@ export function PhoneLauncher({ onOpen }: PhoneLauncherProps) {
         <h2 className="mt-2 text-base font-bold leading-tight tracking-tight text-[#111]">
           Connect wallet
         </h2>
-        <p className="mt-2 max-w-[200px] text-[10px] leading-snug text-[#666]">
-          Sign in to open your apps inside StreamLine.
-        </p>
         <WalletButton className="sl-glass-btn sl-glass-btn-primary mt-5 !px-4 !py-2 !text-[9px]" />
       </div>
     );
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
+    <div className="flex min-h-0 flex-1 flex-col items-center justify-center">
       <p className="text-[9px] font-semibold uppercase tracking-[0.18em] text-[#888]">
         Your apps
       </p>
-      <div className="mt-5 grid flex-1 grid-cols-2 content-start gap-4">
+
+      <div className="mt-6 grid w-full grid-cols-2 gap-5">
         {APPS.map((app) => (
           <button
             key={app.route}
@@ -67,18 +66,9 @@ export function PhoneLauncher({ onOpen }: PhoneLauncherProps) {
               />
             </div>
             <div>
-              <p
-                className={`text-[11px] font-semibold ${
-                  app.pro ? "text-[#111]" : "text-[#111]"
-                }`}
-              >
-                streamline
-                {app.pro && (
-                  <span className="font-medium text-[#888]">.pro</span>
-                )}
-              </p>
+              <p className="text-[11px] font-semibold text-[#111]">{app.label}</p>
               <p className="text-[8px] uppercase tracking-[0.14em] text-[#aaa]">
-                {app.subtitle}
+                {app.segment}
               </p>
             </div>
           </button>

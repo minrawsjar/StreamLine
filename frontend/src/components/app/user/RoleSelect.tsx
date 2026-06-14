@@ -1,6 +1,7 @@
 "use client";
 
 import { BayerDitherImage } from "@/components/hero/BayerDitherImage";
+import { usePhoneEmbedded } from "@/components/app/phone/PhoneEmbeddedContext";
 
 export type Role = "payer" | "receiver";
 
@@ -37,6 +38,37 @@ const CARDS: {
  * stream you're on. Each card is a Bayer-dithered photo with role copy.
  */
 export function RoleSelect({ onSelect }: { onSelect: (role: Role) => void }) {
+  const embedded = usePhoneEmbedded();
+
+  if (embedded) {
+    return (
+      <div className="flex min-h-0 flex-1 flex-col">
+        <p className="text-[9px] font-semibold uppercase tracking-[0.18em] text-[#888]">
+          Pick your role
+        </p>
+        <p className="mt-1 text-[10px] leading-snug text-[#666]">
+          Client or freelancer — same workspace, different view.
+        </p>
+        <div className="mt-4 space-y-2.5">
+          {CARDS.map((c) => (
+            <button
+              key={c.role}
+              type="button"
+              onClick={() => onSelect(c.role)}
+              className="w-full rounded-xl border border-[#2b2a5e]/15 bg-white px-3.5 py-3 text-left transition-colors hover:border-[#5b54e6]/40"
+            >
+              <p className="text-[9px] font-semibold uppercase tracking-[0.14em] text-[#5b54e6]">
+                {c.eyebrow}
+              </p>
+              <p className="mt-1 text-xs font-bold text-[#111]">{c.title}</p>
+              <p className="mt-1 text-[10px] leading-snug text-[#666]">{c.body}</p>
+            </button>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="mx-auto max-w-[1280px] px-6 py-12 md:py-16">
       <p className="text-[11px] uppercase tracking-[0.24em] text-[#5b54e6]">

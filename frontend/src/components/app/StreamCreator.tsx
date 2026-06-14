@@ -31,6 +31,7 @@ import {
   findCreatedConfidentialStream,
 } from "@/lib/confidential-store";
 import { DITHER_HATCH } from "./dashboard-ui";
+import { usePhoneEmbedded } from "./phone/PhoneEmbeddedContext";
 
 type SplitRow = { label: string; address: string; pct: number; yield: boolean };
 
@@ -42,6 +43,7 @@ const DEFAULT_SPLITS: SplitRow[] = [
 export function StreamCreator() {
   const account = useCurrentAccount();
   const client = useSuiClient();
+  const embedded = usePhoneEmbedded();
   const packageId = useNetworkVariable("packageId");
   const usdcType = useNetworkVariable("usdcType");
   const originalPackageId = useNetworkVariable("originalPackageId");
@@ -220,8 +222,8 @@ export function StreamCreator() {
   };
 
   return (
-    <div className="grid gap-10 lg:grid-cols-[1.4fr_1fr]">
-      <div className="flex flex-col gap-8">
+    <div className={embedded ? "flex flex-col gap-4" : "grid gap-10 lg:grid-cols-[1.4fr_1fr]"}>
+      <div className={`flex flex-col ${embedded ? "gap-4" : "gap-8"}`}>
         {/* Privacy is a property of the stream, not a separate product. */}
         <div className="flex items-center justify-between border border-[#2b2a5e]/15 bg-white px-4 py-3">
           <div>
@@ -250,7 +252,6 @@ export function StreamCreator() {
             />
           </button>
         </div>
-
         <Field label="Recipient (freelancer address)">
           <input
             value={freelancer}

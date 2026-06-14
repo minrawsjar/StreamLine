@@ -4,6 +4,10 @@ import { useEffect, useState, type ReactNode } from "react";
 
 import { StreamLineMark } from "./StreamLineMark";
 import { PhoneAppShell } from "@/components/app/phone/PhoneAppShell";
+import {
+  PhoneDashboardView,
+  type PhoneActivityItem,
+} from "@/components/app/phone/PhoneDashboardView";
 import type { PhoneAppRoute } from "@/components/app/phone/types";
 import type { PhoneScene, SceneTheme } from "./heroScenes";
 
@@ -97,52 +101,11 @@ function ScanIconButton({ pro = false }: { pro?: boolean }) {
 const DASHBOARD_BASE_EARNED = 142.5;
 const DASHBOARD_EARN_PER_SEC = 0.5;
 
-const BACK_CARD_LAYERS = [
-  { tone: "bg-white/38 border-white/30", inset: "mx-5", top: 0 },
-  { tone: "bg-white/50 border-white/42", inset: "mx-2", top: 24, showLabel: true },
-] as const;
-
-const DASHBOARD_SECTION_GAP = "mb-7";
-
-const DASHBOARD_ACTIONS = [
-  {
-    id: "transfer",
-    label: "Transfer",
-    icon: (
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-        <path d="M7 17 17 7" />
-        <path d="M7 7h10v10" />
-      </svg>
-    ),
-  },
-  {
-    id: "withdraw",
-    label: "Withdraw",
-    icon: (
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-        <path d="M12 3v12" />
-        <path d="m8 11 4 4 4-4" />
-        <path d="M5 21h14" />
-      </svg>
-    ),
-  },
-  {
-    id: "request",
-    label: "Request",
-    icon: (
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-        <path d="M12 5v14" />
-        <path d="M5 12h14" />
-      </svg>
-    ),
-  },
-] as const;
-
-const DASHBOARD_ACTIVITY = [
+const HERO_DASHBOARD_ACTIVITY: PhoneActivityItem[] = [
   { time: "2m ago", text: "Drip received", amount: "+$0.50" },
   { time: "1h ago", text: "Milestone 3 approved", amount: null },
   { time: "Yesterday", text: "Split to yield wallet", amount: "$42.00" },
-] as const;
+];
 
 function DashboardScreen() {
   const [earned, setEarned] = useState(DASHBOARD_BASE_EARNED);
@@ -162,85 +125,31 @@ function DashboardScreen() {
   });
 
   return (
-    <div className="mt-1 flex min-h-0 flex-1 flex-col">
-      <div className={`relative mx-0.5 ${DASHBOARD_SECTION_GAP}`}>
-        {BACK_CARD_LAYERS.map((layer, i) => (
-          <div
-            key={i}
-            className={`absolute inset-x-0 ${layer.inset}`}
-            style={{ top: `${layer.top}px`, zIndex: i + 1 }}
-            aria-hidden
-          >
-            <div
-              className={`flex h-[88px] items-start rounded-2xl border px-4 pt-3.5 shadow-[0_4px_16px_rgba(0,0,0,0.04)] backdrop-blur-md ${layer.tone}`}
-            >
-              {"showLabel" in layer && layer.showLabel && (
-                <p className="text-[10px] font-semibold uppercase tracking-wider text-[#666]/40">
-                  Private Stream
-                </p>
-              )}
-            </div>
-          </div>
-        ))}
-
-        <div className="relative z-10 mt-[54px] rounded-2xl border border-white/70 bg-white/88 p-4 shadow-[0_10px_32px_rgba(0,0,0,0.1)] backdrop-blur-md">
-          <p className="text-[10px] font-semibold uppercase tracking-wider text-[#888]">
-            Work Stream
-          </p>
-          <p className="mt-1.5 text-[1.85rem] font-bold tabular-nums leading-none text-[#111]">
-            {formatted}
-          </p>
-          <p className="mt-2 text-[11px] font-medium leading-snug text-[#555]">
-            +$0.50/sec · Milestone 3 of 5
-          </p>
-          <div className="mt-3 h-2 overflow-hidden rounded-full bg-black/8">
-            <div className="h-full w-[68%] rounded-full bg-[#111]" />
-          </div>
-        </div>
-      </div>
-
-      <div className={`grid grid-cols-3 gap-2 ${DASHBOARD_SECTION_GAP}`}>
-        {DASHBOARD_ACTIONS.map((action) => (
-          <button
-            key={action.id}
-            type="button"
-            className="flex flex-col items-center gap-1.5 rounded-2xl border border-white/80 bg-white px-1 py-3.5 shadow-[0_4px_16px_rgba(0,0,0,0.05)] backdrop-blur-md transition-colors hover:bg-white"
-          >
-            <span className="flex h-8 w-8 items-center justify-center text-[#111]">
-              {action.icon}
-            </span>
-            <span className="text-[9px] font-semibold text-[#111]">
-              {action.label}
-            </span>
-          </button>
-        ))}
-      </div>
-
-      <div className="overflow-hidden rounded-xl border border-white/50 bg-white/60 backdrop-blur-md">
-        <p className="border-b border-black/6 px-3 py-2 text-[8px] font-semibold uppercase tracking-wider text-[#888]">
-          Activity
-        </p>
-        <div className="divide-y divide-black/5">
-          {DASHBOARD_ACTIVITY.map((item) => (
-            <div
-              key={`${item.time}-${item.text}`}
-              className="flex items-center justify-between gap-2 px-3 py-2"
-            >
-              <div className="min-w-0">
-                <p className="truncate text-[10px] font-medium text-[#111]">
-                  {item.text}
-                </p>
-                <p className="text-[8px] text-[#999]">{item.time}</p>
-              </div>
-              {item.amount && (
-                <p className="shrink-0 text-[10px] font-semibold tabular-nums text-[#111]">
-                  {item.amount}
-                </p>
-              )}
-            </div>
-          ))}
-        </div>
-      </div>
+    <div className="mt-1">
+      <PhoneDashboardView
+        macro={{
+          label: "Total balance",
+          amount: formatted,
+          subtitle: "3 streams · 1 active",
+        }}
+        backCards={[
+          {
+            id: "demo-work",
+            label: "Work stream",
+            amount: formatted,
+            subtitle: "+$0.50/sec · Milestone 3 of 5",
+            progress: 68,
+          },
+          {
+            id: "demo-private",
+            label: "Private stream",
+            amount: "$842.00",
+            subtitle: "Dripping · M2/4",
+            progress: 42,
+          },
+        ]}
+        activity={HERO_DASHBOARD_ACTIVITY}
+      />
     </div>
   );
 }
@@ -548,6 +457,8 @@ export function PhoneMockup({
 
           <div
             className={`absolute inset-0 z-10 flex flex-col px-6 pb-8 transition-all duration-[420ms] ease-out ${
+              inApp ? "min-h-0 overflow-hidden" : ""
+            } ${
               isLaunchScene ? "justify-center pt-12" : "pt-14"
             } ${
               transitioning && !inApp

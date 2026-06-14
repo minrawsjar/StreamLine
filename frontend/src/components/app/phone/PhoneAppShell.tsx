@@ -14,23 +14,20 @@ type PhoneAppShellProps = {
 
 export function PhoneAppShell({ route, onNavigate }: PhoneAppShellProps) {
   const isPro = route === "pro";
+  const inWorkspace = route !== "launcher";
 
   return (
     <>
       <div className="flex shrink-0 items-center justify-between">
-        <div className="flex min-w-0 items-center gap-2">
-          {route !== "launcher" && (
-            <button
-              type="button"
-              onClick={() => onNavigate("launcher")}
-              className={`shrink-0 text-[10px] font-medium ${
-                isPro ? "text-white/50" : "text-black/50"
-              }`}
-              aria-label="Back to apps"
-            >
-              ←
-            </button>
-          )}
+        <button
+          type="button"
+          onClick={() => inWorkspace && onNavigate("launcher")}
+          disabled={!inWorkspace}
+          className={`flex min-w-0 items-center gap-2 text-left ${
+            inWorkspace ? "cursor-pointer" : "cursor-default"
+          }`}
+          aria-label={inWorkspace ? "Back to apps" : undefined}
+        >
           <StreamLineMark size="sm" variant={isPro ? "pro" : "default"} />
           <span
             className={`truncate text-sm font-semibold tracking-tight ${
@@ -39,9 +36,15 @@ export function PhoneAppShell({ route, onNavigate }: PhoneAppShellProps) {
                 : "font-bold text-[#111]"
             }`}
           >
-            streamline{isPro && <span className="text-white/40">.pro</span>}
+            {isPro ? (
+              <>
+                streamline<span className="text-white/40">.pro</span>
+              </>
+            ) : (
+              "Stream"
+            )}
           </span>
-        </div>
+        </button>
         <WalletButton
           className={
             isPro
@@ -51,13 +54,11 @@ export function PhoneAppShell({ route, onNavigate }: PhoneAppShellProps) {
         />
       </div>
 
-      {route === "launcher" && <PhoneLauncher onOpen={onNavigate} />}
-      {route === "user" && (
-        <PhoneUserApp onBack={() => onNavigate("launcher")} />
-      )}
-      {route === "pro" && (
-        <PhoneProApp onBack={() => onNavigate("launcher")} />
-      )}
+      <div className="mt-2 flex min-h-0 flex-1 flex-col overflow-hidden">
+        {route === "launcher" && <PhoneLauncher onOpen={onNavigate} />}
+        {route === "user" && <PhoneUserApp />}
+        {route === "pro" && <PhoneProApp />}
+      </div>
     </>
   );
 }
