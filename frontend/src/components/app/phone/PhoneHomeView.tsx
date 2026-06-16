@@ -2,54 +2,29 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useCurrentAccount, useSuiClientQuery } from "@mysten/dapp-kit";
+import { useQueries } from "@tanstack/react-query";
 
-import { useStreams, useLiveUpdates } from "@/lib/indexer";
+import {
+  fetchStreamDrips,
+  useLiveUpdates,
+  useStreams,
+  type StreamRecord,
+} from "@/lib/indexer";
 import { useNetworkVariable } from "@/lib/networks";
 import { USDC_BASE } from "@/lib/stream-math";
-import {
-  completedMilestones,
-  effectiveState,
-  milestoneCeilingBase,
-} from "@/lib/stream-state";
-import type { StreamRecord } from "@/lib/indexer";
-import { short } from "../dashboard-ui";
+import { effectiveState } from "@/lib/stream-state";
 import {
   PhoneDashboardView,
   type PhoneActivityItem,
+  type PhoneTopStat,
   type StreamCardData,
 } from "./PhoneDashboardView";
 import { PhoneStreamsPanel } from "./PhoneStreamsPanel";
 
-const DEMO_ACTIVITY: PhoneActivityItem[] = [
-  { time: "2m ago", text: "Drip received", amount: "+$0.50" },
-  { time: "1h ago", text: "Milestone approved", amount: null },
-  { time: "Yesterday", text: "Split to yield wallet", amount: "$42.00" },
-];
-
 const EMPTY_BACK_CARDS: StreamCardData[] = [
-  {
-    id: "empty-1",
-    label: "Empty stream",
-    amount: "$0.00",
-    subtitle: "Tap to view all streams",
-    empty: true,
-  },
-  {
-    id: "empty-2",
-    label: "Empty stream",
-    amount: "$0.00",
-    subtitle: "No active stream",
-    empty: true,
-  },
+  { id: "empty-1", label: "Empty stream", empty: true },
+  { id: "empty-2", label: "Empty stream", empty: true },
 ];
-
-function earnedBase(s: StreamRecord, nowMs: number): number {
-  const paid = s.total - s.remaining;
-  if (effectiveState(s) !== "dripping" || s.duration_ms <= 0) return paid;
-  const rate = s.total / s.duration_ms;
-  const accrued = Math.max(0, (nowMs - s.last_drip_ms) * rate);
-  return Math.min(paid + accrued, milestoneCeilingBase(s, s.current_milestone), s.total);
-}
 
 const usd = (base: number) =>
   (base / USDC_BASE).toLocaleString("en-US", {
@@ -59,39 +34,44 @@ const usd = (base: number) =>
     maximumFractionDigits: 2,
   });
 
-function streamToBackCard(s: StreamRecord, now: number): StreamCardData {
-  const earned = earnedBase(s, now);
-  const progress = s.total > 0 ? (earned / s.total) * 100 : 0;
-  const dripping = effectiveState(s) === "dripping";
-  const state = effectiveState(s).replace("_", " ");
+function formatRelative(ms: number, now: number): string {
+  const diff = Math.max(0, now - ms);
+  if (diff < 60_000) return `${Math.max(1, Math.floor(diff / 1000))}s ago`;
+  if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}m ago`;
+  if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}h ago`;
+  if (diff < 172_800_000) return "Yesterday";
+  return new Date(ms).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
 
-  return {
-    id: s.id,
-    label: dripping ? "Active stream" : short(s.id),
-    amount: usd(earned),
-    subtitle: dripping
-      ? `Dripping · M${completedMilestones(s) + 1}/${s.n_milestones}`
-      : state,
-    progress,
-  };
+function streamBackLabel(s: StreamRecord, addr: string, index: number): string {
+  if (s.freelancer === addr) {
+    return index === 1 ? "Private stream" : "Work stream";
+  }
+  if (s.sender === addr) return "Pay stream";
+  return "Stream";
 }
 
 type PhoneHomeViewProps = {
   showAllStreams?: boolean;
   onShowAllStreams?: () => void;
   onBackToHome?: () => void;
+  onCreate?: () => void;
   onRequest?: () => void;
+  onTransfer?: () => void;
 };
 
 export function PhoneHomeView({
   showAllStreams = false,
   onShowAllStreams,
   onBackToHome,
+  onCreate,
   onRequest,
+  onTransfer,
 }: PhoneHomeViewProps) {
   const account = useCurrentAccount();
   const usdcType = useNetworkVariable("usdcType");
   const [now, setNow] = useState(() => Date.now());
+  const [lastWalletBase, setLastWalletBase] = useState(0);
   const addr = account?.address;
 
   const incomingQ = useStreams({ freelancer: addr });
@@ -110,11 +90,12 @@ export function PhoneHomeView({
     return () => clearInterval(t);
   }, []);
 
-  useLiveUpdates(() => {
-    incomingQ.refetch();
-    outgoingQ.refetch();
-    balanceQ.refetch();
-  });
+  useEffect(() => {
+    const next = balanceQ.data?.totalBalance;
+    if (next !== undefined && next !== null) {
+      setLastWalletBase(Number(next));
+    }
+  }, [balanceQ.data?.totalBalance]);
 
   const incoming = incomingQ.data ?? [];
   const outgoing = outgoingQ.data ?? [];
@@ -122,6 +103,31 @@ export function PhoneHomeView({
     () => [...incoming, ...outgoing.filter((o) => !incoming.some((i) => i.id === o.id))],
     [incoming, outgoing]
   );
+
+  const activityStreamIds = useMemo(
+    () => allStreams.slice(0, 8).map((s) => s.id),
+    [allStreams]
+  );
+
+  const dripQueries = useQueries({
+    queries: activityStreamIds.map((id) => ({
+      queryKey: ["drips", id],
+      queryFn: () => fetchStreamDrips(id),
+      enabled: !!id,
+      refetchInterval: 20_000,
+    })),
+  });
+
+  const refetchDrips = () => {
+    dripQueries.forEach((q) => q.refetch());
+  };
+
+  useLiveUpdates(() => {
+    incomingQ.refetch();
+    outgoingQ.refetch();
+    balanceQ.refetch();
+    refetchDrips();
+  });
 
   const activeStreams = useMemo(
     () =>
@@ -135,29 +141,77 @@ export function PhoneHomeView({
   );
 
   const macro = useMemo(() => {
-    const walletBase = Number(balanceQ.data?.totalBalance ?? 0);
+    const walletBase =
+      balanceQ.data?.totalBalance !== undefined &&
+      balanceQ.data?.totalBalance !== null
+        ? Number(balanceQ.data.totalBalance)
+        : lastWalletBase;
     const dripping = allStreams.filter((s) => effectiveState(s) === "dripping").length;
     const count = allStreams.length;
 
     return {
       label: "Total balance",
       amount: usd(walletBase),
-      subtitle: `${count} stream${count === 1 ? "" : "s"}${dripping > 0 ? ` · ${dripping} active` : ""}`,
+      subtitle: "",
     };
-  }, [balanceQ.data?.totalBalance, allStreams]);
+  }, [balanceQ.data?.totalBalance, allStreams, lastWalletBase]);
 
   const backCards = useMemo(() => {
-    const cards = activeStreams.slice(0, 2).map((s) => streamToBackCard(s, now));
+    const cards = activeStreams.slice(0, 2).map((s, i) => ({
+      id: s.id,
+      label: addr ? streamBackLabel(s, addr, i) : "Stream",
+    }));
     while (cards.length < 2) {
       cards.push(EMPTY_BACK_CARDS[cards.length]);
     }
     return cards;
-  }, [activeStreams, now]);
+  }, [activeStreams, addr]);
 
-  const loading = incomingQ.isLoading || outgoingQ.isLoading || balanceQ.isLoading;
+  const topStats = useMemo((): PhoneTopStat[] => {
+    const streamCount = allStreams.length;
+    const drippingStreams = allStreams.filter((s) => effectiveState(s) === "dripping");
+    const ratePerMinuteBase = drippingStreams.reduce((acc, s) => {
+      if (s.duration_ms <= 0) return acc;
+      return acc + (s.total / s.duration_ms) * 60_000;
+    }, 0);
+
+    return [
+      { label: "Streams", value: String(streamCount) },
+      { label: "Drip/min", value: usd(ratePerMinuteBase) },
+    ];
+  }, [allStreams]);
+
+  const activity = useMemo((): PhoneActivityItem[] => {
+    const drips = dripQueries.flatMap((q) => q.data ?? []);
+    const dripItems = drips
+      .sort((a, b) => b.timestamp_ms - a.timestamp_ms)
+      .map((d) => ({
+        ts: d.timestamp_ms,
+        time: formatRelative(d.timestamp_ms, now),
+        text: "Drip received",
+        amount: `+${usd(d.amount)}`,
+      }));
+
+    const streamItems = allStreams.map((s) => ({
+      ts: s.created_at_ms,
+      time: formatRelative(s.created_at_ms, now),
+      text: s.freelancer === addr ? "Stream request received" : "Stream created",
+      amount: null as string | null,
+    }));
+
+    return [...dripItems, ...streamItems]
+      .sort((a, b) => b.ts - a.ts)
+      .slice(0, 5)
+      .map(({ time, text, amount }) => ({ time, text, amount }));
+  }, [dripQueries, allStreams, now, addr]);
+
+  const activityLoading =
+    !!addr && activityStreamIds.length > 0 && dripQueries.some((q) => q.isLoading);
 
   const handleQuickAction = (id: string) => {
+    if (id === "create") onCreate?.();
     if (id === "request") onRequest?.();
+    if (id === "transfer") onTransfer?.();
   };
 
   if (showAllStreams) {
@@ -179,11 +233,13 @@ export function PhoneHomeView({
     <PhoneDashboardView
       macro={{
         label: macro.label,
-        amount: loading ? "…" : macro.amount,
+        amount: macro.amount,
         subtitle: macro.subtitle,
       }}
       backCards={backCards}
-      activity={DEMO_ACTIVITY}
+      topStats={topStats}
+      activity={activity}
+      activityLoading={activityLoading}
       onQuickAction={handleQuickAction}
       onBackCardClick={onShowAllStreams}
     />

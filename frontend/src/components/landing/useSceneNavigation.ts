@@ -1,10 +1,15 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { SCENE_COUNT } from "./heroScenes";
+import { HERO_SCENES, SCENE_COUNT } from "./heroScenes";
 
 const WHEEL_THRESHOLD = 55;
 const SCENE_COOLDOWN_MS = 700;
+
+/** Per-scene auto-progress duration (ms) while the scene is active. */
+const SCENE_PROGRESS_MS: Partial<Record<string, number>> = {
+  how: 6200,
+};
 
 type UseSceneNavigationOptions = {
   enabled?: boolean;
@@ -91,7 +96,9 @@ export function useSceneNavigation({ enabled = true }: UseSceneNavigationOptions
 
     setSceneProgress(0);
     const start = Date.now();
-    const duration = 2800;
+    const sceneId = HERO_SCENES[activeIndex]?.id;
+    const duration =
+      (sceneId ? SCENE_PROGRESS_MS[sceneId] : undefined) ?? 2800;
     let frame: number;
 
     const tick = () => {

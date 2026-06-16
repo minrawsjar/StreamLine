@@ -9,7 +9,15 @@ import { toBaseUnits } from "@/lib/stream-math";
 import { useGaslessExecute } from "@/lib/use-gasless";
 
 /** Mints test USDC to the connected wallet. Testnet only. */
-export function FaucetButton({ amount = 1000 }: { amount?: number }) {
+export function FaucetButton({
+  amount = 1000,
+  className,
+  label,
+}: {
+  amount?: number;
+  className?: string;
+  label?: string;
+}) {
   const account = useCurrentAccount();
   const { network } = useSuiClientContext();
   const { execute, isPending } = useGaslessExecute();
@@ -34,15 +42,20 @@ export function FaucetButton({ amount = 1000 }: { amount?: number }) {
     );
   };
 
+  const buttonLabel = label ?? (isPending ? "minting…" : done ? `+${amount} USDC ✓` : `+${amount} test USDC`);
+
   return (
     <button
       onClick={onMint}
       disabled={isPending}
       data-sl-cursor="on-light"
-      className="border border-[#2b2a5e]/25 px-3 py-2.5 text-[11px] uppercase tracking-[0.1em] text-[#2b2a5e]/70 transition-colors hover:border-[#5b54e6] disabled:opacity-40"
+      className={
+        className ??
+        "border border-[#2b2a5e]/25 px-3 py-2.5 text-[11px] uppercase tracking-[0.1em] text-[#2b2a5e]/70 transition-colors hover:border-[#5b54e6] disabled:opacity-40"
+      }
       title="Mint test USDC to your wallet"
     >
-      {isPending ? "minting…" : done ? `+${amount} USDC ✓` : `+${amount} test USDC`}
+      {buttonLabel}
     </button>
   );
 }

@@ -156,11 +156,13 @@ export function FreelancerDashboard() {
 
   return (
     <div>
-      <DashboardHeader
-        eyebrow="Receiver console"
-        title="Freelancer dashboard"
-        subtitle="Watch money arrive in real time and raise milestones in one click."
-      />
+      {!embedded && (
+        <DashboardHeader
+          eyebrow="Receiver console"
+          title="Freelancer dashboard"
+          subtitle="Watch money arrive in real time and raise milestones in one click."
+        />
+      )}
 
       <div
         className={

@@ -9,11 +9,11 @@ import type { PhoneAppRoute } from "./types";
 const APPS: {
   route: PhoneAppRoute;
   label: string;
-  segment: string;
+  sublabel?: string;
   pro?: boolean;
 }[] = [
-  { route: "user", label: "Stream", segment: "B2C" },
-  { route: "pro", label: "Stream.pro", segment: "B2B", pro: true },
+  { route: "user", label: "StreamLine" },
+  { route: "pro", label: "StreamLine", sublabel: "Pro", pro: true },
 ];
 
 type PhoneLauncherProps = {
@@ -39,12 +39,8 @@ export function PhoneLauncher({ onOpen }: PhoneLauncherProps) {
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col items-center justify-center">
-      <p className="text-[9px] font-semibold uppercase tracking-[0.18em] text-[#888]">
-        Your apps
-      </p>
-
-      <div className="mt-6 grid w-full grid-cols-2 gap-5">
+    <div className="flex min-h-0 flex-1 flex-col pt-8">
+      <div className="grid w-full grid-cols-3 gap-4">
         {APPS.map((app) => (
           <button
             key={app.route}
@@ -66,13 +62,18 @@ export function PhoneLauncher({ onOpen }: PhoneLauncherProps) {
               />
             </div>
             <div>
-              <p className="text-[11px] font-semibold text-[#111]">{app.label}</p>
-              <p className="text-[8px] uppercase tracking-[0.14em] text-[#aaa]">
-                {app.segment}
+              <p className="text-[11px] font-semibold leading-tight text-[#111]">
+                {app.label}
               </p>
+              {app.sublabel && (
+                <p className="text-[9px] font-medium leading-tight text-[#888]">
+                  {app.sublabel}
+                </p>
+              )}
             </div>
           </button>
         ))}
+        <div aria-hidden className="h-14 w-14" />
       </div>
     </div>
   );

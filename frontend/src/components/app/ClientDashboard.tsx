@@ -161,11 +161,13 @@ export function ClientDashboard() {
 
   return (
     <div>
-      <DashboardHeader
-        eyebrow="Payer console"
-        title="Client dashboard"
-        subtitle="Lock funds, watch them stream, approve milestones as work lands."
-      />
+      {!embedded && (
+        <DashboardHeader
+          eyebrow="Payer console"
+          title="Client dashboard"
+          subtitle="Lock funds, watch them stream, approve milestones as work lands."
+        />
+      )}
 
       {list.length === 0 ? (
         <div className="flex flex-col gap-6">
@@ -250,7 +252,7 @@ export function ClientDashboard() {
           </div>
 
           {/* Stream table */}
-          <Card title="Your streams" padded={false}>
+          <Card title={embedded ? undefined : "Your streams"} padded={false}>
             <div className="flex flex-col">
               {activeList.length === 0 && (
                 <p className="border-t border-[#2b2a5e]/10 p-5 text-[12px] text-[#2b2a5e]/45">

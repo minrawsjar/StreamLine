@@ -40,7 +40,7 @@ export const HERO_SCENES: HeroScene[] = [
       label: "",
       headline: "Moving money at",
       accent: "the  speed of work.",
-      body: "Get Paid or Set Payroll.",
+      body: "Programmable Micropayments",
       bullets: [],
     },
     right: {
@@ -65,8 +65,8 @@ export const HERO_SCENES: HeroScene[] = [
     },
     right: {
       label: "decentralised",
-      headline: "Smart contracts replace",
-      accent: "the handshake.",
+      headline: "Smart contracts ",
+      accent: "replace the handshake.",
       body: "Flows only when milestones are approved. Auditable by all parties.",
       bullets: [
     ],
@@ -148,8 +148,8 @@ export const HERO_SCENES: HeroScene[] = [
     },
     rightExtra: {
       label: "Efficient capital",
-      headline: "Your payroll capital",
-      accent: "works harder.",
+      headline: "Your Capital",
+      accent: "Works Harder.",
       body: "Every dollar committed to a stream earns yield before it reaches your team. Recover up to 12% APY on payroll capital automatically — no treasury management, no extra steps.",
       bullets: [
 
