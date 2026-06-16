@@ -46,26 +46,27 @@ export type PhoneActivityItem = {
 export type StreamCardData = {
   id: string;
   label: string;
+  amount?: string;
+  subtitle?: string;
+  isLive?: boolean;
   empty?: boolean;
 };
 
 export type PhoneTopStat = {
   label: string;
   value: string;
+  live?: boolean;
 };
 
 type PhoneDashboardViewProps = {
-  macro: {
-    label: string;
-    amount: string;
-    subtitle: string;
-  };
-  backCards: StreamCardData[];
+  cards: StreamCardData[];
+  activeCardIndex?: number;
   topStats?: readonly PhoneTopStat[];
   activity: readonly PhoneActivityItem[];
   activityLoading?: boolean;
   onQuickAction?: (id: string) => void;
-  onBackCardClick?: () => void;
+  onShiftCards?: (step: number) => void;
+  onPrimaryCardClick?: () => void;
   trailing?: ReactNode;
 };
 
@@ -76,52 +77,62 @@ const BACK_OFFSETS = [
 
 function StreamCardFace({
   card,
-  sideStats = [],
+  belowStats = [],
   className = "",
   macro = false,
+  amountLive = false,
 }: {
   card: { label: string; amount: string; subtitle: string; empty?: boolean };
-  sideStats?: readonly PhoneTopStat[];
+  belowStats?: readonly PhoneTopStat[];
   className?: string;
   macro?: boolean;
+  amountLive?: boolean;
 }) {
   return (
     <div className={`rounded-2xl border border-white/70 bg-white/88 p-4 shadow-[0_10px_32px_rgba(0,0,0,0.1)] backdrop-blur-md ${className}`}>
-      <div className="flex items-stretch gap-3">
-        <div className="min-w-0 flex-1">
-          <p
-            className={`text-[10px] font-semibold uppercase tracking-wider ${
-              card.empty ? "text-[#bbb]" : "text-[#888]"
-            }`}
-          >
-            {card.label}
-          </p>
-          <p
-            className={`mt-1.5 font-bold tabular-nums leading-none ${
-              macro ? "text-[1.85rem]" : "text-[1.35rem]"
-            } ${card.empty ? "text-[#ccc]" : "text-[#111]"}`}
-          >
-            {card.amount}
-          </p>
+      <div className="min-w-0">
+        <p
+          className={`text-[10px] font-semibold uppercase tracking-wider ${
+            card.empty ? "text-[#bbb]" : "text-[#888]"
+          }`}
+        >
+          {card.label}
+          {amountLive && (
+            <span className="ml-1.5 inline-flex items-center gap-1 normal-case tracking-normal text-[#3d8f5a]">
+              <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-[#3d8f5a]" />
+              live
+            </span>
+          )}
+        </p>
+        <p
+          className={`mt-1.5 font-bold tabular-nums leading-none transition-[color] duration-300 ${
+            macro ? "text-[1.85rem]" : "text-[1.35rem]"
+          } ${card.empty ? "text-[#ccc]" : amountLive ? "text-[#1a5c38]" : "text-[#111]"}`}
+        >
+          {card.amount}
+        </p>
+        {belowStats.length > 0 && (
+          <div className="mt-3 flex flex-wrap items-baseline gap-x-6 gap-y-1">
+            {belowStats.map((stat) => (
+              <div key={stat.label} className="flex items-baseline gap-1.5">
+                <span className="text-[7px] uppercase tracking-[0.14em] text-[#8a8a8a]">
+                  {stat.label}
+                </span>
+                <span
+                  className={`text-[10px] font-semibold tabular-nums ${
+                    stat.live ? "text-[#1a5c38]" : "text-[#111]"
+                  }`}
+                >
+                  {stat.value}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+        {card.subtitle && (
           <p className="mt-2 text-[10px] font-medium leading-snug text-[#555]">
             {card.subtitle}
           </p>
-        </div>
-        {sideStats.length > 0 && (
-          <div className="my-0.5 w-[34%] pl-2">
-            <div className="flex h-full flex-col justify-center gap-2.5">
-              {sideStats.map((stat) => (
-                <div key={stat.label} className="text-right">
-                  <p className="text-[10px] font-semibold tabular-nums text-[#111]">
-                    {stat.value}
-                  </p>
-                  <p className="text-[7px] uppercase tracking-[0.14em] text-[#8a8a8a]">
-                    {stat.label}
-                  </p>
-                </div>
-              ))}
-            </div>
-          </div>
         )}
       </div>
     </div>
@@ -129,18 +140,24 @@ function StreamCardFace({
 }
 
 export function PhoneDashboardView({
-  macro,
-  backCards,
+  cards,
+  activeCardIndex = 0,
   topStats = [],
   activity,
   activityLoading = false,
   onQuickAction,
-  onBackCardClick,
+  onShiftCards,
+  onPrimaryCardClick,
   trailing,
 }: PhoneDashboardViewProps) {
+  const normalizedCards = cards.length
+    ? cards
+    : [{ id: "macro-empty", label: "Total balance", amount: "$0.00", subtitle: "" }];
+  const active = ((activeCardIndex % normalizedCards.length) + normalizedCards.length) % normalizedCards.length;
+  const mainCard = normalizedCards[active];
   const layers = BACK_OFFSETS.map((layer, i) => ({
     ...layer,
-    card: backCards[i] ?? {
+    card: normalizedCards[(active + i + 1) % normalizedCards.length] ?? {
       id: `empty-${i}`,
       label: "No stream",
       empty: true,
@@ -154,7 +171,7 @@ export function PhoneDashboardView({
           <button
             key={layer.card.id}
             type="button"
-            onClick={onBackCardClick}
+            onClick={() => onShiftCards?.(i + 1)}
             className={`absolute inset-x-0 ${layer.inset} text-left transition-transform active:scale-[0.99]`}
             style={{ top: `${layer.top}px`, zIndex: i + 1 }}
           >
@@ -166,23 +183,28 @@ export function PhoneDashboardView({
                   layer.card.empty ? "text-[#aaa]/70" : "text-[#666]/50"
                 }`}
               >
-                {i === 1 ? layer.card.label : ""}
+                {!layer.card.empty ? layer.card.label : ""}
               </p>
             </div>
           </button>
         ))}
 
-        <div className="relative z-30 mt-[72px]">
+        <button
+          type="button"
+          onClick={onPrimaryCardClick}
+          className="relative z-30 mt-[72px] block w-full text-left"
+        >
           <StreamCardFace
             macro
-            sideStats={topStats}
+            amountLive={mainCard.isLive}
+            belowStats={topStats}
             card={{
-              label: macro.label,
-              amount: macro.amount,
-              subtitle: macro.subtitle,
+              label: mainCard.label,
+              amount: mainCard.amount ?? "$0.00",
+              subtitle: mainCard.subtitle ?? "",
             }}
           />
-        </div>
+        </button>
       </div>
 
       <div className={`mt-2 grid grid-cols-3 gap-2 ${SECTION_GAP}`}>

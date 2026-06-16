@@ -95,14 +95,20 @@ function DashboardScreen() {
   return (
     <div className="mt-1">
       <PhoneDashboardView
-        macro={{
-          label: "Total balance",
-          amount: formatted,
-          subtitle: "3 streams · 1 active",
-        }}
-        backCards={[
-          { id: "demo-work", label: "Work stream" },
-          { id: "demo-private", label: "Private stream" },
+        cards={[
+          {
+            id: "demo-macro",
+            label: "Total balance",
+            amount: formatted,
+            subtitle: "3 streams · 1 active",
+          },
+          { id: "demo-work", label: "Work stream", amount: "$90.00", subtitle: "Active stream" },
+          {
+            id: "demo-private",
+            label: "Private stream",
+            amount: "$52.50",
+            subtitle: "Stream details",
+          },
         ]}
         activity={HERO_DASHBOARD_ACTIVITY}
       />

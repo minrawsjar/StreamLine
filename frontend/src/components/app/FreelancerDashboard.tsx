@@ -14,6 +14,8 @@ import { DisputeResolution } from "./DisputeResolution";
 import { USDC_BASE, formatInterval } from "@/lib/stream-math";
 import {
   completedMilestones,
+  dripRatePerMinuteBase,
+  earnedBase,
   effectiveState,
   milestoneCeilingBase,
   nextMilestoneNo,
@@ -38,15 +40,6 @@ const PRIV_STATE = [
   "paused",
   "done",
 ] as const;
-
-/** Earned base units = already paid + (live accrual while dripping). */
-function earnedBase(s: StreamRecord, nowMs: number): number {
-  const paid = s.total - s.remaining;
-  if (effectiveState(s) !== "dripping" || s.duration_ms <= 0) return paid;
-  const rate = s.total / s.duration_ms;
-  const accrued = Math.max(0, (nowMs - s.last_drip_ms) * rate);
-  return Math.min(paid + accrued, milestoneCeilingBase(s, s.current_milestone), s.total);
-}
 
 const usd = (base: number) => (base / USDC_BASE).toFixed(2);
 

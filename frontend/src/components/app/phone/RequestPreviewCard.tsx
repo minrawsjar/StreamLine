@@ -3,6 +3,7 @@ import {
   formatInterval,
   formatUsd,
   ratePerSecond,
+  type DurationUnit,
 } from "@/lib/stream-math";
 import {
   resolveStreamRequest,
@@ -18,10 +19,15 @@ function PreviewRow({ label, value }: { label: string; value: string }) {
   );
 }
 
+function formatDurationLabel(value: string, unit: DurationUnit): string {
+  const n = Number(value) || 0;
+  const label = unit === "hours" ? "hour" : unit === "weeks" ? "week" : "day";
+  return `${n} ${n === 1 ? label : `${label}s`}`;
+}
+
 export function RequestPreviewCard({ request }: { request: StreamRequestParams }) {
   const resolved = resolveStreamRequest(request);
   const amountNum = resolved.amount;
-  const durationDays = request.durationDays;
   const milestoneCount = resolved.milestones.length;
   const previewSplits = request.useSplitConfig && !request.isPrivate ? request.splits : [];
   const dripRate = ratePerSecond(amountNum, resolved.durationMs);
@@ -35,10 +41,18 @@ export function RequestPreviewCard({ request }: { request: StreamRequestParams }
       <p className="mt-2 text-[28px] font-bold tabular leading-none tracking-tight text-[#111]">
         {request.isPrivate ? "Private" : formatUsd(amountNum)}
       </p>
+      {request.streamName.trim() && (
+        <p className="mt-1.5 text-[12px] font-medium text-[#444]">
+          {request.streamName.trim()}
+        </p>
+      )}
       <div className="mt-3 space-y-1.5">
         {!request.isPrivate && (
           <>
-            <PreviewRow label="Duration" value={`${durationDays} days`} />
+            <PreviewRow
+              label="Duration"
+              value={formatDurationLabel(request.durationValue, request.durationUnit)}
+            />
             <PreviewRow label="Settles every" value={formatInterval(dripInterval)} />
             <PreviewRow label="Rate" value={`${formatUsd(dripRate)} / sec`} />
           </>

@@ -33,11 +33,13 @@ import {
 import { DITHER_HATCH } from "./dashboard-ui";
 import { usePhoneEmbedded } from "./phone/PhoneEmbeddedContext";
 import {
+  PhoneDurationField,
   PhoneField,
   PhoneToggleRow,
   phoneInputClass,
   phonePctInputClass,
 } from "./phone/PhoneFormParts";
+import { queueStreamLabel, rememberStreamLabel } from "@/lib/stream-labels";
 
 type SplitRow = { label: string; address: string; pct: number; yield: boolean };
 
@@ -74,6 +76,7 @@ export function StreamCreator({
   const { execute, isPending } = useGaslessExecute();
 
   const [isPrivate, setIsPrivate] = useState(prefill?.isPrivate ?? false);
+  const [streamName, setStreamName] = useState("");
   const [freelancer, setFreelancer] = useState(prefill?.freelancer ?? "");
   const [amount, setAmount] = useState(prefill?.amount ?? 800);
   const [durationValue, setDurationValue] = useState(prefill?.durationValue ?? 14);
@@ -92,8 +95,9 @@ export function StreamCreator({
   const [useSplitConfig, setUseSplitConfig] = useState(prefill?.useSplitConfig ?? false);
 
   const durationMs = durationToMs(durationValue, durationUnit);
+  const defaultMilestoneName = streamName.trim() || "Payment";
   const effectiveMilestones =
-    embedded && !useMilestones ? ["Payment"] : milestones;
+    embedded && !useMilestones ? [defaultMilestoneName] : milestones;
   const rate = ratePerSecond(amount, durationMs);
   const interval = dripIntervalMs(amount, durationMs);
   const splitSum = splits.reduce((s, r) => s + (Number(r.pct) || 0), 0);
@@ -161,8 +165,10 @@ export function StreamCreator({
     });
     setStatus("Awaiting wallet signature…");
     execute(tx, {
-      onSuccess: (r) =>
-        setStatus(`Stream created — locked ${formatUsd(amount)}. Digest ${r.digest}`),
+      onSuccess: (r) => {
+        queueStreamLabel(streamName, freelancer, Number(totalBase));
+        setStatus(`Stream created — locked ${formatUsd(amount)}. Digest ${r.digest}`);
+      },
       onError: (e) => setStatus(e.message),
     });
   };
@@ -223,6 +229,7 @@ export function StreamCreator({
           setStatus("Confirming on-chain…");
           const streamId = await findCreatedConfidentialStream(client, digest);
           if (streamId) {
+            rememberStreamLabel(streamId, streamName);
             // Local cache so this wallet can act without a Seal round-trip.
             addSecret(account.address, {
               streamId,
@@ -264,47 +271,38 @@ export function StreamCreator({
           />
         </PhoneField>
 
-        <div className="grid grid-cols-2 gap-3">
-          <PhoneField label="Amount (USDC)">
-            <input
-              type="number"
-              value={amount === 0 ? "" : amount}
-              min={0}
-              placeholder="800"
-              onChange={(e) =>
-                setAmount(e.target.value === "" ? 0 : Number(e.target.value))
-              }
-              className={phoneInputClass}
-            />
-          </PhoneField>
-          {!isPrivate && (
-            <PhoneField label="Duration">
-              <div className="flex gap-2">
-                <input
-                  type="number"
-                  value={durationValue === 0 ? "" : durationValue}
-                  min={0}
-                  placeholder="14"
-                  onChange={(e) =>
-                    setDurationValue(
-                      e.target.value === "" ? 0 : Number(e.target.value)
-                    )
-                  }
-                  className={`min-w-0 flex-1 ${phoneInputClass}`}
-                />
-                <select
-                  value={durationUnit}
-                  onChange={(e) => setDurationUnit(e.target.value as DurationUnit)}
-                  className="rounded-2xl border border-black/15 bg-white px-2 text-[11px] outline-none focus:border-[#5b54e6]"
-                >
-                  <option value="hours">hrs</option>
-                  <option value="days">days</option>
-                  <option value="weeks">wks</option>
-                </select>
-              </div>
-            </PhoneField>
-          )}
-        </div>
+        <PhoneField label="Stream name">
+          <input
+            value={streamName}
+            onChange={(e) => setStreamName(e.target.value)}
+            placeholder="Design sprint"
+            className={phoneInputClass}
+          />
+        </PhoneField>
+
+        <PhoneField label="Amount (USDC)">
+          <input
+            type="number"
+            value={amount === 0 ? "" : amount}
+            min={0}
+            placeholder="800"
+            onChange={(e) =>
+              setAmount(e.target.value === "" ? 0 : Number(e.target.value))
+            }
+            className={phoneInputClass}
+          />
+        </PhoneField>
+
+        {!isPrivate && (
+          <PhoneDurationField
+            value={durationValue === 0 ? "" : String(durationValue)}
+            unit={durationUnit}
+            onValueChange={(v) =>
+              setDurationValue(v === "" ? 0 : Number(v))
+            }
+            onUnitChange={setDurationUnit}
+          />
+        )}
 
         <PhoneToggleRow
           title="Private stream"
@@ -514,6 +512,15 @@ export function StreamCreator({
                 ? "border-[#c0533a] bg-[#c0533a]/[0.03]"
                 : "border-[#2b2a5e]/20"
             }`}
+          />
+        </Field>
+
+        <Field label="Stream name">
+          <input
+            value={streamName}
+            onChange={(e) => setStreamName(e.target.value)}
+            placeholder="Design sprint"
+            className="w-full border border-[#2b2a5e]/20 bg-white px-3 py-2.5 text-[14px] outline-none focus:border-[#5b54e6]"
           />
         </Field>
 

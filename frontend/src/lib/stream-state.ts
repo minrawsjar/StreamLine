@@ -21,6 +21,35 @@ export function milestoneFullyPaid(s: StreamRecord): boolean {
   return paidBase(s) >= milestoneCeilingBase(s, s.current_milestone);
 }
 
+/** Base units emitted per millisecond while the stream is active. */
+export function streamRatePerMs(s: StreamRecord): number {
+  if (s.duration_ms <= 0) return 0;
+  return s.total / s.duration_ms;
+}
+
+/** Incoming drip rate for a single dripping stream (base units / minute). */
+export function dripRatePerMinuteBase(s: StreamRecord): number {
+  if (effectiveState(s) !== "dripping") return 0;
+  return streamRatePerMs(s) * 60_000;
+}
+
+/** Earned base units = already paid + live accrual since the last on-chain drip. */
+export function earnedBase(s: StreamRecord, nowMs: number): number {
+  const paid = paidBase(s);
+  if (effectiveState(s) !== "dripping" || s.duration_ms <= 0) return paid;
+  const accrued = Math.max(0, (nowMs - s.last_drip_ms) * streamRatePerMs(s));
+  return Math.min(
+    paid + accrued,
+    milestoneCeilingBase(s, s.current_milestone),
+    s.total
+  );
+}
+
+/** Accrued but not yet settled on-chain (the “live” portion of a dripping stream). */
+export function pendingAccrualBase(s: StreamRecord, nowMs: number): number {
+  return Math.max(0, earnedBase(s, nowMs) - paidBase(s));
+}
+
 /**
  * UI-facing state. The indexer can lag after a milestone completes (the contract
  * flips to LOCKED inside the same `drip` tx with no extra event).

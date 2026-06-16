@@ -1,5 +1,7 @@
 import type { ReactNode } from "react";
 
+import type { DurationUnit } from "@/lib/stream-math";
+
 export function PhoneField({
   label,
   children,
@@ -72,3 +74,42 @@ export const phoneInputClass =
 
 export const phonePctInputClass =
   "w-14 rounded-xl border border-black/15 bg-white px-2 py-2 text-[11px] outline-none focus:border-[#5b54e6] [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none";
+
+export function PhoneDurationField({
+  value,
+  unit,
+  onValueChange,
+  onUnitChange,
+  disabled = false,
+}: {
+  value: string;
+  unit: DurationUnit;
+  onValueChange: (v: string) => void;
+  onUnitChange: (u: DurationUnit) => void;
+  disabled?: boolean;
+}) {
+  return (
+    <PhoneField label="Duration">
+      <div className="flex gap-2">
+        <input
+          type="number"
+          value={value}
+          disabled={disabled}
+          placeholder="14"
+          onChange={(e) => onValueChange(e.target.value)}
+          className={`min-w-0 flex-1 ${phoneInputClass}`}
+        />
+        <select
+          value={unit}
+          disabled={disabled}
+          onChange={(e) => onUnitChange(e.target.value as DurationUnit)}
+          className="rounded-2xl border border-black/15 bg-white px-2 text-[11px] outline-none focus:border-[#5b54e6]"
+        >
+          <option value="hours">hours</option>
+          <option value="days">days</option>
+          <option value="weeks">weeks</option>
+        </select>
+      </div>
+    </PhoneField>
+  );
+}

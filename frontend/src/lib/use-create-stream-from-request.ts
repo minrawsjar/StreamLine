@@ -27,6 +27,7 @@ import {
   validateResolvedStreamRequest,
   type StreamRequestParams,
 } from "@/lib/request-link";
+import { queueStreamLabel, rememberStreamLabel } from "@/lib/stream-labels";
 
 export function useCreateStreamFromRequest() {
   const account = useCurrentAccount();
@@ -118,6 +119,7 @@ export function useCreateStreamFromRequest() {
               setStatus("Confirming on-chain…");
               const streamId = await findCreatedConfidentialStream(client, digest);
               if (streamId) {
+                rememberStreamLabel(streamId, request.streamName);
                 addSecret(account.address, {
                   streamId,
                   coinType: usdcType,
@@ -168,6 +170,7 @@ export function useCreateStreamFromRequest() {
       await execute(tx, {
         onSuccess: (r) => {
           success = true;
+          queueStreamLabel(request.streamName, freelancer, Number(totalBase));
           setStatus(`Stream created — locked ${formatUsd(amount)}. Digest ${r.digest}`);
         },
         onError: (e) => setStatus(e.message),

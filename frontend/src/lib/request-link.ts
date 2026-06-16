@@ -1,7 +1,12 @@
+import type { DurationUnit } from "./stream-math";
+import { durationToMs } from "./stream-math";
+
 export type StreamRequestParams = {
+  streamName: string;
   recipient: string;
   amount: string;
-  durationDays: string;
+  durationValue: string;
+  durationUnit: DurationUnit;
   isPrivate: boolean;
   useMilestones: boolean;
   milestones: string[];
@@ -30,12 +35,15 @@ export function resolveStreamRequest(
   return {
     freelancer: request.recipient,
     amount: Number(request.amount) || 0,
-    durationMs: (Number(request.durationDays) || 0) * 86_400_000,
+    durationMs: durationToMs(
+      Number(request.durationValue) || 0,
+      request.durationUnit
+    ),
     isPrivate: request.isPrivate,
     milestones:
       request.useMilestones && request.milestones.length > 0
         ? request.milestones
-        : ["Payment"],
+        : [request.streamName.trim() || "Payment"],
     splits:
       request.useSplitConfig && request.splits.length > 0
         ? request.splits.map((s) => ({
@@ -112,9 +120,13 @@ export function parseStreamRequestLink(input: string): StreamRequestParams | nul
     const splits = useSplitConfig ? parseSplits(params.get("splits")) : [];
 
     return {
+      streamName: params.get("stream_name") ?? "",
       recipient,
       amount: params.get("amount") ?? "0",
-      durationDays: params.get("duration_days") ?? "0",
+      durationValue:
+        params.get("duration_value") ?? params.get("duration_days") ?? "0",
+      durationUnit:
+        (params.get("duration_unit") as DurationUnit) || "days",
       isPrivate: params.get("private") === "1",
       useMilestones,
       milestones,

@@ -12,7 +12,13 @@ import {
 } from "@/lib/indexer";
 import { useNetworkVariable } from "@/lib/networks";
 import { USDC_BASE } from "@/lib/stream-math";
-import { effectiveState } from "@/lib/stream-state";
+import {
+  dripRatePerMinuteBase,
+  earnedBase,
+  effectiveState,
+  pendingAccrualBase,
+} from "@/lib/stream-state";
+import { resolveStreamLabel } from "@/lib/stream-labels";
 import {
   PhoneDashboardView,
   type PhoneActivityItem,
@@ -26,12 +32,12 @@ const EMPTY_BACK_CARDS: StreamCardData[] = [
   { id: "empty-2", label: "Empty stream", empty: true },
 ];
 
-const usd = (base: number) =>
+const usd = (base: number, opts?: { live?: boolean }) =>
   (base / USDC_BASE).toLocaleString("en-US", {
     style: "currency",
     currency: "USD",
     minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
+    maximumFractionDigits: opts?.live ? 6 : 2,
   });
 
 function formatRelative(ms: number, now: number): string {
@@ -72,6 +78,7 @@ export function PhoneHomeView({
   const usdcType = useNetworkVariable("usdcType");
   const [now, setNow] = useState(() => Date.now());
   const [lastWalletBase, setLastWalletBase] = useState(0);
+  const [activeCardIndex, setActiveCardIndex] = useState(0);
   const addr = account?.address;
 
   const incomingQ = useStreams({ freelancer: addr });
@@ -140,46 +147,89 @@ export function PhoneHomeView({
     [allStreams]
   );
 
-  const macro = useMemo(() => {
+  const incomingDripping = useMemo(
+    () => incoming.filter((s) => effectiveState(s) === "dripping"),
+    [incoming]
+  );
+
+  const liveAccrualBase = useMemo(
+    () =>
+      incomingDripping.reduce((acc, s) => acc + pendingAccrualBase(s, now), 0),
+    [incomingDripping, now]
+  );
+
+  const macroCard = useMemo(() => {
     const walletBase =
       balanceQ.data?.totalBalance !== undefined &&
       balanceQ.data?.totalBalance !== null
         ? Number(balanceQ.data.totalBalance)
         : lastWalletBase;
-    const dripping = allStreams.filter((s) => effectiveState(s) === "dripping").length;
-    const count = allStreams.length;
+    const isLive = liveAccrualBase > 0;
 
     return {
+      id: "macro",
       label: "Total balance",
-      amount: usd(walletBase),
+      amount: usd(walletBase + liveAccrualBase, { live: isLive }),
       subtitle: "",
+      isLive,
     };
-  }, [balanceQ.data?.totalBalance, allStreams, lastWalletBase]);
+  }, [balanceQ.data?.totalBalance, lastWalletBase, liveAccrualBase]);
 
-  const backCards = useMemo(() => {
-    const cards = activeStreams.slice(0, 2).map((s, i) => ({
-      id: s.id,
-      label: addr ? streamBackLabel(s, addr, i) : "Stream",
-    }));
-    while (cards.length < 2) {
-      cards.push(EMPTY_BACK_CARDS[cards.length]);
+  const streamCards = useMemo(() => {
+    return activeStreams.map((s, i) => {
+      const isIncoming = s.freelancer === addr;
+      const liveBase = earnedBase(s, now);
+      return {
+        id: s.id,
+        label: resolveStreamLabel(s) ?? (addr ? streamBackLabel(s, addr, i) : "Stream"),
+        amount: usd(liveBase, { live: effectiveState(s) === "dripping" && isIncoming }),
+        subtitle: effectiveState(s) === "dripping" ? "Active stream" : "Stream details",
+        isLive: effectiveState(s) === "dripping" && isIncoming,
+      };
+    });
+  }, [activeStreams, addr, now]);
+
+  const cards = useMemo(() => {
+    if (streamCards.length === 0) return [macroCard, ...EMPTY_BACK_CARDS];
+    return [macroCard, ...streamCards];
+  }, [macroCard, streamCards]);
+
+  useEffect(() => {
+    if (cards.length === 0) {
+      setActiveCardIndex(0);
+      return;
     }
-    return cards;
-  }, [activeStreams, addr]);
+    setActiveCardIndex((prev) => ((prev % cards.length) + cards.length) % cards.length);
+  }, [cards.length]);
+
+  const shiftCards = (step: number) => {
+    if (cards.length === 0) return;
+    setActiveCardIndex((prev) => (prev + step) % cards.length);
+  };
+
+  const openActiveCard = () => {
+    const active = cards[((activeCardIndex % cards.length) + cards.length) % cards.length];
+    if (!active || active.id === "macro") return;
+    onShowAllStreams?.();
+  };
 
   const topStats = useMemo((): PhoneTopStat[] => {
     const streamCount = allStreams.length;
-    const drippingStreams = allStreams.filter((s) => effectiveState(s) === "dripping");
-    const ratePerMinuteBase = drippingStreams.reduce((acc, s) => {
-      if (s.duration_ms <= 0) return acc;
-      return acc + (s.total / s.duration_ms) * 60_000;
-    }, 0);
+    const ratePerMinuteBase = incomingDripping.reduce(
+      (acc, s) => acc + dripRatePerMinuteBase(s),
+      0
+    );
+    const isLive = ratePerMinuteBase > 0;
 
     return [
+      {
+        label: "Drip/min",
+        value: usd(ratePerMinuteBase, { live: isLive }),
+        live: isLive,
+      },
       { label: "Streams", value: String(streamCount) },
-      { label: "Drip/min", value: usd(ratePerMinuteBase) },
     ];
-  }, [allStreams]);
+  }, [allStreams, incomingDripping]);
 
   const activity = useMemo((): PhoneActivityItem[] => {
     const drips = dripQueries.flatMap((q) => q.data ?? []);
@@ -231,17 +281,14 @@ export function PhoneHomeView({
 
   return (
     <PhoneDashboardView
-      macro={{
-        label: macro.label,
-        amount: macro.amount,
-        subtitle: macro.subtitle,
-      }}
-      backCards={backCards}
+      cards={cards}
+      activeCardIndex={activeCardIndex}
       topStats={topStats}
       activity={activity}
       activityLoading={activityLoading}
       onQuickAction={handleQuickAction}
-      onBackCardClick={onShowAllStreams}
+      onShiftCards={shiftCards}
+      onPrimaryCardClick={openActiveCard}
     />
   );
 }

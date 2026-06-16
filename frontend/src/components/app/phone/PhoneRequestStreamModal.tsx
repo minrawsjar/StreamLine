@@ -5,7 +5,9 @@ import { useCurrentAccount } from "@mysten/dapp-kit";
 import { QRCodeSVG } from "qrcode.react";
 
 import { copyToClipboard } from "@/lib/format";
+import type { DurationUnit } from "@/lib/stream-math";
 import {
+  PhoneDurationField,
   PhoneField,
   PhoneToggleRow,
   phoneInputClass,
@@ -31,8 +33,10 @@ export function PhoneRequestStreamModal({
   onClose,
 }: PhoneRequestStreamModalProps) {
   const account = useCurrentAccount();
+  const [streamName, setStreamName] = useState("");
   const [amount, setAmount] = useState("800");
-  const [durationDays, setDurationDays] = useState("14");
+  const [durationValue, setDurationValue] = useState("14");
+  const [durationUnit, setDurationUnit] = useState<DurationUnit>("days");
   const [isPrivate, setIsPrivate] = useState(false);
   const [useMilestones, setUseMilestones] = useState(false);
   const [useSplitConfig, setUseSplitConfig] = useState(false);
@@ -56,9 +60,11 @@ export function PhoneRequestStreamModal({
     const params = new URLSearchParams({
       recipient,
       amount: amount || "0",
-      duration_days: durationDays || "0",
+      duration_value: durationValue || "0",
+      duration_unit: durationUnit,
       milestones: useMilestones && milestones.length > 0 ? milestones.join("|") : "0",
     });
+    if (streamName.trim()) params.set("stream_name", streamName.trim());
     params.set("private", isPrivate ? "1" : "0");
     params.set("milestones_count", useMilestones ? String(milestones.length) : "0");
     if (useMilestones && milestones.length > 0) {
@@ -76,7 +82,7 @@ export function PhoneRequestStreamModal({
       );
     }
     return `${origin}/app?${params.toString()}`;
-  }, [recipient, amount, durationDays, milestones, note, isPrivate, useMilestones, useSplitConfig, splits]);
+  }, [recipient, streamName, amount, durationValue, durationUnit, milestones, note, isPrivate, useMilestones, useSplitConfig, splits]);
 
   const splitSum = splits.reduce((s, r) => s + (Number(r.pct) || 0), 0);
 
@@ -101,9 +107,11 @@ export function PhoneRequestStreamModal({
   };
 
   const previewRequest: StreamRequestParams = {
+    streamName,
     recipient,
     amount,
-    durationDays,
+    durationValue,
+    durationUnit,
     isPrivate,
     useMilestones,
     milestones,
@@ -128,22 +136,29 @@ export function PhoneRequestStreamModal({
               </p>
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
-              <PhoneField label="Amount (USDC)">
-                <input
-                  value={amount}
-                  onChange={(e) => setAmount(e.target.value)}
-                  className={phoneInputClass}
-                />
-              </PhoneField>
-              <PhoneField label="Duration (days)">
-                <input
-                  value={durationDays}
-                  onChange={(e) => setDurationDays(e.target.value)}
-                  className={phoneInputClass}
-                />
-              </PhoneField>
-            </div>
+            <PhoneField label="Stream name">
+              <input
+                value={streamName}
+                onChange={(e) => setStreamName(e.target.value)}
+                placeholder="Design sprint"
+                className={phoneInputClass}
+              />
+            </PhoneField>
+
+            <PhoneField label="Amount (USDC)">
+              <input
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+                className={phoneInputClass}
+              />
+            </PhoneField>
+
+            <PhoneDurationField
+              value={durationValue}
+              unit={durationUnit}
+              onValueChange={setDurationValue}
+              onUnitChange={setDurationUnit}
+            />
 
             <PhoneToggleRow
               title="Private request"

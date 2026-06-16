@@ -8,9 +8,10 @@ import { PhoneField, phoneInputClass } from "./PhoneFormParts";
 
 type PhoneScanViewProps = {
   onResult: (request: StreamRequestParams) => void;
+  onCancel: () => void;
 };
 
-export function PhoneScanView({ onResult }: PhoneScanViewProps) {
+export function PhoneScanView({ onResult, onCancel }: PhoneScanViewProps) {
   const scannerId = useId().replace(/:/g, "");
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const [manualLink, setManualLink] = useState("");
@@ -134,6 +135,13 @@ export function PhoneScanView({ onResult }: PhoneScanViewProps) {
           className="mt-2 w-full rounded-2xl bg-[#111] px-4 py-2.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-white disabled:opacity-40"
         >
           Use link
+        </button>
+        <button
+          type="button"
+          onClick={onCancel}
+          className="w-full rounded-2xl border border-black/12 bg-white px-4 py-2.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-[#111]"
+        >
+          Cancel
         </button>
       </div>
     </div>

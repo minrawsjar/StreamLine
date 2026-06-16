@@ -110,7 +110,12 @@ export function PhoneAppShell({ route, onNavigate }: PhoneAppShellProps) {
         {route === "launcher" && <PhoneLauncher onOpen={onNavigate} />}
         {route === "user" && <PhoneUserApp />}
         {route === "pro" && <PhoneProApp />}
-        {route === "scan" && <PhoneScanView onResult={handleScanResult} />}
+        {route === "scan" && (
+          <PhoneScanView
+            onResult={handleScanResult}
+            onCancel={() => onNavigate(scanReturnRoute)}
+          />
+        )}
         {route === "fulfill" && pendingRequest && (
           <PhoneFulfillRequestView
             request={pendingRequest}
