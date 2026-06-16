@@ -67,12 +67,13 @@ type PhoneDashboardViewProps = {
   onQuickAction?: (id: string) => void;
   onShiftCards?: (step: number) => void;
   onPrimaryCardClick?: () => void;
+  onPrimaryCardDetails?: () => void;
   trailing?: ReactNode;
 };
 
 const BACK_OFFSETS = [
-  { inset: "mx-5", top: 8, tone: "bg-white/38 border-white/30" },
-  { inset: "mx-2", top: 32, tone: "bg-white/50 border-white/42" },
+  { inset: "mx-5", top: 6, tone: "bg-white/38 border-white/30" },
+  { inset: "mx-2", top: 22, tone: "bg-white/50 border-white/42" },
 ] as const;
 
 function StreamCardFace({
@@ -81,29 +82,39 @@ function StreamCardFace({
   className = "",
   macro = false,
   amountLive = false,
+  onDetails,
 }: {
   card: { label: string; amount: string; subtitle: string; empty?: boolean };
   belowStats?: readonly PhoneTopStat[];
   className?: string;
   macro?: boolean;
   amountLive?: boolean;
+  onDetails?: () => void;
 }) {
   return (
     <div className={`rounded-2xl border border-white/70 bg-white/88 p-4 shadow-[0_10px_32px_rgba(0,0,0,0.1)] backdrop-blur-md ${className}`}>
       <div className="min-w-0">
-        <p
-          className={`text-[10px] font-semibold uppercase tracking-wider ${
-            card.empty ? "text-[#bbb]" : "text-[#888]"
-          }`}
-        >
-          {card.label}
-          {amountLive && (
-            <span className="ml-1.5 inline-flex items-center gap-1 normal-case tracking-normal text-[#3d8f5a]">
-              <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-[#3d8f5a]" />
-              live
-            </span>
+        <div className="flex items-start justify-between gap-2">
+          <p
+            className={`text-[10px] font-semibold uppercase tracking-wider ${
+              card.empty ? "text-[#bbb]" : "text-[#888]"
+            }`}
+          >
+            {card.label}
+          </p>
+          {!!onDetails && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onDetails();
+              }}
+              className="text-[8px] font-semibold uppercase tracking-[0.14em] text-[#666]"
+            >
+              Show details
+            </button>
           )}
-        </p>
+        </div>
         <p
           className={`mt-1.5 font-bold tabular-nums leading-none transition-[color] duration-300 ${
             macro ? "text-[1.85rem]" : "text-[1.35rem]"
@@ -148,6 +159,7 @@ export function PhoneDashboardView({
   onQuickAction,
   onShiftCards,
   onPrimaryCardClick,
+  onPrimaryCardDetails,
   trailing,
 }: PhoneDashboardViewProps) {
   const normalizedCards = cards.length
@@ -157,7 +169,7 @@ export function PhoneDashboardView({
   const mainCard = normalizedCards[active];
   const layers = BACK_OFFSETS.map((layer, i) => ({
     ...layer,
-    card: normalizedCards[(active + i + 1) % normalizedCards.length] ?? {
+    card: normalizedCards.length > i + 1 ? normalizedCards[(active + i + 1) % normalizedCards.length] : {
       id: `empty-${i}`,
       label: "No stream",
       empty: true,
@@ -176,27 +188,35 @@ export function PhoneDashboardView({
             style={{ top: `${layer.top}px`, zIndex: i + 1 }}
           >
             <div
-              className={`flex min-h-[52px] flex-col justify-center rounded-2xl border px-4 py-3 shadow-[0_4px_16px_rgba(0,0,0,0.04)] backdrop-blur-md ${layer.tone}`}
+              className={`flex min-h-[118px] flex-col justify-start rounded-2xl border p-4 shadow-[0_4px_16px_rgba(0,0,0,0.04)] backdrop-blur-md ${layer.tone}`}
             >
               <p
                 className={`text-[10px] font-semibold uppercase tracking-wider ${
                   layer.card.empty ? "text-[#aaa]/70" : "text-[#666]/50"
                 }`}
               >
-                {!layer.card.empty ? layer.card.label : ""}
+                {!layer.card.empty && i === 0 ? layer.card.label : ""}
               </p>
             </div>
           </button>
         ))}
 
-        <button
-          type="button"
+        <div
+          role="button"
+          tabIndex={0}
           onClick={onPrimaryCardClick}
-          className="relative z-30 mt-[72px] block w-full text-left"
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              onPrimaryCardClick?.();
+            }
+          }}
+          className="relative z-30 mt-[56px] block w-full cursor-pointer text-left"
         >
           <StreamCardFace
             macro
-            amountLive={mainCard.isLive}
+            amountLive={mainCard.id !== "macro" && !!mainCard.isLive}
+            onDetails={onPrimaryCardDetails}
             belowStats={topStats}
             card={{
               label: mainCard.label,
@@ -204,7 +224,7 @@ export function PhoneDashboardView({
               subtitle: mainCard.subtitle ?? "",
             }}
           />
-        </button>
+        </div>
       </div>
 
       <div className={`mt-2 grid grid-cols-3 gap-2 ${SECTION_GAP}`}>

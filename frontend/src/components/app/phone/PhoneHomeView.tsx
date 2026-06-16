@@ -32,12 +32,12 @@ const EMPTY_BACK_CARDS: StreamCardData[] = [
   { id: "empty-2", label: "Empty stream", empty: true },
 ];
 
-const usd = (base: number, opts?: { live?: boolean }) =>
+const usd = (base: number, digits = 2) =>
   (base / USDC_BASE).toLocaleString("en-US", {
     style: "currency",
     currency: "USD",
-    minimumFractionDigits: 2,
-    maximumFractionDigits: opts?.live ? 6 : 2,
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
   });
 
 function formatRelative(ms: number, now: number): string {
@@ -66,6 +66,11 @@ type PhoneHomeViewProps = {
   onTransfer?: () => void;
 };
 
+type HomeDetailsView =
+  | { kind: "home" }
+  | { kind: "total" }
+  | { kind: "stream"; id: string };
+
 export function PhoneHomeView({
   showAllStreams = false,
   onShowAllStreams,
@@ -79,6 +84,7 @@ export function PhoneHomeView({
   const [now, setNow] = useState(() => Date.now());
   const [lastWalletBase, setLastWalletBase] = useState(0);
   const [activeCardIndex, setActiveCardIndex] = useState(0);
+  const [detailsView, setDetailsView] = useState<HomeDetailsView>({ kind: "home" });
   const addr = account?.address;
 
   const incomingQ = useStreams({ freelancer: addr });
@@ -169,7 +175,7 @@ export function PhoneHomeView({
     return {
       id: "macro",
       label: "Total balance",
-      amount: usd(walletBase + liveAccrualBase, { live: isLive }),
+      amount: usd(walletBase + liveAccrualBase, 3),
       subtitle: "",
       isLive,
     };
@@ -182,7 +188,7 @@ export function PhoneHomeView({
       return {
         id: s.id,
         label: resolveStreamLabel(s) ?? (addr ? streamBackLabel(s, addr, i) : "Stream"),
-        amount: usd(liveBase, { live: effectiveState(s) === "dripping" && isIncoming }),
+        amount: usd(liveBase, 3),
         subtitle: effectiveState(s) === "dripping" ? "Active stream" : "Stream details",
         isLive: effectiveState(s) === "dripping" && isIncoming,
       };
@@ -209,9 +215,21 @@ export function PhoneHomeView({
 
   const openActiveCard = () => {
     const active = cards[((activeCardIndex % cards.length) + cards.length) % cards.length];
-    if (!active || active.id === "macro") return;
-    onShowAllStreams?.();
+    if (!active) return;
+    if (active.id === "macro") {
+      setDetailsView({ kind: "total" });
+      return;
+    }
+    setDetailsView({ kind: "stream", id: active.id });
   };
+
+  const selectedStream = useMemo(
+    () =>
+      detailsView.kind === "stream"
+        ? activeStreams.find((s) => s.id === detailsView.id)
+        : undefined,
+    [detailsView, activeStreams]
+  );
 
   const topStats = useMemo((): PhoneTopStat[] => {
     const streamCount = allStreams.length;
@@ -224,7 +242,7 @@ export function PhoneHomeView({
     return [
       {
         label: "Drip/min",
-        value: usd(ratePerMinuteBase, { live: isLive }),
+        value: usd(ratePerMinuteBase, 3),
         live: isLive,
       },
       { label: "Streams", value: String(streamCount) },
@@ -279,6 +297,91 @@ export function PhoneHomeView({
     );
   }
 
+  if (detailsView.kind === "total") {
+    return (
+      <div className="flex min-h-0 flex-1 flex-col">
+        <button
+          type="button"
+          onClick={() => setDetailsView({ kind: "home" })}
+          className="mb-3 self-start text-[9px] font-medium text-[#666]"
+        >
+          ← Home
+        </button>
+        <div className="flex flex-col gap-3">
+          <div>
+            <h2 className="text-[15px] font-semibold tracking-tight text-[#111]">
+              Active streams
+            </h2>
+            <p className="mt-1 text-[12px] leading-snug text-[#666]">
+              Open a stream to see full details.
+            </p>
+          </div>
+          {activeStreams.length === 0 ? (
+            <p className="text-[11px] text-[#888]">No active streams yet.</p>
+          ) : (
+            activeStreams.map((s, i) => (
+              <button
+                key={s.id}
+                type="button"
+                onClick={() => setDetailsView({ kind: "stream", id: s.id })}
+                className="rounded-2xl border border-black/10 bg-white px-3 py-2.5 text-left"
+              >
+                <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#888]">
+                  {resolveStreamLabel(s) ?? (addr ? streamBackLabel(s, addr, i) : "Stream")}
+                </p>
+                <p className="mt-1 text-[14px] font-semibold tabular-nums text-[#111]">
+                  {usd(earnedBase(s, now), 3)}
+                </p>
+                <p className="mt-0.5 text-[10px] text-[#666]">
+                  {effectiveState(s) === "dripping" ? "Dripping" : "Not dripping"} · milestone {s.current_milestone + 1}/{s.n_milestones}
+                </p>
+              </button>
+            ))
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  if (detailsView.kind === "stream" && selectedStream) {
+    const incoming = selectedStream.freelancer === addr;
+    const paid = selectedStream.total - selectedStream.remaining;
+    const progressPct = selectedStream.total > 0 ? (paid / selectedStream.total) * 100 : 0;
+    return (
+      <div className="flex min-h-0 flex-1 flex-col">
+        <button
+          type="button"
+          onClick={() => setDetailsView({ kind: "home" })}
+          className="mb-3 self-start text-[9px] font-medium text-[#666]"
+        >
+          ← Home
+        </button>
+        <div className="flex flex-col gap-3 rounded-2xl border border-black/10 bg-white p-3">
+          <div>
+            <h2 className="text-[15px] font-semibold tracking-tight text-[#111]">
+              {resolveStreamLabel(selectedStream) ?? "Stream details"}
+            </h2>
+            <p className="mt-1 text-[12px] leading-snug text-[#666]">
+              {incoming ? "Incoming stream to your wallet." : "Outgoing stream from your wallet."}
+            </p>
+          </div>
+          <DetailRow label="State" value={effectiveState(selectedStream)} />
+          <DetailRow label="Current value" value={usd(earnedBase(selectedStream, now), 3)} />
+          <DetailRow label="Drip/min" value={usd(dripRatePerMinuteBase(selectedStream), 3)} />
+          <DetailRow label="Progress" value={`${progressPct.toFixed(1)}%`} />
+          <DetailRow
+            label="Milestone"
+            value={`${selectedStream.current_milestone + 1}/${selectedStream.n_milestones}`}
+          />
+          <DetailRow
+            label="Stream id"
+            value={`${selectedStream.id.slice(0, 8)}…${selectedStream.id.slice(-6)}`}
+          />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <PhoneDashboardView
       cards={cards}
@@ -289,6 +392,16 @@ export function PhoneHomeView({
       onQuickAction={handleQuickAction}
       onShiftCards={shiftCards}
       onPrimaryCardClick={openActiveCard}
+      onPrimaryCardDetails={openActiveCard}
     />
+  );
+}
+
+function DetailRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-center justify-between py-1">
+      <span className="text-[10px] uppercase tracking-[0.12em] text-[#888]">{label}</span>
+      <span className="text-[11px] font-medium text-[#111]">{value}</span>
+    </div>
   );
 }
