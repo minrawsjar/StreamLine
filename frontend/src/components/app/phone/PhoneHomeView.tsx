@@ -21,6 +21,8 @@ import {
   pendingAccrualBase,
 } from "@/lib/stream-state";
 import { resolveStreamLabel } from "@/lib/stream-labels";
+import { useGaslessExecute } from "@/lib/use-gasless";
+import { buildRaiseCompletion } from "@/lib/streamline-tx";
 import {
   PhoneDashboardView,
   type PhoneActivityItem,
@@ -93,10 +95,13 @@ export function PhoneHomeView({
 }: PhoneHomeViewProps) {
   const account = useCurrentAccount();
   const usdcType = useNetworkVariable("usdcType");
+  const packageId = useNetworkVariable("packageId");
+  const { execute, isPending } = useGaslessExecute();
   const [now, setNow] = useState(() => Date.now());
   const [lastWalletBase, setLastWalletBase] = useState(0);
   const [activeCardIndex, setActiveCardIndex] = useState(0);
   const [detailsView, setDetailsView] = useState<HomeDetailsView>({ kind: "home" });
+  const [actionStatus, setActionStatus] = useState<string | null>(null);
   const addr = account?.address;
 
   const incomingQ = useStreams({ freelancer: addr });
@@ -297,6 +302,23 @@ export function PhoneHomeView({
     if (id === "transfer") onTransfer?.();
   };
 
+  const onRaiseCompletion = (streamId: string) => {
+    setActionStatus("Awaiting signature…");
+    execute(buildRaiseCompletion({ packageId, usdcType, streamId }), {
+      onSuccess: (r) => {
+        setActionStatus(`Milestone raised — ${r.digest.slice(0, 10)}…`);
+        incomingQ.refetch();
+        outgoingQ.refetch();
+      },
+      onError: (e) => setActionStatus(e.message),
+    });
+  };
+
+  const openStream = (id: string) => {
+    setActionStatus(null);
+    setDetailsView({ kind: "stream", id });
+  };
+
   if (showAllStreams) {
     return (
       <div className="flex min-h-0 flex-1 flex-col">
@@ -346,7 +368,7 @@ export function PhoneHomeView({
                 <button
                   key={s.id}
                   type="button"
-                  onClick={() => setDetailsView({ kind: "stream", id: s.id })}
+                  onClick={() => openStream(s.id)}
                   className="rounded-2xl border border-black/10 bg-white px-3 py-2.5 text-left"
                 >
                   <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#888]">
@@ -407,6 +429,25 @@ export function PhoneHomeView({
             value={`${selectedStream.id.slice(0, 8)}…${selectedStream.id.slice(-6)}`}
           />
         </div>
+
+        {incoming && isAwaitingFreelancerRaise(selectedStream) && (
+          <div className="mt-3">
+            <button
+              type="button"
+              disabled={isPending}
+              onClick={() => onRaiseCompletion(selectedStream.id)}
+              className="w-full rounded-full bg-[#111] px-4 py-3 text-[12px] font-semibold text-white disabled:opacity-50"
+            >
+              {isPending ? "Raising…" : "Raise completion"}
+            </button>
+            <p className="mt-1.5 text-center text-[10px] leading-snug text-[#888]">
+              Marks milestone {selectedStream.current_milestone + 1} done and sends it to the client to approve.
+            </p>
+          </div>
+        )}
+        {actionStatus && (
+          <p className="mt-2 text-center text-[10px] text-[#666]">{actionStatus}</p>
+        )}
       </div>
     );
   }
