@@ -16,6 +16,8 @@ import {
   dripRatePerMinuteBase,
   earnedBase,
   effectiveState,
+  isAwaitingClientApproval,
+  isAwaitingFreelancerRaise,
   pendingAccrualBase,
 } from "@/lib/stream-state";
 import { resolveStreamLabel } from "@/lib/stream-labels";
@@ -47,6 +49,16 @@ function formatRelative(ms: number, now: number): string {
   if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}h ago`;
   if (diff < 172_800_000) return "Yesterday";
   return new Date(ms).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
+
+/** Human-readable reason a stream is or isn't flowing. */
+function streamStatusLabel(s: StreamRecord): string {
+  if (effectiveState(s) === "dripping") return "Dripping";
+  if (isAwaitingClientApproval(s)) return "Awaiting approval";
+  if (isAwaitingFreelancerRaise(s)) return "Awaiting completion";
+  if (s.state === "done") return "Completed";
+  if (s.state === "paused") return "Paused";
+  return "Idle";
 }
 
 function streamBackLabel(s: StreamRecord, addr: string, index: number): string {
@@ -184,13 +196,16 @@ export function PhoneHomeView({
   const streamCards = useMemo(() => {
     return activeStreams.map((s, i) => {
       const isIncoming = s.freelancer === addr;
-      const liveBase = earnedBase(s, now);
+      const dripping = effectiveState(s) === "dripping";
+      // Dripping streams show their live earned value; parked streams show the
+      // locked principal so a funded stream never reads as a confusing $0.
+      const value = dripping ? earnedBase(s, now) : s.total;
       return {
         id: s.id,
         label: resolveStreamLabel(s) ?? (addr ? streamBackLabel(s, addr, i) : "Stream"),
-        amount: usd(liveBase, 3),
-        subtitle: effectiveState(s) === "dripping" ? "Active stream" : "Stream details",
-        isLive: effectiveState(s) === "dripping" && isIncoming,
+        amount: usd(value, 3),
+        subtitle: streamStatusLabel(s),
+        isLive: dripping && isIncoming,
       };
     });
   }, [activeStreams, addr, now]);
@@ -317,26 +332,40 @@ export function PhoneHomeView({
             </p>
           </div>
           {activeStreams.length === 0 ? (
-            <p className="text-[11px] text-[#888]">No active streams yet.</p>
+            <div className="rounded-2xl border border-dashed border-black/10 bg-white px-3 py-6 text-center">
+              <p className="text-[12px] font-medium text-[#555]">No streams yet</p>
+              <p className="mt-1 text-[11px] text-[#888]">
+                Create a stream or accept a request to get started.
+              </p>
+            </div>
           ) : (
-            activeStreams.map((s, i) => (
-              <button
-                key={s.id}
-                type="button"
-                onClick={() => setDetailsView({ kind: "stream", id: s.id })}
-                className="rounded-2xl border border-black/10 bg-white px-3 py-2.5 text-left"
-              >
-                <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#888]">
-                  {resolveStreamLabel(s) ?? (addr ? streamBackLabel(s, addr, i) : "Stream")}
-                </p>
-                <p className="mt-1 text-[14px] font-semibold tabular-nums text-[#111]">
-                  {usd(earnedBase(s, now), 3)}
-                </p>
-                <p className="mt-0.5 text-[10px] text-[#666]">
-                  {effectiveState(s) === "dripping" ? "Dripping" : "Not dripping"} · milestone {s.current_milestone + 1}/{s.n_milestones}
-                </p>
-              </button>
-            ))
+            activeStreams.map((s, i) => {
+              const dripping = effectiveState(s) === "dripping";
+              const value = dripping ? earnedBase(s, now) : s.total;
+              return (
+                <button
+                  key={s.id}
+                  type="button"
+                  onClick={() => setDetailsView({ kind: "stream", id: s.id })}
+                  className="rounded-2xl border border-black/10 bg-white px-3 py-2.5 text-left"
+                >
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#888]">
+                    {resolveStreamLabel(s) ?? (addr ? streamBackLabel(s, addr, i) : "Stream")}
+                  </p>
+                  <p className="mt-1 text-[14px] font-semibold tabular-nums text-[#111]">
+                    {usd(value, 3)}
+                    {!dripping && (
+                      <span className="ml-1 text-[10px] font-medium uppercase tracking-wide text-[#999]">
+                        locked
+                      </span>
+                    )}
+                  </p>
+                  <p className="mt-0.5 text-[10px] text-[#666]">
+                    {streamStatusLabel(s)} · milestone {s.current_milestone + 1}/{s.n_milestones}
+                  </p>
+                </button>
+              );
+            })
           )}
         </div>
       </div>
