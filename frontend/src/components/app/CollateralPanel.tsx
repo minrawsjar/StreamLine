@@ -10,6 +10,7 @@ import { useLending, PV_DISCOUNT } from "@/lib/use-lending";
 import { effectiveState } from "@/lib/stream-state";
 import { buildBorrow, buildRepay } from "@/lib/streamline-tx";
 import { USDC_BASE } from "@/lib/stream-math";
+import { BorrowFlow } from "./FinanceFlowViz";
 import { Card } from "./dashboard-ui";
 
 const usd = (base: number) =>
@@ -118,6 +119,10 @@ export function CollateralPanel() {
             </p>
           </div>
         </div>
+      </div>
+
+      <div className="mb-5">
+        <BorrowFlow />
       </div>
 
       {/* Borrow against dripping streams */}

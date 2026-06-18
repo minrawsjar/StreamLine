@@ -8,6 +8,7 @@ import { useGaslessExecute } from "@/lib/use-gasless";
 import { useYieldVault } from "@/lib/use-yield";
 import { buildVaultDeposit, buildVaultRedeem } from "@/lib/streamline-tx";
 import { USDC_BASE } from "@/lib/stream-math";
+import { YieldSplitFlow } from "./FinanceFlowViz";
 import { Card } from "./dashboard-ui";
 
 const usd = (base: number) =>
@@ -94,6 +95,10 @@ export function YieldPanel() {
             {vault.aprPct.toFixed(0)}%
           </p>
         </div>
+      </div>
+
+      <div className="mb-5">
+        <YieldSplitFlow />
       </div>
 
       {/* Live position value */}

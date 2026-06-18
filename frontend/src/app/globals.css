@@ -238,9 +238,68 @@ body {
   .sl-levitate-glow,
   .sl-drift,
   .sl-float-tile,
-  .animate-shiny {
+  .animate-shiny,
+  .sl-flow-dot-h,
+  .sl-flow-dot,
+  .sl-shrink-pulse {
     animation: none;
   }
+}
+
+@keyframes sl-flow-dot-h {
+  0% {
+    left: 0%;
+    opacity: 0;
+  }
+  10% {
+    opacity: 1;
+  }
+  90% {
+    opacity: 1;
+  }
+  100% {
+    left: 100%;
+    opacity: 0;
+  }
+}
+
+@keyframes sl-flow-dot {
+  0% {
+    top: 0%;
+    opacity: 0;
+  }
+  10% {
+    opacity: 1;
+  }
+  90% {
+    opacity: 1;
+  }
+  100% {
+    top: 100%;
+    opacity: 0;
+  }
+}
+
+.sl-flow-dot-h {
+  animation: sl-flow-dot-h 1.8s ease-in-out infinite;
+}
+
+.sl-flow-dot {
+  animation: sl-flow-dot 1.8s ease-in-out infinite;
+}
+
+@keyframes sl-shrink-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.72;
+  }
+}
+
+.sl-shrink-pulse {
+  animation: sl-shrink-pulse 2s ease-in-out infinite;
 }
 
 /* Shiny keyword accent (headline highlights) */

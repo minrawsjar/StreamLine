@@ -53,9 +53,11 @@ export function SceneTextPanel({
     ? stacked
       ? "text-[2.4rem] lg:text-[2.85rem]"
       : "text-[2.85rem] lg:text-[3.6rem]"
-    : stacked
-      ? "text-[2rem] lg:text-[2.35rem]"
-      : "text-[2.65rem] lg:text-[3.35rem]";
+    : content.headlineLarge
+      ? "text-[2.9rem] lg:text-[4rem]"
+      : stacked
+        ? "text-[2rem] lg:text-[2.35rem]"
+        : "text-[2.65rem] lg:text-[3.35rem]";
 
   const bodySize = isPro
     ? stacked

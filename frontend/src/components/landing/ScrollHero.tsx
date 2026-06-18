@@ -25,6 +25,7 @@ export function ScrollHero() {
   const isPro = scene.theme === "pro";
   const inApp = phoneApp !== null;
   const isIntroTiles = scene.panelMode === "tiles";
+  const panelTall = scene.rightExtra;
 
   return (
     <div
@@ -50,7 +51,7 @@ export function ScrollHero() {
           className={`relative flex justify-end transition-opacity duration-500 ${
             isIntroTiles
               ? "h-[min(42vh,360px)] items-start lg:-translate-y-6"
-              : scene.rightExtra
+              : panelTall
                 ? "h-[min(78vh,620px)] items-center"
                 : "h-[320px] items-center"
           } ${inApp ? "pointer-events-none opacity-30" : ""}`}
@@ -101,7 +102,7 @@ export function ScrollHero() {
           className={`relative flex justify-start transition-opacity duration-500 ${
             isIntroTiles
               ? "h-[min(42vh,360px)] items-end lg:translate-y-6"
-              : scene.rightExtra
+              : panelTall
                 ? "h-[min(78vh,620px)] items-center"
                 : "h-[320px] items-center"
           } ${inApp ? "pointer-events-none opacity-30" : ""}`}

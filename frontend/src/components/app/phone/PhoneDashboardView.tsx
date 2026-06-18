@@ -65,7 +65,7 @@ type PhoneDashboardViewProps = {
   activity: readonly PhoneActivityItem[];
   activityLoading?: boolean;
   onQuickAction?: (id: string) => void;
-  onShiftCards?: (step: number) => void;
+  onShiftCards?: () => void;
   onPrimaryCardClick?: () => void;
   onPrimaryCardDetails?: () => void;
   trailing?: ReactNode;
@@ -165,28 +165,26 @@ export function PhoneDashboardView({
   const normalizedCards = cards.length
     ? cards
     : [{ id: "macro-empty", label: "Total balance", amount: "$0.00", subtitle: "" }];
-  const active = ((activeCardIndex % normalizedCards.length) + normalizedCards.length) % normalizedCards.length;
+  const n = normalizedCards.length;
+  const active = ((activeCardIndex % n) + n) % n;
   const mainCard = normalizedCards[active];
+  const nextCard = n > 1 ? normalizedCards[(active + 1) % n] : null;
+  const decorativeCard: StreamCardData = {
+    id: "decorative",
+    label: "",
+    empty: true,
+  };
   const layers = BACK_OFFSETS.map((layer, i) => ({
     ...layer,
-    card: normalizedCards.length > i + 1 ? normalizedCards[(active + i + 1) % normalizedCards.length] : {
-      id: `empty-${i}`,
-      label: "No stream",
-      empty: true,
-    },
+    card: i === 0 && nextCard ? nextCard : decorativeCard,
+    clickable: i === 0 && n > 1,
   }));
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className={`relative z-20 mx-0.5 mt-2 overflow-visible pb-2 ${SECTION_GAP}`}>
-        {layers.map((layer, i) => (
-          <button
-            key={layer.card.id}
-            type="button"
-            onClick={() => onShiftCards?.(i + 1)}
-            className={`absolute inset-x-0 ${layer.inset} text-left transition-transform active:scale-[0.99]`}
-            style={{ top: `${layer.top}px`, zIndex: i + 1 }}
-          >
+        {layers.map((layer, i) => {
+          const inner = (
             <div
               className={`flex min-h-[118px] flex-col justify-start rounded-2xl border p-4 shadow-[0_4px_16px_rgba(0,0,0,0.04)] backdrop-blur-md ${layer.tone}`}
             >
@@ -198,8 +196,28 @@ export function PhoneDashboardView({
                 {!layer.card.empty && i === 0 ? layer.card.label : ""}
               </p>
             </div>
-          </button>
-        ))}
+          );
+          return layer.clickable ? (
+            <button
+              key={`back-${i}-${layer.card.id}`}
+              type="button"
+              onClick={() => onShiftCards?.()}
+              className={`absolute inset-x-0 ${layer.inset} text-left transition-transform active:scale-[0.99]`}
+              style={{ top: `${layer.top}px`, zIndex: i + 1 }}
+            >
+              {inner}
+            </button>
+          ) : (
+            <div
+              key={`back-${i}-decorative`}
+              className={`pointer-events-none absolute inset-x-0 ${layer.inset}`}
+              style={{ top: `${layer.top}px`, zIndex: i + 1 }}
+              aria-hidden
+            >
+              {inner}
+            </div>
+          );
+        })}
 
         <div
           role="button"

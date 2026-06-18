@@ -12,6 +12,9 @@ import {
 import type { PhoneAppRoute } from "@/components/app/phone/types";
 import type { PhoneScene, SceneTheme } from "./heroScenes";
 import { HowStepsTimeline } from "./HowStepsTimeline";
+import { FinancePhonePreview } from "@/components/app/FinanceFlowViz";
+import { PrivacyPhonePreview } from "./PrivacyPhonePreview";
+import { ProPhonePreview } from "./ProPhonePreview";
 
 /** iPhone 15 proportions: 393 × 852 pt → screen aspect 9:19.5 */
 const SCREEN_ASPECT = "9 / 19.5";
@@ -188,85 +191,25 @@ function StatsScreen() {
 }
 
 function FinanceScreen({ progress }: { progress: number }) {
-  const borrowed = Math.floor(890 + progress * 110);
-  const yieldEarned = (12.4 + progress * 4.2).toFixed(2);
   return (
-    <div className="mt-4 flex min-h-0 flex-1 flex-col justify-center gap-3">
-      <div className="rounded-2xl border border-white/60 bg-white/75 p-4 shadow-[0_4px_24px_rgba(0,0,0,0.06)] backdrop-blur-md">
-        <p className="text-[10px] font-semibold uppercase tracking-wider text-[#888]">
-          Locked balance
-        </p>
-        <p className="mt-1.5 text-[1.65rem] font-bold tabular leading-none text-[#111]">
-          $4,000
-        </p>
-        <p className="mt-2 text-[11px] font-medium text-[#555]">
-          +${yieldEarned} yield in Scallop · 18 days left
-        </p>
-      </div>
-      <div className="grid grid-cols-2 gap-2.5">
-        <div className="rounded-xl border border-white/50 bg-white/65 p-3.5 backdrop-blur-md">
-          <p className="text-[9px] font-medium uppercase tracking-wider text-[#888]">
-            Split
-          </p>
-          <p className="mt-0.5 text-sm font-bold text-[#111]">60 / 30 / 10</p>
-          <p className="mt-0.5 text-[9px] text-[#888]">spend · yield · save</p>
-        </div>
-        <div className="rounded-xl border border-white/50 bg-white/65 p-3.5 backdrop-blur-md">
-          <p className="text-[9px] font-medium uppercase tracking-wider text-[#888]">
-            Borrowed
-          </p>
-          <p className="mt-0.5 text-sm font-bold tabular text-[#111]">${borrowed}</p>
-          <p className="mt-0.5 text-[9px] text-[#888]">auto-repaying</p>
-        </div>
-      </div>
-      <p className="text-center text-[11px] font-medium leading-snug text-[#555]">
-        Idle money earns. Active streams collateralize.
-      </p>
+    <div className="mt-1 flex min-h-0 flex-1 flex-col">
+      <FinancePhonePreview progress={progress} />
+    </div>
+  );
+}
+
+function PrivacyScreen({ progress }: { progress: number }) {
+  return (
+    <div className="flex min-h-0 flex-1 flex-col justify-center">
+      <PrivacyPhonePreview progress={progress} />
     </div>
   );
 }
 
 function ProScreen({ progress }: { progress: number }) {
-  const paid = Math.floor(248500 + progress * 12500).toLocaleString();
   return (
-    <div className="mt-6 flex min-h-0 flex-1 flex-col font-[family-name:var(--font-inter)]">
-      <p className="text-[10px] font-medium uppercase tracking-[0.18em] text-white/40">
-        Pay run · Q2 contractors
-      </p>
-      <p className="mt-2 text-[1.75rem] font-semibold tabular leading-none tracking-tight text-white">
-        ${paid}
-      </p>
-      <p className="mt-1 text-[11px] text-white/45">
-        42 payees · 6 departments · streaming
-      </p>
-
-      <div className="mt-5 space-y-2">
-        {[
-          { name: "Engineering", amt: "$84,200", status: "Dripping" },
-          { name: "Design", amt: "$31,500", status: "Awaiting milestone" },
-          { name: "Operations", amt: "$18,900", status: "Pay run scheduled" },
-        ].map((row) => (
-          <div
-            key={row.name}
-            className="flex items-center justify-between rounded-lg border border-white/10 bg-white/5 px-3 py-2.5"
-          >
-            <div>
-              <p className="text-[11px] font-medium text-white/80">{row.name}</p>
-              <p className="text-[10px] text-white/35">{row.status}</p>
-            </div>
-            <p className="text-xs font-semibold tabular text-white/70">{row.amt}</p>
-          </div>
-        ))}
-      </div>
-
-      <div className="mt-auto rounded-lg border border-white/10 bg-white/5 px-3 py-3">
-        <p className="text-[9px] uppercase tracking-wider text-white/35">
-          Next disbursement
-        </p>
-        <p className="mt-0.5 text-sm font-medium text-white/80">
-          Friday · 09:00 UTC · auto
-        </p>
-      </div>
+    <div className="flex min-h-0 flex-1 flex-col">
+      <ProPhonePreview progress={progress} />
     </div>
   );
 }
@@ -292,7 +235,7 @@ function LaunchScreen({ compact = false }: { compact?: boolean }) {
         Money Streams
         <br />
         {" "}
-        <span className="sl-shiny animate-shiny">Soon on Sui</span>
+        <span className="sl-shiny animate-shiny">Coming Soon</span>
       </h2>
     </div>
   );
@@ -320,6 +263,8 @@ function PhoneScreenContent({
       return <StatsScreen />;
     case "finance":
       return <FinanceScreen progress={sceneProgress} />;
+    case "privacy":
+      return <PrivacyScreen progress={sceneProgress} />;
     case "pro":
       return <ProScreen progress={sceneProgress} />;
     case "launch":
@@ -418,7 +363,9 @@ export function PhoneMockup({
                 )}
                 <div
                   className={`flex min-h-0 flex-col ${
-                    scene === "states" ? "flex-1" : ""
+                    scene === "states" || scene === "finance" || scene === "privacy" || scene === "pro"
+                      ? "flex-1"
+                      : ""
                   }`}
                 >
                   <PhoneScreenContent

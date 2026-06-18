@@ -4,6 +4,7 @@ export type PhoneScene =
   | "states"
   | "stats"
   | "finance"
+  | "privacy"
   | "pro"
   | "launch";
 
@@ -16,6 +17,7 @@ export type ScenePanel = {
   body: string;
   bullets: string[];
   metric?: { value: string; label: string };
+  headlineLarge?: boolean;
 };
 
 export type PanelMode = "tiles" | "full";
@@ -80,28 +82,24 @@ export const HERO_SCENES: HeroScene[] = [
       label: "earn more",
       headline: "Earn Yield ",
       accent: "with your Stream.",
-      body: "$4,000 locked for a three-week project? It doesn't sit idle, it routes into defi and earns from start.",
+      body: "Money shouldn't sit idle, so split your stream into yield, and savings, and let the your earnings compound from the 1st second. Automatically.",
       bullets: [
-        "Idle capital works for both sides",
-        "Split once — spending, savings, yield",
-        "Fires automatically on every drip",
       ],
+      headlineLarge: true,
     },
     right: {
       label: "Use Anytime",
       headline: "Borrow against",
       accent: "your stream.",
-      body: "$3,000 stream running, two weeks left, need cash today? Borrow against future income now. The loan repays itself from your drips — no manual payments, no liquidation risk.",
+      body: "Need cash today? Borrow against your stream's present value — one lump sum now, then part of your stream repays the lender automatically. No liquidation risk. No manual payments. No worries about collateral health.",
       bullets: [
-        "Stream present value as collateral",
-        "Auto-repay from incoming drips",
-        "Position gets healthier every day",
+
       ],
     },
   },
   {
     id: "privacy",
-    phone: "stats",
+    phone: "privacy",
     theme: "light",
     left: {
       label: "Remain Private",
@@ -111,6 +109,7 @@ export const HERO_SCENES: HeroScene[] = [
       bullets: [
   
       ],
+      headlineLarge: true,
     },
     right: {
       label: "Provable on demand",
