@@ -16,6 +16,13 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends pkg-config ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
+# Make crates.io fetches resilient to flaky CI networks: the sparse protocol is
+# lighter than the git index, more retries ride out transient resets, and
+# disabling HTTP/2 multiplexing avoids "connection reset by peer" mid-download.
+ENV CARGO_NET_RETRY=10 \
+    CARGO_HTTP_MULTIPLEXING=false \
+    CARGO_REGISTRIES_CRATES_IO_PROTOCOL=sparse
+
 COPY . .
 RUN cargo build --release --bin streamline-indexer --bin streamline-keeper
 
