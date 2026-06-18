@@ -120,13 +120,23 @@ export function HowStepsTimeline({
         }`}
       >
         <div className="relative flex min-h-0 flex-1 flex-col px-0.5">
-          <div className="relative flex min-h-0 flex-1 flex-col justify-between py-2">
+          <div
+            className={`relative flex min-h-0 flex-1 flex-col ${
+              embedded ? "justify-center py-2" : "justify-between py-2"
+            }`}
+          >
             <div
-              className={`absolute left-[15px] top-3 bottom-3 w-px -translate-x-1/2 bg-gradient-to-b ${lineTone}`}
+              className={`absolute left-[15px] w-px -translate-x-1/2 bg-gradient-to-b ${lineTone} ${
+                embedded ? "top-1 bottom-1" : "top-3 bottom-3"
+              }`}
               aria-hidden
             />
 
-            <ol className="relative flex h-full min-h-0 flex-1 flex-col justify-between">
+            <ol
+              className={`relative flex min-h-0 flex-1 flex-col ${
+                embedded ? "h-full justify-between gap-2" : "h-full justify-between"
+              }`}
+            >
             {steps.map((step, i) => {
               const state =
                 i < active ? "done" : i === active ? "active" : "upcoming";
@@ -138,8 +148,8 @@ export function HowStepsTimeline({
               );
 
               return (
-                <li key={step.id} className="relative flex items-start gap-4">
-                  <span className="relative z-[1] mt-1.5 flex h-7 w-7 shrink-0 items-center justify-center">
+                <li key={step.id} className={`relative flex items-start ${embedded ? "gap-3" : "gap-4"}`}>
+                  <span className={`relative z-[1] flex h-7 w-7 shrink-0 items-center justify-center ${embedded ? "mt-1" : "mt-1.5"}`}>
                     <span
                       className={`rounded-full transition-all duration-700 ${
                         state === "active"
@@ -161,17 +171,17 @@ export function HowStepsTimeline({
                       {step.label}
                     </p>
                     <p
-                      className={`mt-1.5 font-semibold leading-none tracking-[-0.03em] ${
+                      className={`font-semibold leading-none tracking-[-0.03em] ${
                         embedded
-                          ? "text-[1.35rem]"
-                          : "text-[clamp(1.35rem,2.2vw,1.75rem)]"
+                          ? "mt-1.5 text-[1.35rem]"
+                          : "mt-1.5 text-[clamp(1.35rem,2.2vw,1.75rem)]"
                       } ${titleTone}`}
                     >
                       {step.title}
                     </p>
                     <p
-                      className={`mt-2.5 max-w-[28ch] leading-snug ${
-                        embedded ? "text-[11px]" : "text-[13px]"
+                      className={`max-w-[28ch] leading-snug ${
+                        embedded ? "mt-2 text-[11px]" : "mt-2.5 text-[13px]"
                       } ${phraseTone}`}
                     >
                       {step.phrase}
