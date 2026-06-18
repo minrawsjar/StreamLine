@@ -6,4 +6,5 @@ export { HowItWorksSection } from "./HowItWorksSection";
 export { WhySuiSection } from "./WhySuiSection";
 export { ComparisonSection } from "./ComparisonSection";
 export { SiteFooter } from "./SiteFooter";
+export { LegalFooter } from "./LegalFooter";
 export { CustomCursor } from "./CustomCursor";

@@ -65,10 +65,11 @@ export function AppChrome({ children }: { children: React.ReactNode }) {
           {account && <TokenBalance dark={isPro} />}
           {account && !isPro && <FaucetButton amount={1000} />}
           <WalletButton
+            showFaucetInMenu={!isPro}
             className={
               isPro
                 ? "sl-glass-btn-dark !px-4 !py-2 !text-[10px]"
-                : "inline-flex items-center bg-[#2b2a5e] px-4 py-2 text-[10px] uppercase tracking-[0.12em] text-white transition-opacity hover:opacity-90"
+                : "inline-flex items-center rounded-full border border-[#2b2a5e]/15 bg-white px-4 py-2 text-[10px] uppercase tracking-[0.12em] text-[#2b2a5e] transition-colors hover:bg-[#f7f7fb]"
             }
           />
         </div>

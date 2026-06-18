@@ -31,6 +31,15 @@ import {
   findCreatedConfidentialStream,
 } from "@/lib/confidential-store";
 import { DITHER_HATCH } from "./dashboard-ui";
+import { usePhoneEmbedded } from "./phone/PhoneEmbeddedContext";
+import {
+  PhoneDurationField,
+  PhoneField,
+  PhoneToggleRow,
+  phoneInputClass,
+  phonePctInputClass,
+} from "./phone/PhoneFormParts";
+import { queueStreamLabel, rememberStreamLabel } from "@/lib/stream-labels";
 
 type SplitRow = { label: string; address: string; pct: number; yield: boolean };
 
@@ -39,30 +48,56 @@ const DEFAULT_SPLITS: SplitRow[] = [
   { label: "Scallop (yield)", address: "", pct: 30, yield: true },
 ];
 
-export function StreamCreator() {
+export type StreamCreatorPrefill = {
+  freelancer?: string;
+  amount?: number;
+  durationValue?: number;
+  durationUnit?: DurationUnit;
+  isPrivate?: boolean;
+  useMilestones?: boolean;
+  milestones?: string[];
+  useSplitConfig?: boolean;
+  splits?: SplitRow[];
+};
+
+export function StreamCreator({
+  onCancel,
+  prefill,
+}: {
+  onCancel?: () => void;
+  prefill?: StreamCreatorPrefill;
+} = {}) {
   const account = useCurrentAccount();
   const client = useSuiClient();
+  const embedded = usePhoneEmbedded();
   const packageId = useNetworkVariable("packageId");
   const usdcType = useNetworkVariable("usdcType");
   const originalPackageId = useNetworkVariable("originalPackageId");
   const { execute, isPending } = useGaslessExecute();
 
-  const [isPrivate, setIsPrivate] = useState(false);
-  const [freelancer, setFreelancer] = useState("");
-  const [amount, setAmount] = useState(800);
-  const [durationValue, setDurationValue] = useState(14);
-  const [durationUnit, setDurationUnit] = useState<DurationUnit>("days");
-  const [milestones, setMilestones] = useState<string[]>([
-    "Wireframes",
-    "Mockups",
-    "Revisions",
-    "Final",
-  ]);
-  const [splits, setSplits] = useState<SplitRow[]>(DEFAULT_SPLITS);
+  const [isPrivate, setIsPrivate] = useState(prefill?.isPrivate ?? false);
+  const [streamName, setStreamName] = useState("");
+  const [freelancer, setFreelancer] = useState(prefill?.freelancer ?? "");
+  const [amount, setAmount] = useState(prefill?.amount ?? 800);
+  const [durationValue, setDurationValue] = useState(prefill?.durationValue ?? 14);
+  const [durationUnit, setDurationUnit] = useState<DurationUnit>(
+    prefill?.durationUnit ?? "days"
+  );
+  const [milestones, setMilestones] = useState<string[]>(
+    prefill?.milestones ?? ["Wireframes", "Mockups", "Revisions", "Final"]
+  );
+  const [splits, setSplits] = useState<SplitRow[]>(prefill?.splits ?? DEFAULT_SPLITS);
   const [status, setStatus] = useState<string | null>(null);
   const [proving, setProving] = useState(false);
+  const [showPrivateArea, setShowPrivateArea] = useState(true);
+  const [showMilestonesArea, setShowMilestonesArea] = useState(true);
+  const [useMilestones, setUseMilestones] = useState(prefill?.useMilestones ?? false);
+  const [useSplitConfig, setUseSplitConfig] = useState(prefill?.useSplitConfig ?? false);
 
   const durationMs = durationToMs(durationValue, durationUnit);
+  const defaultMilestoneName = streamName.trim() || "Payment";
+  const effectiveMilestones =
+    embedded && !useMilestones ? [defaultMilestoneName] : milestones;
   const rate = ratePerSecond(amount, durationMs);
   const interval = dripIntervalMs(amount, durationMs);
   const splitSum = splits.reduce((s, r) => s + (Number(r.pct) || 0), 0);
@@ -71,8 +106,8 @@ export function StreamCreator() {
   const errors = useMemo(() => {
     const e: string[] = [];
     if (amount <= 0) e.push("Amount must be greater than 0.");
-    if (milestones.length === 0) e.push("Add at least one milestone.");
-    if (amount / Math.max(milestones.length, 1) < 0.01)
+    if (effectiveMilestones.length === 0) e.push("Add at least one milestone.");
+    if (amount / Math.max(effectiveMilestones.length, 1) < 0.01)
       e.push("Each milestone must be ≥ 0.01 USDC.");
     // A Sui address is 0x + exactly 64 hex. A 40-hex Ethereum-style address
     // looks valid but Sui zero-pads it to an address nobody controls, so the
@@ -87,7 +122,7 @@ export function StreamCreator() {
         e.push(`Splits must total 100% (currently ${splitSum}%).`);
     }
     return e;
-  }, [amount, durationValue, milestones.length, splitSum, isPrivate, freelancer]);
+  }, [amount, durationValue, effectiveMilestones.length, splitSum, isPrivate, freelancer]);
 
   const canCreate = errors.length === 0 && !!account;
   const recipientInvalid =
@@ -122,16 +157,18 @@ export function StreamCreator() {
       usdcType,
       sender: account.address,
       freelancer,
-      milestoneNames: milestones,
-      milestoneAmountsBase: splitMilestoneAmounts(totalBase, milestones.length),
+      milestoneNames: effectiveMilestones,
+      milestoneAmountsBase: splitMilestoneAmounts(totalBase, effectiveMilestones.length),
       totalBase,
       durationMs,
       yieldBps,
     });
     setStatus("Awaiting wallet signature…");
     execute(tx, {
-      onSuccess: (r) =>
-        setStatus(`Stream created — locked ${formatUsd(amount)}. Digest ${r.digest}`),
+      onSuccess: (r) => {
+        queueStreamLabel(streamName, freelancer, Number(totalBase));
+        setStatus(`Stream created — locked ${formatUsd(amount)}. Digest ${r.digest}`);
+      },
       onError: (e) => setStatus(e.message),
     });
   };
@@ -163,7 +200,7 @@ export function StreamCreator() {
           v: 1,
           coinType: usdcType,
           totalBase: totalBase.toString(),
-          milestones: milestones.length,
+          milestones: effectiveMilestones.length,
           freelancer: recipient,
           remainingBase: totalBase.toString(),
           rRemaining: rRemaining.toString(),
@@ -178,7 +215,7 @@ export function StreamCreator() {
         sender: account.address,
         totalBase,
         freelancer: recipient,
-        nMilestones: milestones.length,
+        nMilestones: effectiveMilestones.length,
         remainingCommitment: remainingC,
         wrapProof: wrap.proof,
         earnedCommitment: earnedC,
@@ -192,12 +229,13 @@ export function StreamCreator() {
           setStatus("Confirming on-chain…");
           const streamId = await findCreatedConfidentialStream(client, digest);
           if (streamId) {
+            rememberStreamLabel(streamId, streamName);
             // Local cache so this wallet can act without a Seal round-trip.
             addSecret(account.address, {
               streamId,
               coinType: usdcType,
               totalBase: totalBase.toString(),
-              milestones: milestones.length,
+              milestones: effectiveMilestones.length,
               freelancer: recipient,
               remainingBase: totalBase.toString(),
               rRemaining: rRemaining.toString(),
@@ -219,38 +257,251 @@ export function StreamCreator() {
     }
   };
 
+  if (embedded) {
+    return (
+      <div className="flex flex-col gap-4">
+        <PhoneField label="Recipient">
+          <input
+            value={freelancer}
+            onChange={(e) => setFreelancer(e.target.value)}
+            placeholder="0x…"
+            className={`${phoneInputClass} font-mono text-[11px] ${
+              recipientInvalid ? "border-[#c0533a]" : ""
+            }`}
+          />
+        </PhoneField>
+
+        <PhoneField label="Stream name">
+          <input
+            value={streamName}
+            onChange={(e) => setStreamName(e.target.value)}
+            placeholder="Design sprint"
+            className={phoneInputClass}
+          />
+        </PhoneField>
+
+        <PhoneField label="Amount (USDC)">
+          <input
+            type="number"
+            value={amount === 0 ? "" : amount}
+            min={0}
+            placeholder="800"
+            onChange={(e) =>
+              setAmount(e.target.value === "" ? 0 : Number(e.target.value))
+            }
+            className={phoneInputClass}
+          />
+        </PhoneField>
+
+        {!isPrivate && (
+          <PhoneDurationField
+            value={durationValue === 0 ? "" : String(durationValue)}
+            unit={durationUnit}
+            onValueChange={(v) =>
+              setDurationValue(v === "" ? 0 : Number(v))
+            }
+            onUnitChange={setDurationUnit}
+          />
+        )}
+
+        <PhoneToggleRow
+          title="Private stream"
+          subtitle="Hide amounts on-chain"
+          checked={isPrivate}
+          onChange={(v) => {
+            setIsPrivate(v);
+            if (v) setUseSplitConfig(false);
+          }}
+        />
+
+        <PhoneToggleRow
+          title="Use milestones"
+          subtitle="Define payment stages"
+          checked={useMilestones}
+          onChange={setUseMilestones}
+        >
+          <div className="flex flex-col gap-2">
+            {milestones.map((m, i) => (
+              <div key={i} className="flex gap-2">
+                <span className="flex w-7 items-center justify-center rounded-lg bg-[#2b2a5e] text-[10px] text-white">
+                  {i + 1}
+                </span>
+                <input
+                  value={m}
+                  onChange={(e) => updateMilestone(i, e.target.value)}
+                  className="w-full rounded-xl border border-black/15 bg-white px-3 py-2 text-[12px] outline-none focus:border-[#5b54e6]"
+                />
+                <button
+                  type="button"
+                  onClick={() =>
+                    setMilestones((arr) => arr.filter((_, j) => j !== i))
+                  }
+                  className="px-2 text-[#c0533a]"
+                  aria-label="Remove milestone"
+                >
+                  ×
+                </button>
+              </div>
+            ))}
+            <button
+              type="button"
+              onClick={() =>
+                setMilestones((m) => [...m, `Milestone ${m.length + 1}`])
+              }
+              className="self-start rounded-lg border border-black/15 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-[#444]"
+            >
+              + add milestone
+            </button>
+          </div>
+        </PhoneToggleRow>
+
+        <PhoneToggleRow
+          title="Split config"
+          subtitle={
+            isPrivate ? "Not available for private" : `Route each drip (${splitSum}%)`
+          }
+          checked={useSplitConfig}
+          disabled={isPrivate}
+          onChange={setUseSplitConfig}
+        >
+          <div className="flex flex-col gap-2">
+            {splits.map((row, i) => (
+              <div key={i} className="flex flex-wrap items-center gap-2">
+                <input
+                  value={row.label}
+                  onChange={(e) => updateSplit(i, { label: e.target.value })}
+                  className="min-w-0 flex-1 rounded-xl border border-black/15 bg-white px-3 py-2 text-[11px] outline-none focus:border-[#5b54e6]"
+                />
+                <input
+                  type="number"
+                  inputMode="numeric"
+                  value={row.pct === 0 ? "" : row.pct}
+                  placeholder="0"
+                  onChange={(e) =>
+                    updateSplit(i, {
+                      pct: e.target.value === "" ? 0 : Number(e.target.value),
+                    })
+                  }
+                  className={phonePctInputClass}
+                />
+                <span className="text-[10px] text-[#777]">%</span>
+                <label className="flex items-center gap-1 text-[10px] text-[#666]">
+                  <input
+                    type="checkbox"
+                    checked={row.yield}
+                    onChange={(e) => updateSplit(i, { yield: e.target.checked })}
+                  />
+                  yield
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setSplits((s) => s.filter((_, j) => j !== i))}
+                  className="px-1 text-[#c0533a]"
+                  aria-label="Remove split"
+                >
+                  ×
+                </button>
+              </div>
+            ))}
+            <button
+              type="button"
+              onClick={() =>
+                setSplits((s) => [
+                  ...s,
+                  { label: "Destination", address: "", pct: 0, yield: false },
+                ])
+              }
+              className="self-start rounded-lg border border-black/15 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-[#444]"
+            >
+              + add split
+            </button>
+          </div>
+        </PhoneToggleRow>
+
+        {!deployed && (
+          <p className="text-[11px] text-[#888]">
+            Move package not set for this network — set NEXT_PUBLIC_PACKAGE_ID to
+            enable on-chain creation.
+          </p>
+        )}
+        {errors[0] && !canCreate && (
+          <p className="text-[11px] text-[#c0533a]">{errors[0]}</p>
+        )}
+        {status && (
+          <p className="break-words text-[11px] text-[#666]">{status}</p>
+        )}
+
+        <div className="mt-6 flex flex-col gap-2">
+          <button
+            type="button"
+            onClick={onCreate}
+            disabled={!canCreate || !deployed || isPending || proving}
+            className="w-full rounded-2xl bg-[#111] px-4 py-2.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-white disabled:opacity-40"
+          >
+            {isPending || proving
+              ? isPrivate
+                ? "Proving…"
+                : "Signing…"
+              : isPrivate
+                ? "Create private stream"
+                : "Create stream"}
+          </button>
+          {onCancel && (
+            <button
+              type="button"
+              onClick={onCancel}
+              className="w-full rounded-2xl border border-black/12 bg-white px-4 py-2.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-[#111]"
+            >
+              Cancel
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="grid gap-10 lg:grid-cols-[1.4fr_1fr]">
       <div className="flex flex-col gap-8">
-        {/* Privacy is a property of the stream, not a separate product. */}
-        <div className="flex items-center justify-between border border-[#2b2a5e]/15 bg-white px-4 py-3">
-          <div>
-            <p className="text-[12px] font-semibold">
-              Private amounts {isPrivate && "🔒"}
-            </p>
-            <p className="mt-0.5 text-[11px] leading-relaxed text-[#2b2a5e]/60">
-              {isPrivate
-                ? "Amounts are hidden on-chain (commitments + ZK proofs). Secrets are Seal-encrypted to you and the recipient."
-                : "Amounts visible on-chain. Toggle to hide them with ZK commitments."}
-            </p>
-          </div>
-          <button
-            type="button"
-            role="switch"
-            aria-checked={isPrivate}
-            onClick={() => setIsPrivate((v) => !v)}
-            className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${
-              isPrivate ? "bg-[#5b54e6]" : "bg-[#2b2a5e]/25"
-            }`}
-          >
-            <span
-              className={`absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition-transform ${
-                isPrivate ? "translate-x-5" : "translate-x-0"
+        <button
+          type="button"
+          onClick={() => setShowPrivateArea((v) => !v)}
+          className="flex items-center justify-between border border-[#2b2a5e]/15 bg-white px-4 py-2.5 text-left"
+        >
+          <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#666]">
+            Privacy options
+          </span>
+          <span className="text-[11px] text-[#777]">{showPrivateArea ? "Hide" : "Show"}</span>
+        </button>
+        {showPrivateArea && (
+          <div className="flex items-center justify-between border border-[#2b2a5e]/15 bg-white px-4 py-3">
+            <div>
+              <p className="text-[12px] font-semibold">
+                Private amounts {isPrivate && "🔒"}
+              </p>
+              <p className="mt-0.5 text-[11px] leading-relaxed text-[#2b2a5e]/60">
+                {isPrivate
+                  ? "Amounts are hidden on-chain (commitments + ZK proofs). Secrets are Seal-encrypted to you and the recipient."
+                  : "Amounts visible on-chain. Toggle to hide them with ZK commitments."}
+              </p>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={isPrivate}
+              onClick={() => setIsPrivate((v) => !v)}
+              className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${
+                isPrivate ? "bg-[#5b54e6]" : "bg-[#2b2a5e]/25"
               }`}
-            />
-          </button>
-        </div>
-
+            >
+              <span
+                className={`absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition-transform ${
+                  isPrivate ? "translate-x-5" : "translate-x-0"
+                }`}
+              />
+            </button>
+          </div>
+        )}
         <Field label="Recipient (freelancer address)">
           <input
             value={freelancer}
@@ -261,6 +512,15 @@ export function StreamCreator() {
                 ? "border-[#c0533a] bg-[#c0533a]/[0.03]"
                 : "border-[#2b2a5e]/20"
             }`}
+          />
+        </Field>
+
+        <Field label="Stream name">
+          <input
+            value={streamName}
+            onChange={(e) => setStreamName(e.target.value)}
+            placeholder="Design sprint"
+            className="w-full border border-[#2b2a5e]/20 bg-white px-3 py-2.5 text-[14px] outline-none focus:border-[#5b54e6]"
           />
         </Field>
 
@@ -306,37 +566,49 @@ export function StreamCreator() {
           )}
         </div>
 
-        <Field label={`Milestones (${milestones.length})`}>
-          <div className="flex flex-col gap-2">
-            {milestones.map((m, i) => (
-              <div key={i} className="flex gap-2">
-                <span className="flex w-8 items-center justify-center bg-[#2b2a5e] text-[12px] text-white">
-                  {i + 1}
-                </span>
-                <input
-                  value={m}
-                  onChange={(e) => updateMilestone(i, e.target.value)}
-                  className="w-full border border-[#2b2a5e]/20 bg-white px-3 py-2 text-[13px] outline-none focus:border-[#5b54e6]"
-                />
-                <button
-                  onClick={() =>
-                    setMilestones((arr) => arr.filter((_, j) => j !== i))
-                  }
-                  className="px-3 text-[#c0533a] hover:opacity-60"
-                  aria-label="Remove milestone"
-                >
-                  ×
-                </button>
-              </div>
-            ))}
-            <button
-              onClick={() => setMilestones((m) => [...m, `Milestone ${m.length + 1}`])}
-              className="self-start border border-[#2b2a5e]/20 px-3 py-1.5 text-[12px] hover:border-[#5b54e6]"
-            >
-              + add milestone
-            </button>
-          </div>
-        </Field>
+        <button
+          type="button"
+          onClick={() => setShowMilestonesArea((v) => !v)}
+          className="flex items-center justify-between border border-[#2b2a5e]/15 bg-white px-4 py-2.5 text-left"
+        >
+          <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#666]">
+            Milestones
+          </span>
+          <span className="text-[11px] text-[#777]">{showMilestonesArea ? "Hide" : "Show"}</span>
+        </button>
+        {showMilestonesArea && (
+          <Field label={`Milestones (${milestones.length})`}>
+            <div className="flex flex-col gap-2">
+              {milestones.map((m, i) => (
+                <div key={i} className="flex gap-2">
+                  <span className="flex w-8 items-center justify-center bg-[#2b2a5e] text-[12px] text-white">
+                    {i + 1}
+                  </span>
+                  <input
+                    value={m}
+                    onChange={(e) => updateMilestone(i, e.target.value)}
+                    className="w-full border border-[#2b2a5e]/20 bg-white px-3 py-2 text-[13px] outline-none focus:border-[#5b54e6]"
+                  />
+                  <button
+                    onClick={() =>
+                      setMilestones((arr) => arr.filter((_, j) => j !== i))
+                    }
+                    className="px-3 text-[#c0533a] hover:opacity-60"
+                    aria-label="Remove milestone"
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+              <button
+                onClick={() => setMilestones((m) => [...m, `Milestone ${m.length + 1}`])}
+                className="self-start border border-[#2b2a5e]/20 px-3 py-1.5 text-[12px] hover:border-[#5b54e6]"
+              >
+                + add milestone
+              </button>
+            </div>
+          </Field>
+        )}
 
         {!isPrivate && (
         <Field label={`Split config (${splitSum}%)`}>

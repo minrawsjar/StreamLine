@@ -1,15 +1,17 @@
 "use client";
 
-import { useEffect, useState } from "react";
-
-import { QRCodeSVG } from "qrcode.react";
+import { useEffect, useState, type ReactNode } from "react";
 
 import { StreamLineMark } from "./StreamLineMark";
 import { PhoneAppShell } from "@/components/app/phone/PhoneAppShell";
+import { ScanIconButton } from "@/components/app/phone/PhoneHeaderActions";
+import {
+  PhoneDashboardView,
+  type PhoneActivityItem,
+} from "@/components/app/phone/PhoneDashboardView";
 import type { PhoneAppRoute } from "@/components/app/phone/types";
 import type { PhoneScene, SceneTheme } from "./heroScenes";
-
-const FLOW_STEPS = ["LOCK", "DRIP", "DONE"];
+import { HowStepsTimeline } from "./HowStepsTimeline";
 
 /** iPhone 15 proportions: 393 × 852 pt → screen aspect 9:19.5 */
 const SCREEN_ASPECT = "9 / 19.5";
@@ -38,19 +40,28 @@ function PhoneWallpaper() {
   );
 }
 
-function PhoneHeader({ pro = false }: { pro?: boolean }) {
+function PhoneHeader({
+  pro = false,
+  trailing,
+}: {
+  pro?: boolean;
+  trailing?: ReactNode;
+}) {
   return (
-    <div className="flex shrink-0 items-center gap-2">
-      <StreamLineMark size="sm" variant={pro ? "pro" : "default"} />
-      <span
-        className={`text-sm font-semibold tracking-tight ${
-          pro
-            ? "font-[family-name:var(--font-inter)] text-white"
-            : "font-bold text-[#111]"
-        }`}
-      >
-        streamline{pro && <span className="text-white/40">.pro</span>}
-      </span>
+    <div className="flex shrink-0 items-center justify-between gap-2">
+      <div className="flex items-center gap-2">
+        <StreamLineMark size="sm" variant={pro ? "pro" : "default"} />
+        <span
+          className={`text-sm font-semibold tracking-tight ${
+            pro
+              ? "font-[family-name:var(--font-inter)] text-white"
+              : "font-bold text-[#111]"
+          }`}
+        >
+          streamline{pro && <span className="text-white/40">.pro</span>}
+        </span>
+      </div>
+      {trailing}
     </div>
   );
 }
@@ -58,10 +69,11 @@ function PhoneHeader({ pro = false }: { pro?: boolean }) {
 const DASHBOARD_BASE_EARNED = 142.5;
 const DASHBOARD_EARN_PER_SEC = 0.5;
 
-const BACK_CARD_LAYERS = [
-  { tone: "bg-white/38 border-white/30", inset: "mx-4", top: 6 },
-  { tone: "bg-white/50 border-white/42", inset: "mx-2", top: 20 },
-] as const;
+const HERO_DASHBOARD_ACTIVITY: PhoneActivityItem[] = [
+  { time: "2m ago", text: "Drip received", amount: "+$0.50" },
+  { time: "1h ago", text: "Milestone 3 approved", amount: null },
+  { time: "Yesterday", text: "Split to yield wallet", amount: "$42.00" },
+];
 
 function DashboardScreen() {
   const [earned, setEarned] = useState(DASHBOARD_BASE_EARNED);
@@ -81,68 +93,25 @@ function DashboardScreen() {
   });
 
   return (
-    <div className="mt-1 flex min-h-0 flex-1 flex-col gap-3">
-      <div className="relative mx-0.5">
-        {BACK_CARD_LAYERS.map((layer, i) => (
-          <div
-            key={i}
-            className={`absolute inset-x-0 ${layer.inset}`}
-            style={{ top: `${layer.top}px`, zIndex: i + 1 }}
-            aria-hidden
-          >
-            <div
-              className={`h-[88px] rounded-2xl border shadow-[0_4px_16px_rgba(0,0,0,0.04)] backdrop-blur-md ${layer.tone}`}
-            />
-          </div>
-        ))}
-
-        <div className="relative z-10 mt-[46px] rounded-2xl border border-white/70 bg-white/88 p-4 shadow-[0_10px_32px_rgba(0,0,0,0.1)] backdrop-blur-md">
-          <p className="text-[10px] font-semibold uppercase tracking-wider text-[#888]">
-            Video Editing Gig
-          </p>
-          <p className="mt-1.5 text-[1.85rem] font-bold tabular-nums leading-none text-[#111]">
-            {formatted}
-          </p>
-          <p className="mt-2 text-[11px] font-medium leading-snug text-[#555]">
-            +$0.50/sec · Milestone 3 of 5
-          </p>
-          <div className="mt-3 h-2 overflow-hidden rounded-full bg-black/8">
-            <div className="h-full w-[68%] rounded-full bg-[#111]" />
-          </div>
-        </div>
-      </div>
-
-      <div className="mt-auto grid grid-cols-3 gap-2">
-        <div className="rounded-xl border border-white/50 bg-white/65 p-2.5 backdrop-blur-md">
-          <p className="text-[8px] font-medium uppercase tracking-wider text-[#888]">
-            Split
-          </p>
-          <p className="mt-0.5 text-[11px] font-bold text-[#111]">70 / 30</p>
-          <p className="mt-0.5 text-[8px] text-[#888]">wallet · yield</p>
-        </div>
-        <div className="rounded-xl border border-white/50 bg-white/65 p-2.5 backdrop-blur-md">
-          <p className="text-[8px] font-medium uppercase tracking-wider text-[#888]">
-            Next drip
-          </p>
-          <p className="mt-0.5 text-[11px] font-bold text-[#111]">~90s</p>
-          <p className="mt-0.5 text-[8px] text-[#888]">gasless</p>
-        </div>
-        <div className="flex flex-col items-center rounded-xl border border-white/50 bg-white/65 p-2 backdrop-blur-md">
-          <p className="text-[8px] font-medium uppercase tracking-wider text-[#888]">
-            Share
-          </p>
-          <QRCodeSVG
-            value="https://streamline.app/gig/video-editing"
-            size={44}
-            level="M"
-            marginSize={0}
-            bgColor="#ffffff"
-            fgColor="#111111"
-            className="mt-1 rounded-sm"
-            title="Share gig QR code"
-          />
-        </div>
-      </div>
+    <div className="mt-1">
+      <PhoneDashboardView
+        cards={[
+          {
+            id: "demo-macro",
+            label: "Total balance",
+            amount: formatted,
+            subtitle: "3 streams · 1 active",
+          },
+          { id: "demo-work", label: "Work stream", amount: "$90.00", subtitle: "Active stream" },
+          {
+            id: "demo-private",
+            label: "Private stream",
+            amount: "$52.50",
+            subtitle: "Stream details",
+          },
+        ]}
+        activity={HERO_DASHBOARD_ACTIVITY}
+      />
     </div>
   );
 }
@@ -171,38 +140,9 @@ function DripScreen({ progress }: { progress: number }) {
 }
 
 function StatesScreen({ progress }: { progress: number }) {
-  const active = Math.min(
-    FLOW_STEPS.length - 1,
-    Math.floor(progress * FLOW_STEPS.length)
-  );
   return (
-    <div className="mt-6 flex min-h-0 flex-1 flex-col">
-      <p className="text-[10px] font-semibold uppercase tracking-wider text-[#888]">
-        Three steps
-      </p>
-      <div className="mt-4 space-y-2">
-        {FLOW_STEPS.map((s, i) => (
-          <div
-            key={s}
-            className={`rounded-xl px-3.5 py-2.5 text-xs font-bold transition-all duration-500 ${
-              i === active
-                ? "bg-[#111] text-white shadow-[0_4px_16px_rgba(0,0,0,0.2)]"
-                : i < active
-                  ? "bg-black/10 text-[#111]"
-                  : "bg-white/60 text-[#aaa]"
-            }`}
-          >
-            {i + 1}. {s}
-          </div>
-        ))}
-      </div>
-      <p className="mt-auto pt-4 text-xs font-medium leading-snug text-[#555]">
-        {active === 1
-          ? "USDC dripping while you work"
-          : active === 2
-            ? "All milestones complete"
-            : "Full amount locked upfront"}
-      </p>
+    <div className="mt-1 flex min-h-0 flex-1 flex-col">
+      <HowStepsTimeline progress={progress} embedded />
     </div>
   );
 }
@@ -450,6 +390,8 @@ export function PhoneMockup({
 
           <div
             className={`absolute inset-0 z-10 flex flex-col px-6 pb-8 transition-all duration-[420ms] ease-out ${
+              inApp ? "min-h-0 overflow-hidden" : ""
+            } ${
               isLaunchScene ? "justify-center pt-12" : "pt-14"
             } ${
               transitioning && !inApp
@@ -464,13 +406,28 @@ export function PhoneMockup({
               />
             ) : (
               <>
-                {!isLaunchScene && <PhoneHeader pro={useDarkGlass} />}
-                <PhoneScreenContent
-                  scene={scene}
-                  sceneProgress={sceneProgress}
-                  onLaunchApp={onLaunchApp}
-                  compact={compact}
-                />
+                {!isLaunchScene && (
+                  <PhoneHeader
+                    pro={useDarkGlass}
+                    trailing={
+                      scene === "dashboard" && !inApp ? (
+                        <ScanIconButton pro={useDarkGlass} />
+                      ) : undefined
+                    }
+                  />
+                )}
+                <div
+                  className={`flex min-h-0 flex-col ${
+                    scene === "states" ? "flex-1" : ""
+                  }`}
+                >
+                  <PhoneScreenContent
+                    scene={scene}
+                    sceneProgress={sceneProgress}
+                    onLaunchApp={onLaunchApp}
+                    compact={compact}
+                  />
+                </div>
               </>
             )}
           </div>

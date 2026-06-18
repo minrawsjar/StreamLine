@@ -14,6 +14,8 @@ import { DisputeResolution } from "./DisputeResolution";
 import { USDC_BASE, formatInterval } from "@/lib/stream-math";
 import {
   completedMilestones,
+  dripRatePerMinuteBase,
+  earnedBase,
   effectiveState,
   milestoneCeilingBase,
   nextMilestoneNo,
@@ -29,6 +31,7 @@ import {
   short,
   type BarDatum,
 } from "./dashboard-ui";
+import { usePhoneEmbedded } from "./phone/PhoneEmbeddedContext";
 
 const PRIV_STATE = [
   "locked",
@@ -38,19 +41,11 @@ const PRIV_STATE = [
   "done",
 ] as const;
 
-/** Earned base units = already paid + (live accrual while dripping). */
-function earnedBase(s: StreamRecord, nowMs: number): number {
-  const paid = s.total - s.remaining;
-  if (effectiveState(s) !== "dripping" || s.duration_ms <= 0) return paid;
-  const rate = s.total / s.duration_ms;
-  const accrued = Math.max(0, (nowMs - s.last_drip_ms) * rate);
-  return Math.min(paid + accrued, milestoneCeilingBase(s, s.current_milestone), s.total);
-}
-
 const usd = (base: number) => (base / USDC_BASE).toFixed(2);
 
 export function FreelancerDashboard() {
   const account = useCurrentAccount();
+  const embedded = usePhoneEmbedded();
   const packageId = useNetworkVariable("packageId");
   const usdcType = useNetworkVariable("usdcType");
   const { execute, isPending } = useGaslessExecute();
@@ -154,13 +149,21 @@ export function FreelancerDashboard() {
 
   return (
     <div>
-      <DashboardHeader
-        eyebrow="Receiver console"
-        title="Freelancer dashboard"
-        subtitle="Watch money arrive in real time and raise milestones in one click."
-      />
+      {!embedded && (
+        <DashboardHeader
+          eyebrow="Receiver console"
+          title="Freelancer dashboard"
+          subtitle="Watch money arrive in real time and raise milestones in one click."
+        />
+      )}
 
-      <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div
+        className={
+          embedded
+            ? "mb-4 grid grid-cols-2 gap-2"
+            : "mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4"
+        }
+      >
         <StatCard
           tone="brand"
           label="Earned (all)"

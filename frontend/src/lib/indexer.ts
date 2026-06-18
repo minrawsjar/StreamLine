@@ -85,10 +85,14 @@ export function useStream(id: string | undefined) {
 export function useStreamDrips(id: string | undefined) {
   return useQuery({
     queryKey: ["drips", id],
-    queryFn: () => getJson<DripRecord[]>(`/stream/${id}/drips`),
+    queryFn: () => fetchStreamDrips(id!),
     enabled: !!id,
     refetchInterval: 20_000,
   });
+}
+
+export function fetchStreamDrips(streamId: string): Promise<DripRecord[]> {
+  return getJson<DripRecord[]>(`/stream/${streamId}/drips`);
 }
 
 /**

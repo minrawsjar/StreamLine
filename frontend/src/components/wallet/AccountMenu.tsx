@@ -16,13 +16,28 @@ import {
   copyToClipboard,
 } from "@/lib/format";
 import type { NetworkName } from "@/lib/networks";
+import { FaucetButton } from "./FaucetButton";
+import {
+  ProfileIcon,
+  profileIconButtonClass,
+} from "@/components/app/phone/PhoneHeaderActions";
 
 /**
  * Connected-state control: shows the active address with a dropdown for copy,
  * explorer, account switching, and disconnect. Replaces the connect button
  * once a wallet/zkLogin session is active.
  */
-export function AccountMenu({ className }: { className?: string }) {
+export function AccountMenu({
+  className,
+  showFaucet = false,
+  variant = "default",
+  profilePro = false,
+}: {
+  className?: string;
+  showFaucet?: boolean;
+  variant?: "default" | "profile";
+  profilePro?: boolean;
+}) {
   const account = useCurrentAccount();
   const { currentWallet } = useCurrentWallet();
   const accounts = useAccounts();
@@ -52,27 +67,38 @@ export function AccountMenu({ className }: { className?: string }) {
     }
   };
 
+  const isProfile = variant === "profile";
+
   return (
     <div
       className="relative"
       ref={ref}
-      data-sl-cursor={className ? "on-light" : "on-dark"}
+      data-sl-cursor={isProfile ? (profilePro ? "on-dark" : "on-light") : className ? "on-light" : "on-dark"}
     >
       <button
         onClick={() => setOpen((v) => !v)}
-        className={`flex items-center gap-2 transition-opacity ${
-          className ??
-          "border border-white/20 bg-[#2b2a5e] px-4 py-2.5 text-[12px] text-white hover:opacity-90"
-        }`}
+        className={
+          isProfile
+            ? profileIconButtonClass(profilePro)
+            : `flex items-center gap-2 transition-opacity ${
+                className ??
+                "border border-white/20 bg-[#2b2a5e] px-4 py-2.5 text-[12px] text-white hover:opacity-90"
+              }`
+        }
+        aria-label="Account menu"
       >
-        {currentWallet?.icon && (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={currentWallet.icon} alt="" className="h-[1.1em] w-[1.1em] shrink-0" />
+        {isProfile ? <ProfileIcon /> : (
+          <>
+            {currentWallet?.icon && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={currentWallet.icon} alt="" className="h-[1.1em] w-[1.1em] shrink-0" />
+            )}
+            <span className="tabular truncate">
+              {account.label ?? shortAddress(account.address)}
+            </span>
+            <span className="text-[0.8em] opacity-60">▼</span>
+          </>
         )}
-        <span className="tabular truncate">
-          {account.label ?? shortAddress(account.address)}
-        </span>
-        <span className="text-[0.8em] opacity-60">▼</span>
       </button>
 
       {open && (
@@ -102,6 +128,15 @@ export function AccountMenu({ className }: { className?: string }) {
               View on explorer ↗
             </a>
           </div>
+
+          {showFaucet && (
+            <div className="border-t border-[#2b2a5e]/10 px-3 py-2">
+              <FaucetButton
+                amount={1000}
+                className="w-full rounded-xl border border-[#2b2a5e]/20 bg-white px-3 py-2 text-[11px] font-medium text-[#2b2a5e]/85 transition-colors hover:border-[#5b54e6] hover:bg-[#2b2a5e]/[0.03] disabled:opacity-40"
+              />
+            </div>
+          )}
 
           {accounts.length > 1 && (
             <div className="border-t border-[#2b2a5e]/10 py-1">

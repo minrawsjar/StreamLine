@@ -9,6 +9,7 @@ import { HERO_SCENES, SCENE_COUNT } from "./heroScenes";
 import { useSceneNavigation } from "./useSceneNavigation";
 import type { PhoneAppRoute } from "@/components/app/phone/types";
 import { HERO_LAYOUT_MAX_CLASS } from "./heroLayout";
+import { LegalFooter } from "./LegalFooter";
 
 export function ScrollHero() {
   const [phoneApp, setPhoneApp] = useState<PhoneAppRoute | null>(null);
@@ -49,7 +50,9 @@ export function ScrollHero() {
           className={`relative flex justify-end transition-opacity duration-500 ${
             isIntroTiles
               ? "h-[min(42vh,360px)] items-start lg:-translate-y-6"
-              : "h-[320px] items-center"
+              : scene.rightExtra
+                ? "h-[min(78vh,620px)] items-center"
+                : "h-[320px] items-center"
           } ${inApp ? "pointer-events-none opacity-30" : ""}`}
         >
           {HERO_SCENES.map((s, i) => (
@@ -98,7 +101,9 @@ export function ScrollHero() {
           className={`relative flex justify-start transition-opacity duration-500 ${
             isIntroTiles
               ? "h-[min(42vh,360px)] items-end lg:translate-y-6"
-              : "h-[320px] items-center"
+              : scene.rightExtra
+                ? "h-[min(78vh,620px)] items-center"
+                : "h-[320px] items-center"
           } ${inApp ? "pointer-events-none opacity-30" : ""}`}
         >
           {HERO_SCENES.map((s, i) => (
@@ -108,16 +113,36 @@ export function ScrollHero() {
                 isIntroTiles ? "items-end" : "items-center"
               } ${i === activeIndex ? "z-10" : "z-0 pointer-events-none"}`}
             >
-              {i === activeIndex && (
-                <SceneTextPanel
-                  side="right"
-                  content={s.right}
-                  theme={s.theme}
-                  panelMode={s.panelMode}
-                  visible={textVisible && !inApp}
-                  storeCard={i === SCENE_COUNT - 1 ? "google" : undefined}
-                />
-              )}
+              {i === activeIndex &&
+                (s.rightExtra ? (
+                  <div className="flex w-full max-w-[360px] flex-col gap-10 lg:gap-12">
+                    <SceneTextPanel
+                      side="right"
+                      content={s.right}
+                      theme={s.theme}
+                      panelMode={s.panelMode}
+                      visible={textVisible && !inApp}
+                      stacked
+                    />
+                    <SceneTextPanel
+                      side="right"
+                      content={s.rightExtra}
+                      theme={s.theme}
+                      panelMode={s.panelMode}
+                      visible={textVisible && !inApp}
+                      stacked
+                    />
+                  </div>
+                ) : (
+                  <SceneTextPanel
+                    side="right"
+                    content={s.right}
+                    theme={s.theme}
+                    panelMode={s.panelMode}
+                    visible={textVisible && !inApp}
+                    storeCard={i === SCENE_COUNT - 1 ? "google" : undefined}
+                  />
+                ))}
             </div>
           ))}
         </div>
@@ -174,14 +199,25 @@ export function ScrollHero() {
                   compact
                 />
                 {scene.panelMode !== "tiles" && (
-                  <div className="mt-4">
+                  <div className="mt-4 space-y-4">
                     <SceneTextPanel
                       side="right"
                       content={scene.right}
                       theme={scene.theme}
                       visible={textVisible}
                       compact
+                      stacked={!!scene.rightExtra}
                     />
+                    {scene.rightExtra && (
+                      <SceneTextPanel
+                        side="right"
+                        content={scene.rightExtra}
+                        theme={scene.theme}
+                        visible={textVisible}
+                        compact
+                        stacked
+                      />
+                    )}
                   </div>
                 )}
                 {scene.panelMode === "tiles" && (
@@ -231,6 +267,12 @@ export function ScrollHero() {
         >
           Scroll ↓
         </p>
+      )}
+
+      {!inApp && (
+        <div className="absolute bottom-5 left-0 right-0 z-30 px-[5%]">
+          <LegalFooter theme={scene.theme} />
+        </div>
       )}
     </div>
   );

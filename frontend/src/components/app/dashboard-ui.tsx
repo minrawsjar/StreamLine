@@ -2,6 +2,8 @@
 
 import type { ReactNode } from "react";
 
+import { usePhoneEmbedded } from "@/components/app/phone/PhoneEmbeddedContext";
+
 /**
  * Shared dashboard primitives for the StreamLine client + freelancer consoles.
  * Donezo-style layout (stat cards, analytics bars, progress ring) recolored to
@@ -28,6 +30,28 @@ export function DashboardHeader({
   subtitle?: string;
   action?: ReactNode;
 }) {
+  const embedded = usePhoneEmbedded();
+
+  if (embedded) {
+    return (
+      <div className="mb-4">
+        {eyebrow && (
+          <p className="text-[8px] font-semibold uppercase tracking-[0.2em] text-[#5b54e6]">
+            {eyebrow}
+          </p>
+        )}
+        <h1 className="mt-1 text-lg font-black leading-tight tracking-[-0.02em]">
+          {title}
+        </h1>
+        {subtitle && (
+          <p className="mt-1 text-[10px] leading-snug text-[#2b2a5e]/55">
+            {subtitle}
+          </p>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
       <div>
@@ -61,26 +85,43 @@ export function StatCard({
   sub?: string;
   tone?: "plain" | "flow" | "brand";
 }) {
+  const embedded = usePhoneEmbedded();
+
   if (tone === "plain") {
     return (
-      <div className="border border-[#2b2a5e]/15 bg-white p-5">
+      <div className={`border border-[#2b2a5e]/15 bg-white ${embedded ? "p-3" : "p-5"}`}>
         <div className="flex items-start justify-between">
-          <p className="text-[12px] uppercase tracking-[0.12em] text-[#2b2a5e]/55">
+          <p
+            className={`uppercase tracking-[0.12em] text-[#2b2a5e]/55 ${
+              embedded ? "text-[9px]" : "text-[12px]"
+            }`}
+          >
             {label}
           </p>
-          <Arrow className="text-[#2b2a5e]/40" />
+          {!embedded && <Arrow className="text-[#2b2a5e]/40" />}
         </div>
-        <p className="mt-4 text-[40px] font-black leading-none tabular tracking-[-0.02em]">
+        <p
+          className={`font-black leading-none tabular tracking-[-0.02em] ${
+            embedded ? "mt-2 text-xl" : "mt-4 text-[40px]"
+          }`}
+        >
           {value}
         </p>
-        {sub && <p className="mt-3 text-[11px] text-[#2b2a5e]/45">{sub}</p>}
+        {sub && (
+          <p className={`text-[#2b2a5e]/45 ${embedded ? "mt-1 text-[9px]" : "mt-3 text-[11px]"}`}>
+            {sub}
+          </p>
+        )}
       </div>
     );
   }
 
   const bg = tone === "flow" ? "#1d9e75" : "#5b54e6";
   return (
-    <div className="relative overflow-hidden p-5 text-white" style={{ background: bg }}>
+    <div
+      className={`relative overflow-hidden text-white ${embedded ? "p-3" : "p-5"}`}
+      style={{ background: bg }}
+    >
       <div
         aria-hidden
         className="pointer-events-none absolute inset-0"
@@ -88,15 +129,27 @@ export function StatCard({
       />
       <div className="relative">
         <div className="flex items-start justify-between">
-          <p className="text-[12px] uppercase tracking-[0.12em] text-white/80">
+          <p
+            className={`uppercase tracking-[0.12em] text-white/80 ${
+              embedded ? "text-[9px]" : "text-[12px]"
+            }`}
+          >
             {label}
           </p>
-          <Arrow className="text-white/80" />
+          {!embedded && <Arrow className="text-white/80" />}
         </div>
-        <p className="mt-4 text-[40px] font-black leading-none tabular tracking-[-0.02em]">
+        <p
+          className={`font-black leading-none tabular tracking-[-0.02em] ${
+            embedded ? "mt-2 text-xl" : "mt-4 text-[40px]"
+          }`}
+        >
           {value}
         </p>
-        {sub && <p className="mt-3 text-[11px] text-white/75">{sub}</p>}
+        {sub && (
+          <p className={`text-white/75 ${embedded ? "mt-1 text-[9px]" : "mt-3 text-[11px]"}`}>
+            {sub}
+          </p>
+        )}
       </div>
     </div>
   );
@@ -117,15 +170,27 @@ export function Card({
   className?: string;
   padded?: boolean;
 }) {
+  const embedded = usePhoneEmbedded();
+
   return (
     <section className={`border border-[#2b2a5e]/15 bg-white ${className}`}>
       {title && (
-        <div className="flex items-center justify-between px-5 pt-5">
-          <h2 className="text-[15px] font-bold tracking-[-0.01em]">{title}</h2>
+        <div
+          className={`flex items-center justify-between ${
+            embedded ? "px-3 pt-3" : "px-5 pt-5"
+          }`}
+        >
+          <h2
+            className={`font-bold tracking-[-0.01em] ${
+              embedded ? "text-[12px]" : "text-[15px]"
+            }`}
+          >
+            {title}
+          </h2>
           {action}
         </div>
       )}
-      <div className={padded ? "p-5" : ""}>{children}</div>
+      <div className={padded ? (embedded ? "p-3" : "p-5") : ""}>{children}</div>
     </section>
   );
 }
@@ -141,11 +206,14 @@ export function BarChart({
   data: BarDatum[];
   height?: number;
 }) {
+  const embedded = usePhoneEmbedded();
+  const chartHeight = height ?? (embedded ? 100 : 180);
+
   const max = Math.max(1, ...data.map((d) => d.value));
   return (
-    <div className="flex items-end gap-2" style={{ height }}>
+    <div className="flex items-end gap-2" style={{ height: chartHeight }}>
       {data.map((d, i) => {
-        const h = Math.max(6, (d.value / max) * (height - 28));
+        const h = Math.max(6, (d.value / max) * (chartHeight - 28));
         const peak = d.value === max && d.value > 0;
         return (
           <div key={i} className="flex flex-1 flex-col items-center justify-end gap-2">
@@ -183,19 +251,21 @@ export function DonutProgress({
   caption?: string;
   size?: number;
 }) {
+  const embedded = usePhoneEmbedded();
+  const ringSize = embedded ? 110 : size;
   const p = Math.max(0, Math.min(100, percent));
-  const stroke = 22;
-  const r = (size - stroke) / 2;
+  const stroke = embedded ? 14 : 22;
+  const r = (ringSize - stroke) / 2;
   const c = 2 * Math.PI * r;
   const dash = (p / 100) * c * 0.75; // 3/4 arc gauge
   const track = c * 0.75;
   return (
     <div className="flex flex-col items-center">
-      <svg width={size} height={size * 0.78} viewBox={`0 0 ${size} ${size}`}>
-        <g transform={`rotate(135 ${size / 2} ${size / 2})`}>
+      <svg width={ringSize} height={ringSize * 0.78} viewBox={`0 0 ${ringSize} ${ringSize}`}>
+        <g transform={`rotate(135 ${ringSize / 2} ${ringSize / 2})`}>
           <circle
-            cx={size / 2}
-            cy={size / 2}
+            cx={ringSize / 2}
+            cy={ringSize / 2}
             r={r}
             fill="none"
             stroke="#2b2a5e"
@@ -205,8 +275,8 @@ export function DonutProgress({
             strokeLinecap="butt"
           />
           <circle
-            cx={size / 2}
-            cy={size / 2}
+            cx={ringSize / 2}
+            cy={ringSize / 2}
             r={r}
             fill="none"
             stroke="#1d9e75"
@@ -220,7 +290,7 @@ export function DonutProgress({
           y="48%"
           textAnchor="middle"
           className="tabular"
-          fontSize={size * 0.18}
+          fontSize={ringSize * 0.18}
           fontWeight={900}
           fill="#2b2a5e"
         >
@@ -231,7 +301,7 @@ export function DonutProgress({
             x="50%"
             y="62%"
             textAnchor="middle"
-            fontSize={size * 0.055}
+            fontSize={ringSize * 0.055}
             fill="#2b2a5e"
             opacity={0.5}
           >
@@ -266,8 +336,13 @@ export function StateBadge({ state }: { state: string }) {
 /* ── Misc ─────────────────────────────────────────────────────────────── */
 
 export function EmptyPanel({ children }: { children: ReactNode }) {
+  const embedded = usePhoneEmbedded();
   return (
-    <div className="border border-dashed border-[#2b2a5e]/25 px-8 py-16 text-center text-[13px] text-[#2b2a5e]/60">
+    <div
+      className={`border border-dashed border-[#2b2a5e]/25 text-center text-[#2b2a5e]/60 ${
+        embedded ? "px-4 py-8 text-[10px] leading-relaxed" : "px-8 py-16 text-[13px]"
+      }`}
+    >
       {children}
     </div>
   );

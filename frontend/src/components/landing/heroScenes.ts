@@ -27,6 +27,7 @@ export type HeroScene = {
   panelMode?: PanelMode;
   left: ScenePanel;
   right: ScenePanel;
+  rightExtra?: ScenePanel;
 };
 
 export const HERO_SCENES: HeroScene[] = [
@@ -37,44 +38,17 @@ export const HERO_SCENES: HeroScene[] = [
     panelMode: "tiles",
     left: {
       label: "",
-      headline: "Get paid as",
-      accent: "you work.",
-      body: "Not when you invoice. Not when they remember.",
+      headline: "Moving money at",
+      accent: "the  speed of work.",
+      body: "Programmable Micropayments",
       bullets: [],
     },
     right: {
       label: "",
-      headline: "Continuous,",
-      accent: "private income.",
-      body: "Turn any contract into a stream on Sui — gasless, automatic, yours.",
+      headline: "Continuously, ",
+      accent: "Securely & Privately.",
+      body: "Gasless, yield-bearing, liquid.",
       bullets: [],
-    },
-  },
-  {
-    id: "problem",
-    phone: "drip",
-    theme: "light",
-    left: {
-      label: "The problem",
-      headline: "Finish Tuesday.",
-      accent: "Paid Friday.",
-      body: "You finish the work on Tuesday. The wire arrives on Friday — if you're lucky. Rent is due, groceries need buying, and you've already started the next project.",
-      bullets: [
-        "Invoices mean waiting",
-        "Payday gaps while bills don't wait",
-        "Work is continuous — payment isn't",
-      ],
-    },
-    right: {
-      label: "And on-chain",
-      headline: "It's all",
-      accent: "public.",
-      body: "Your salary, your contractor rate, your client's name — anyone with a browser can see it. Or you're the one hiring: pay upfront and hope, or pay late and feel guilty. There's no good option.",
-      bullets: [
-        "Rates and relationships exposed",
-        "Clients can't trust without locking funds",
-        "StreamLine fixes all three",
-      ],
     },
   },
   {
@@ -82,56 +56,20 @@ export const HERO_SCENES: HeroScene[] = [
     phone: "states",
     theme: "light",
     left: {
-      label: "How it works",
-      headline: "Money flows",
-      accent: "as you work.",
-      body: "Lock the full amount once. Define your milestones. Client approves a checkpoint — and the stream opens. From that moment, money drips into your wallet continuously. Every minute. While you sleep.",
+      label: "open your stream",
+      headline: "Get paid as you Work",
+      accent: "in Real time.",
+      body: "No invoices. No wires. No waiting. Open a stream in seconds, and start recieving USDC in real time.",
       bullets: [
-        "Lock — full amount committed upfront",
-        "Drip — USDC arrives gaslessly, in real time",
-        "Done — clean record when milestones finish",
-      ],
-      metric: { value: "3", label: "steps — that's it" },
+     ],
     },
     right: {
-      label: "No chasing",
-      headline: "Silence is not",
-      accent: "a veto.",
-      body: "No invoice. No waiting. No chasing. If the client goes quiet after you deliver, the stream auto-approves after 48 hours. You can't be ghosted out of your payment.",
+      label: "decentralised",
+      headline: "Smart contracts ",
+      accent: "replace the handshake.",
+      body: "Flows only when milestones are approved. Auditable by all parties.",
       bullets: [
-        "One tap to mark a milestone complete",
-        "Client approves — streaming resumes",
-        "48h silence → auto-approve",
-      ],
-      metric: { value: "48h", label: "auto-approve window" },
-    },
-  },
-  {
-    id: "privacy",
-    phone: "stats",
-    theme: "light",
-    left: {
-      label: "Privacy",
-      headline: "Your salary is",
-      accent: "nobody's business.",
-      body: "On most blockchains, every payment is public. Your rate, your client, your earnings — all readable by anyone. StreamLine is private by default. Who you're paying. How much. Hidden on-chain.",
-      bullets: [
-        "Contractor rates stay yours",
-        "Colleagues don't need to know your pay",
-        "Freelancers control their pricing",
-      ],
-    },
-    right: {
-      label: "When you need proof",
-      headline: "Share earnings",
-      accent: "cryptographically.",
-      body: "Accountant, bank, tax authority — share a proof they can verify. No PDFs. No screenshots. Visible only to you, and whoever you choose to show.",
-      bullets: [
-        "Selective disclosure on your terms",
-        "Verifiable income history",
-        "Private by default — no setup required",
-      ],
-      metric: { value: "$0", label: "to prove your earnings" },
+    ],
     },
   },
   {
@@ -139,10 +77,10 @@ export const HERO_SCENES: HeroScene[] = [
     phone: "finance",
     theme: "light",
     left: {
-      label: "While it waits",
-      headline: "Locked money",
-      accent: "earns yield.",
-      body: "$4,000 locked for a three-week project? It doesn't sit idle — it routes into Scallop and earns from day one. Every drip reduces principal. The yield keeps running on the rest.",
+      label: "earn more",
+      headline: "Earn Yield ",
+      accent: "with your Stream.",
+      body: "$4,000 locked for a three-week project? It doesn't sit idle, it routes into defi and earns from start.",
       bullets: [
         "Idle capital works for both sides",
         "Split once — spending, savings, yield",
@@ -150,7 +88,7 @@ export const HERO_SCENES: HeroScene[] = [
       ],
     },
     right: {
-      label: "Need cash now",
+      label: "Use Anytime",
       headline: "Borrow against",
       accent: "your stream.",
       body: "$3,000 stream running, two weeks left, need cash today? Borrow against future income now. The loan repays itself from your drips — no manual payments, no liquidation risk.",
@@ -159,7 +97,29 @@ export const HERO_SCENES: HeroScene[] = [
         "Auto-repay from incoming drips",
         "Position gets healthier every day",
       ],
-      metric: { value: "24/7", label: "repayment from drips" },
+    },
+  },
+  {
+    id: "privacy",
+    phone: "stats",
+    theme: "light",
+    left: {
+      label: "Remain Private",
+      headline: "Your salary is",
+      accent: "nobody's business.",
+      body: "You don't want salary, rates, clients visible on-chain, so use your streams privately. No configuration needed.",
+      bullets: [
+  
+      ],
+    },
+    right: {
+      label: "Provable on demand",
+      headline: "Share earnings",
+      accent: "cryptographically.",
+      body: "Accountant, bank, tax authority — share a proof they can verify. Streamline gives you selective disclosure on your terms, visible only to you, and whoever you choose to show.",
+      bullets: [
+   
+      ],
     },
   },
   {
@@ -167,28 +127,33 @@ export const HERO_SCENES: HeroScene[] = [
     phone: "pro",
     theme: "pro",
     left: {
-      label: "StreamLine.pro",
-      headline: "Open a pay run.",
-      accent: "It runs itself.",
-      body: "Run contractor payroll, vendor milestones, and global disbursements from one dashboard. Create streams in bulk, lock funds per engagement, and let drips settle continuously — private and auditable.",
+      label: "Manage Payrolls",
+      headline: "Payroll that  ",
+      accent: "runs itself.",
+      body: "Run contractor payroll, vendor milestones, and global disbursements from one dashboard. Create in bulk, lock per engagement, and let drips settle continuously, private and auditable.",
       bullets: [
         "Pay runs for 500+ contractors at once",
-        "Milestone approvals in batch",
-        "Finance-team roles and permissions",
+        "Team-based roles and permissions",
+       "Milestones & approvals in batch",
+
       ],
-      metric: { value: "500+", label: "payees per org" },
     },
     right: {
-      label: "For the business",
-      headline: "Funds locked.",
-      accent: "You stay in control.",
-      body: "Commit the full amount upfront so workers trust the job — but approve each milestone before money flows. Cancel anytime on unstreamed balance. No wires, no invoice chasing, no public payroll on-chain.",
+      label: "global & instant",
+      headline: "Zero Borders",
+      accent: "Zero Banks",
+      body: "USDC streams to anyone, anywhere, instantly. No SWIFT. No correspondent banks. No conversion fees. Same experience for a contractor in Lagos as an employee in London. Plus, the compliance-ready history is always audit ready.",
       bullets: [
-        "zkLogin onboarding — no seed phrase for contractors",
-        "Multi-sig on large disbursements",
-        "Compliance-ready payment history on export",
       ],
-      metric: { value: "24/7", label: "automated settlement" },
+    },
+    rightExtra: {
+      label: "Efficient capital",
+      headline: "Your Capital",
+      accent: "Works Harder.",
+      body: "Every dollar committed to a stream earns yield before it reaches your team. Recover up to 12% APY on payroll capital automatically — no treasury management, no extra steps.",
+      bullets: [
+
+      ],
     },
   },
   {

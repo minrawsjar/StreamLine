@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useCurrentAccount } from "@mysten/dapp-kit";
 
 import { WalletButton } from "@/components/wallet/WalletButton";
+import { usePhoneEmbedded } from "@/components/app/phone/PhoneEmbeddedContext";
 
 const DEPARTMENTS = [
   { name: "Engineering", amt: "$84,200", status: "Dripping", contractors: 18 },
@@ -14,6 +15,7 @@ const DEPARTMENTS = [
 
 export function ProDashboard() {
   const account = useCurrentAccount();
+  const embedded = usePhoneEmbedded();
   const [paid, setPaid] = useState(248500);
 
   useEffect(() => {
@@ -24,6 +26,14 @@ export function ProDashboard() {
   }, []);
 
   if (!account) {
+    if (embedded) {
+      return (
+        <div className="flex min-h-0 flex-1 flex-col items-center justify-center px-2 text-center font-[family-name:var(--font-inter)]">
+          <p className="text-[10px] text-white/40">Connect wallet above to continue</p>
+        </div>
+      );
+    }
+
     return (
       <div className="flex min-h-[calc(100dvh-57px)] flex-col items-center justify-center gap-6 px-6 text-center font-[family-name:var(--font-inter)]">
         <p className="text-[11px] uppercase tracking-[0.24em] text-white/35">
@@ -38,55 +48,96 @@ export function ProDashboard() {
   }
 
   return (
-    <div className="mx-auto max-w-[1100px] px-6 py-10 font-[family-name:var(--font-inter)]">
-      <p className="text-[10px] font-medium uppercase tracking-[0.2em] text-white/35">
+    <div
+      className={
+        embedded
+          ? "flex min-h-0 flex-1 flex-col font-[family-name:var(--font-inter)]"
+          : "mx-auto max-w-[1100px] px-6 py-10 font-[family-name:var(--font-inter)]"
+      }
+    >
+      <p
+        className={`font-medium uppercase tracking-[0.2em] text-white/35 ${
+          embedded ? "text-[8px]" : "text-[10px]"
+        }`}
+      >
         Payroll run · Q2
       </p>
-      <div className="mt-3 flex flex-wrap items-end justify-between gap-4">
+      <div
+        className={`flex flex-wrap items-end justify-between gap-4 ${
+          embedded ? "mt-2" : "mt-3"
+        }`}
+      >
         <div>
-          <h1 className="text-[clamp(32px,5vw,52px)] font-semibold tabular leading-none tracking-tight">
+          <h1
+            className={`font-semibold tabular leading-none tracking-tight ${
+              embedded ? "text-[1.5rem]" : "text-[clamp(32px,5vw,52px)]"
+            }`}
+          >
             ${paid.toLocaleString()}
           </h1>
-          <p className="mt-2 text-[13px] text-white/45">
+          <p className={`mt-2 text-white/45 ${embedded ? "text-[10px]" : "text-[13px]"}`}>
             42 contractors · 6 departments · streaming live
           </p>
         </div>
-        <div className="flex gap-2">
+        {!embedded && (
+          <div className="flex gap-2">
+            <button
+              type="button"
+              className="sl-glass-btn-dark !px-4 !py-2 !text-[10px]"
+            >
+              Export audit
+            </button>
+            <button
+              type="button"
+              className="sl-glass-btn-dark sl-glass-btn-dark-primary !px-4 !py-2 !text-[10px]"
+            >
+              New run
+            </button>
+          </div>
+        )}
+      </div>
+
+      {embedded && (
+        <div className="mt-3 flex gap-2">
           <button
             type="button"
-            className="sl-glass-btn-dark !px-4 !py-2 !text-[10px]"
+            className="sl-glass-btn-dark flex-1 !py-1.5 !text-[8px]"
           >
-            Export audit
+            Export
           </button>
           <button
             type="button"
-            className="sl-glass-btn-dark sl-glass-btn-dark-primary !px-4 !py-2 !text-[10px]"
+            className="sl-glass-btn-dark sl-glass-btn-dark-primary flex-1 !py-1.5 !text-[8px]"
           >
             New run
           </button>
         </div>
-      </div>
+      )}
 
-      <div className="mt-10 grid gap-3">
+      <div className={`grid gap-3 ${embedded ? "mt-4" : "mt-10"}`}>
         {DEPARTMENTS.map((row) => (
           <div
             key={row.name}
-            className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-white/10 bg-white/[0.04] px-5 py-4"
+            className={`flex flex-wrap items-center justify-between gap-4 rounded-xl border border-white/10 bg-white/[0.04] ${
+              embedded ? "px-3 py-3" : "px-5 py-4"
+            }`}
           >
             <div>
-              <p className="text-sm font-medium text-white/85">{row.name}</p>
-              <p className="mt-0.5 text-[11px] text-white/35">
+              <p className={`font-medium text-white/85 ${embedded ? "text-[10px]" : "text-sm"}`}>
+                {row.name}
+              </p>
+              <p className={`mt-0.5 text-white/35 ${embedded ? "text-[8px]" : "text-[11px]"}`}>
                 {row.contractors} contractors · {row.status}
               </p>
             </div>
-            <p className="text-base font-semibold tabular text-white/75">
+            <p className={`font-semibold tabular text-white/75 ${embedded ? "text-[10px]" : "text-base"}`}>
               {row.amt}
             </p>
           </div>
         ))}
       </div>
 
-      <div className="mt-8 grid gap-4 sm:grid-cols-3">
+      <div className={`grid gap-4 ${embedded ? "mt-4 grid-cols-1" : "mt-8 sm:grid-cols-3"}`}>
         {[
           { label: "Next disbursement", value: "Friday · 09:00 UTC" },
           { label: "Pending approvals", value: "3 milestones" },
@@ -94,12 +145,14 @@ export function ProDashboard() {
         ].map((stat) => (
           <div
             key={stat.label}
-            className="rounded-xl border border-white/10 bg-white/[0.03] px-4 py-4"
+            className={`rounded-xl border border-white/10 bg-white/[0.03] ${
+              embedded ? "px-3 py-3" : "px-4 py-4"
+            }`}
           >
-            <p className="text-[9px] uppercase tracking-wider text-white/30">
+            <p className={`uppercase tracking-wider text-white/30 ${embedded ? "text-[8px]" : "text-[9px]"}`}>
               {stat.label}
             </p>
-            <p className="mt-1.5 text-sm font-medium text-white/75">
+            <p className={`mt-1.5 font-medium text-white/75 ${embedded ? "text-[10px]" : "text-sm"}`}>
               {stat.value}
             </p>
           </div>
