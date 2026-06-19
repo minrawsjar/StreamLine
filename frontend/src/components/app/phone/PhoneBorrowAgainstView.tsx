@@ -189,7 +189,12 @@ export function PhoneBorrowAgainstView({
           </section>
         )}
 
-        {blockReason ? (
+        {detailsMode ? (
+          <p className="rounded-2xl border border-dashed border-black/12 bg-[#fafafa] px-3 py-4 text-center text-[11px] leading-snug text-[#666]">
+            One loan per stream. This stream is already borrowed against — its
+            drips repay the loan automatically until it&apos;s cleared.
+          </p>
+        ) : blockReason ? (
           <p className="rounded-2xl border border-dashed border-black/12 bg-[#fafafa] px-3 py-4 text-center text-[11px] leading-snug text-[#666]">
             {blockReason}
           </p>
@@ -245,7 +250,7 @@ export function PhoneBorrowAgainstView({
           </p>
         )}
 
-        {maxBorrowBase > 0 && !blockReason && (
+        {!detailsMode && maxBorrowBase > 0 && !blockReason && (
           <button
             type="button"
             onClick={onBorrow}
