@@ -37,6 +37,7 @@ type PhoneStreamDetailsViewProps = {
   now: number;
   onBack: () => void;
   onRaiseMilestone?: (streamId: string) => void;
+  onApproveMilestone?: (streamId: string) => void;
   raising?: boolean;
   raiseStatus?: string | null;
   onBorrowed?: () => void;
@@ -72,6 +73,7 @@ export function PhoneStreamDetailsView({
   now,
   onBack,
   onRaiseMilestone,
+  onApproveMilestone,
   raising,
   raiseStatus,
   onBorrowed,
@@ -245,6 +247,26 @@ export function PhoneStreamDetailsView({
             <p className="mt-1.5 text-center text-[10px] leading-snug text-[#888]">
               Marks milestone {done} done and sends it to the client to approve —
               dripping resumes once approved.
+            </p>
+            {raiseStatus && (
+              <p className="mt-1 text-center text-[10px] text-[#666]">{raiseStatus}</p>
+            )}
+          </div>
+        )}
+
+        {!incoming && view === "pending_review" && onApproveMilestone && (
+          <div>
+            <button
+              type="button"
+              disabled={raising}
+              onClick={() => onApproveMilestone(stream.id)}
+              className="w-full rounded-2xl bg-[#1d9e75] px-4 py-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-white disabled:opacity-40"
+            >
+              {raising ? "Approving…" : `Approve milestone ${next}`}
+            </button>
+            <p className="mt-1.5 text-center text-[10px] leading-snug text-[#888]">
+              Releases milestone {next} so the stream resumes dripping. Otherwise it
+              auto-approves after the 48h review window.
             </p>
             {raiseStatus && (
               <p className="mt-1 text-center text-[10px] text-[#666]">{raiseStatus}</p>

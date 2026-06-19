@@ -28,7 +28,7 @@ import {
 } from "@/lib/loan-ui";
 import { useLending } from "@/lib/use-lending";
 import { useGaslessExecute } from "@/lib/use-gasless";
-import { buildRaiseCompletion } from "@/lib/streamline-tx";
+import { buildRaiseCompletion, buildApproveMilestone } from "@/lib/streamline-tx";
 import {
   PhoneDashboardView,
   type PhoneActivityItem,
@@ -98,6 +98,8 @@ export function PhoneHomeView({
   const account = useCurrentAccount();
   const usdcType = useNetworkVariable("usdcType");
   const packageId = useNetworkVariable("packageId");
+  // StreamCap types are pinned to the package that defined them — use original id.
+  const originalPackageId = useNetworkVariable("originalPackageId");
   const { execute, isPending } = useGaslessExecute();
   const pool = useLending();
   const [pendingBorrows, setPendingBorrows] = useState(readPendingBorrows);
@@ -110,6 +112,29 @@ export function PhoneHomeView({
 
   const incomingQ = useStreams({ freelancer: addr });
   const outgoingQ = useStreams({ sender: addr });
+  // Owned StreamCaps → map of stream id → cap object id, so the client (sender)
+  // can approve a milestone in review.
+  const capsQ = useSuiClientQuery(
+    "getOwnedObjects",
+    {
+      owner: addr ?? "",
+      filter: { StructType: `${originalPackageId}::stream::StreamCap` },
+      options: { showContent: true },
+    },
+    { enabled: !!addr && originalPackageId !== "0x0" }
+  );
+  const streamCaps = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const o of capsQ.data?.data ?? []) {
+      const content = o.data?.content;
+      if (content?.dataType === "moveObject") {
+        const fields = content.fields as Record<string, unknown>;
+        const sid = fields["stream_id"] as string | undefined;
+        if (sid && o.data?.objectId) map.set(sid, o.data.objectId);
+      }
+    }
+    return map;
+  }, [capsQ.data]);
   const balanceQ = useSuiClientQuery(
     "getBalance",
     {
@@ -349,6 +374,23 @@ export function PhoneHomeView({
     });
   };
 
+  const onApproveMilestone = (streamId: string) => {
+    const capId = streamCaps.get(streamId);
+    if (!capId) {
+      setActionStatus("No approval permission (StreamCap) found for this stream.");
+      return;
+    }
+    setActionStatus("Awaiting signature…");
+    execute(buildApproveMilestone({ packageId, usdcType, streamId, capId }), {
+      onSuccess: (r) => {
+        setActionStatus(`Milestone approved — ${r.digest.slice(0, 10)}…`);
+        incomingQ.refetch();
+        outgoingQ.refetch();
+      },
+      onError: (e) => setActionStatus(e.message),
+    });
+  };
+
   const openStream = (id: string) => {
     setActionStatus(null);
     setDetailsView({ kind: "stream", id });
@@ -499,6 +541,7 @@ export function PhoneHomeView({
         now={now}
         onBack={() => setDetailsView({ kind: "home" })}
         onRaiseMilestone={onRaiseCompletion}
+        onApproveMilestone={onApproveMilestone}
         raising={isPending}
         raiseStatus={actionStatus}
         onBorrowed={() => {
