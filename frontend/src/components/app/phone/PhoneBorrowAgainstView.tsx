@@ -4,6 +4,13 @@ import { useEffect, useMemo, useState } from "react";
 import { useCurrentAccount } from "@mysten/dapp-kit";
 
 import type { StreamRecord } from "@/lib/indexer";
+import {
+  loanRepayPerSec,
+  netDripPerSec,
+  rememberPendingBorrow,
+  readPendingBorrows,
+  loanForStream,
+} from "@/lib/loan-ui";
 import { useNetworkVariable } from "@/lib/networks";
 import { USDC_BASE } from "@/lib/stream-math";
 import { effectiveState } from "@/lib/stream-state";
@@ -27,12 +34,14 @@ type PhoneBorrowAgainstViewProps = {
   stream: StreamRecord;
   label: string;
   onBack: () => void;
+  onBorrowed?: () => void;
 };
 
 export function PhoneBorrowAgainstView({
   stream,
   label,
   onBack,
+  onBorrowed,
 }: PhoneBorrowAgainstViewProps) {
   const account = useCurrentAccount();
   const packageId = useNetworkVariable("packageId");
@@ -42,25 +51,34 @@ export function PhoneBorrowAgainstView({
 
   const [amountUsd, setAmountUsd] = useState(0);
   const [status, setStatus] = useState<string | null>(null);
+  const [pendingBorrows, setPendingBorrows] = useState(readPendingBorrows);
 
   const view = effectiveState(stream);
   const isDripping = view === "dripping";
   const maxBorrowBase = maxBorrowableBase(stream.remaining, pool.reserveBase);
   const maxBorrowUsd = maxBorrowBase / USDC_BASE;
 
-  const existingLoan = pool.loans.find((l) => l.streamId === stream.id);
+  const existingLoan = loanForStream(stream.id, pool.loans, pendingBorrows);
   const deployed =
     !!packageId && packageId !== "0x0" && !!pool.poolId && pool.poolId !== "0x0";
+
+  const repayPerSec = existingLoan
+    ? loanRepayPerSec(existingLoan, stream) / USDC_BASE
+    : 0;
+  const netPerSec = netDripPerSec(existingLoan, stream) / USDC_BASE;
 
   const blockReason = useMemo(() => {
     if (!isDripping) return "Only dripping streams can be borrowed against.";
     if (!deployed) return "Lending pool is not available on this network yet.";
+    if (existingLoan && maxBorrowBase <= 0) {
+      return null;
+    }
     if (maxBorrowBase <= 0) {
       if (pool.reserveBase <= 0) return "Pool has no liquidity right now.";
       return "Nothing left to borrow against on this stream.";
     }
     return null;
-  }, [isDripping, deployed, maxBorrowBase, pool.reserveBase]);
+  }, [isDripping, deployed, maxBorrowBase, pool.reserveBase, existingLoan]);
 
   useEffect(() => {
     if (blockReason) {
@@ -91,13 +109,21 @@ export function PhoneBorrowAgainstView({
       }),
       {
         onSuccess: () => {
-          setStatus("Borrowed — USDC sent to your wallet.");
+          rememberPendingBorrow(stream.id, amountBase);
+          setPendingBorrows(readPendingBorrows());
+          setStatus(
+            "Borrowed — USDC sent to your wallet. Future drips repay the loan automatically."
+          );
           pool.refetch();
+          window.setTimeout(() => pool.refetch(), 2500);
+          onBorrowed?.();
         },
         onError: (e) => setStatus(e.message),
       }
     );
   };
+
+  const detailsMode = !!existingLoan;
 
   return (
     <div className="sl-scrollbar-hidden flex min-h-0 flex-1 flex-col overflow-y-auto">
@@ -112,32 +138,53 @@ export function PhoneBorrowAgainstView({
       <div className="flex flex-col gap-3 pb-2">
         <div>
           <h2 className="text-[15px] font-semibold tracking-tight text-[#111]">
-            Borrow against
+            {detailsMode ? "Borrow details" : "Borrow against"}
           </h2>
           <p className="mt-1 text-[12px] leading-snug text-[#666]">{label}</p>
         </div>
 
-        <section className="rounded-2xl border border-black/10 bg-white p-4">
-          <p className="text-[9px] font-semibold uppercase tracking-[0.16em] text-[#888]">
-            You can borrow up to
-          </p>
-          <p className="mt-2 text-[2rem] font-bold tabular-nums leading-none text-[#111]">
-            {usd(maxBorrowBase, 2)}
-          </p>
-          <p className="mt-2 text-[11px] leading-snug text-[#666]">
-            {(PV_DISCOUNT * 100).toFixed(0)}% of remaining ({usd(stream.remaining, 2)})
-            
-          </p>
-        </section>
-
         {existingLoan && (
-          <section className="rounded-2xl border border-[#c0533a]/20 bg-[#c0533a]/[0.04] px-3 py-2.5">
-            <p className="text-[10px] font-semibold text-[#c0533a]">Active loan</p>
-            <p className="mt-1 text-[11px] text-[#666]">
-              Borrowed {usd(existingLoan.principalBase, 2)} · owe{" "}
-              <span className="font-semibold tabular text-[#c0533a]">
-                {usd(existingLoan.owedBase, 2)}
-              </span>
+          <section className="rounded-2xl border border-[#e85d2a]/30 bg-[#e85d2a]/[0.06] p-4">
+            <p className="text-[9px] font-semibold uppercase tracking-[0.16em] text-[#e85d2a]">
+              Active loan
+            </p>
+            <p className="mt-2 text-[2rem] font-bold tabular-nums leading-none text-[#111]">
+              {usd(existingLoan.owedBase, 2)}
+            </p>
+            <p className="mt-2 text-[11px] leading-snug text-[#666]">
+              Borrowed {usd(existingLoan.principalBase, 2)} · repaying from stream
+            </p>
+            {isDripping && (
+              <div className="mt-3 border-t border-[#e85d2a]/15 pt-3">
+                <div className="flex h-1.5 overflow-hidden rounded-full bg-black/[0.06]">
+                  <div
+                    className="h-full bg-[#e85d2a]"
+                    style={{
+                      width: `${Math.min(100, (repayPerSec / (repayPerSec + netPerSec || 1)) * 100)}%`,
+                    }}
+                  />
+                  <div className="h-full flex-1 bg-[#1d9e75]" />
+                </div>
+                <p className="mt-2 text-[10px] font-medium leading-snug">
+                  <span className="text-[#e85d2a]">−${repayPerSec.toFixed(4)} / sec to loan</span>
+                  <span className="text-[#888]"> · </span>
+                  <span className="text-[#1d9e75]">+${netPerSec.toFixed(4)} / sec to you</span>
+                </p>
+              </div>
+            )}
+          </section>
+        )}
+
+        {!detailsMode && (
+          <section className="rounded-2xl border border-black/10 bg-white p-4">
+            <p className="text-[9px] font-semibold uppercase tracking-[0.16em] text-[#888]">
+              You can borrow up to
+            </p>
+            <p className="mt-2 text-[2rem] font-bold tabular-nums leading-none text-[#111]">
+              {usd(maxBorrowBase, 2)}
+            </p>
+            <p className="mt-2 text-[11px] leading-snug text-[#666]">
+              {(PV_DISCOUNT * 100).toFixed(0)}% of remaining ({usd(stream.remaining, 2)})
             </p>
           </section>
         )}
@@ -147,58 +194,67 @@ export function PhoneBorrowAgainstView({
             {blockReason}
           </p>
         ) : (
-          <>
-            <section className="rounded-2xl border border-black/10 bg-white p-4">
-              <div className="flex items-baseline justify-between gap-2">
-                <p className="text-[9px] font-semibold uppercase tracking-[0.16em] text-[#888]">
-                  Borrow amount
-                </p>
-                <p className="text-[18px] font-bold tabular-nums text-[#111]">
-                  {usd(amountBase, 2)}
-                </p>
-              </div>
-              <input
-                type="range"
-                min={0}
-                max={maxBorrowUsd}
-                step={maxBorrowUsd >= 100 ? 1 : 0.01}
-                value={amountUsd}
-                onChange={(e) => setAmountUsd(Number(e.target.value))}
-                className="mt-4 w-full accent-[#c0533a]"
-              />
-              <div className="mt-2 flex justify-between text-[10px] tabular text-[#888]">
-                <span>$0</span>
-                <span>{usd(maxBorrowBase, 2)}</span>
-              </div>
-            </section>
+          maxBorrowBase > 0 && (
+            <>
+              <section className="rounded-2xl border border-black/10 bg-white p-4">
+                <div className="flex items-baseline justify-between gap-2">
+                  <p className="text-[9px] font-semibold uppercase tracking-[0.16em] text-[#888]">
+                    {detailsMode ? "Borrow more" : "Borrow amount"}
+                  </p>
+                  <p className="text-[18px] font-bold tabular-nums text-[#111]">
+                    {usd(amountBase, 2)}
+                  </p>
+                </div>
+                <input
+                  type="range"
+                  min={0}
+                  max={maxBorrowUsd}
+                  step={maxBorrowUsd >= 100 ? 1 : 0.01}
+                  value={amountUsd}
+                  onChange={(e) => setAmountUsd(Number(e.target.value))}
+                  className="mt-4 w-full accent-[#e85d2a]"
+                />
+                <div className="mt-2 flex justify-between text-[10px] tabular text-[#888]">
+                  <span>$0</span>
+                  <span>{usd(maxBorrowBase, 2)}</span>
+                </div>
+              </section>
 
-            <div className="grid grid-cols-2 gap-2">
-              <MiniStat label="Borrow APR" value={`${pool.borrowAprPct.toFixed(0)}%`} />
-              <MiniStat
-                label="Repay"
-                value="Auto from drips"
-              />
-            </div>
+              <div className="grid grid-cols-2 gap-2">
+                <MiniStat label="Borrow APR" value={`${pool.borrowAprPct.toFixed(0)}%`} />
+                <MiniStat label="Repay" value="Auto from drips" />
+              </div>
 
-            <p className="text-[10px] leading-snug text-[#888]">
-              Cash arrives now. Future drips repay the loan automatically — no
-              liquidation risk as the stream drains.
-            </p>
-          </>
+              <p className="text-[10px] leading-snug text-[#888]">
+                Cash arrives now. Future drips repay the loan automatically — no
+                liquidation risk as the stream drains.
+              </p>
+            </>
+          )
         )}
 
         {status && (
-          <p className="text-center text-[11px] leading-snug text-[#666]">{status}</p>
+          <p
+            className={`rounded-xl px-3 py-2.5 text-center text-[11px] leading-snug ${
+              status.startsWith("Borrowed")
+                ? "border border-[#1d9e75]/25 bg-[#1d9e75]/[0.06] text-[#1a5c38]"
+                : "text-[#666]"
+            }`}
+          >
+            {status}
+          </p>
         )}
 
-        <button
-          type="button"
-          onClick={onBorrow}
-          disabled={!canBorrow || isPending || pool.isLoading}
-          className="mt-2 w-full rounded-2xl bg-[#c0533a] px-4 py-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-white disabled:opacity-40"
-        >
-          {isPending ? "Borrowing…" : `Borrow ${usd(amountBase, 2)}`}
-        </button>
+        {maxBorrowBase > 0 && !blockReason && (
+          <button
+            type="button"
+            onClick={onBorrow}
+            disabled={!canBorrow || isPending || pool.isLoading}
+            className="mt-2 w-full rounded-2xl bg-[#e85d2a] px-4 py-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-white disabled:opacity-40"
+          >
+            {isPending ? "Borrowing…" : `Borrow ${usd(amountBase, 2)}`}
+          </button>
+        )}
       </div>
     </div>
   );

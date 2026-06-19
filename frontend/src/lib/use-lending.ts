@@ -27,6 +27,7 @@ export type Loan = {
   principalBase: number;
   /** Live amount owed (principal + accrued borrow interest), base units. */
   owedBase: number;
+  openedMs: number;
 };
 
 export type LendingState = {
@@ -96,6 +97,7 @@ export function useLending(): LendingState {
         streamId: String(f["stream_id"]),
         principalBase: principal,
         owedBase: principal + interest,
+        openedMs: opened,
       };
     })
     .filter((l): l is Loan => l !== null && l.principalBase > 0);

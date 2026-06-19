@@ -115,7 +115,7 @@ function StreamCardFace({
             >
               {card.label}
             </p>
-            {isStream && card.subtitle && (
+            {isStream && card.subtitle && !amountLive && (
               <p
                 className={`mt-1 inline-flex items-center gap-1 text-[9px] font-semibold uppercase tracking-[0.08em] ${
                   amountLive ? "text-[#1d9e75]" : "text-[#666]"

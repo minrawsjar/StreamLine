@@ -21,6 +21,12 @@ import {
   pendingAccrualBase,
 } from "@/lib/stream-state";
 import { resolveStreamLabel } from "@/lib/stream-labels";
+import {
+  clearPendingBorrow,
+  loanForStream,
+  readPendingBorrows,
+} from "@/lib/loan-ui";
+import { useLending } from "@/lib/use-lending";
 import { useGaslessExecute } from "@/lib/use-gasless";
 import { buildRaiseCompletion } from "@/lib/streamline-tx";
 import {
@@ -93,6 +99,8 @@ export function PhoneHomeView({
   const usdcType = useNetworkVariable("usdcType");
   const packageId = useNetworkVariable("packageId");
   const { execute, isPending } = useGaslessExecute();
+  const pool = useLending();
+  const [pendingBorrows, setPendingBorrows] = useState(readPendingBorrows);
   const [now, setNow] = useState(() => Date.now());
   const [lastWalletBase, setLastWalletBase] = useState(0);
   const [activeCardIndex, setActiveCardIndex] = useState(0);
@@ -153,7 +161,16 @@ export function PhoneHomeView({
     outgoingQ.refetch();
     balanceQ.refetch();
     refetchDrips();
+    pool.refetch();
+    setPendingBorrows(readPendingBorrows());
   });
+
+  useEffect(() => {
+    for (const loan of pool.loans) {
+      clearPendingBorrow(loan.streamId);
+    }
+    setPendingBorrows(readPendingBorrows());
+  }, [pool.loans]);
 
   const activeStreams = useMemo(
     () =>
@@ -200,17 +217,25 @@ export function PhoneHomeView({
       .map((s, i) => {
         const isIncoming = s.freelancer === addr;
         const dripping = effectiveState(s) === "dripping";
+        const loan = loanForStream(s.id, pool.loans, pendingBorrows);
         const value = dripping ? earnedBase(s, now) : s.total;
+        const status = loan
+          ? "Repaying loan"
+          : dripping
+            ? ""
+            : streamStatusLabel(s);
         return {
           id: s.id,
           label: resolveStreamLabel(s) ?? (addr ? streamBackLabel(s, addr, i) : "Stream"),
           amount: usd(value, 3),
-          subtitle: streamStatusLabel(s),
+          subtitle: status,
           isLive: dripping && isIncoming,
-          meta: `${isIncoming ? "Incoming" : "Outgoing"} · ${usd(s.remaining, 0)} left`,
+          meta: loan
+            ? `Borrowed ${usd(loan.principalBase, 0)} · owe ${usd(loan.owedBase, 0)}`
+            : `${isIncoming ? "Incoming" : "Outgoing"} · ${usd(s.remaining, 0)} left`,
         };
       });
-  }, [activeStreams, addr, now]);
+  }, [activeStreams, addr, now, pool.loans, pendingBorrows]);
 
   const cards = useMemo(() => [macroCard, ...streamCards], [macroCard, streamCards]);
 
@@ -281,11 +306,27 @@ export function PhoneHomeView({
       amount: null as string | null,
     }));
 
-    return [...dripItems, ...streamItems]
+    const loanItems = pool.loans.map((l) => ({
+      ts: l.openedMs,
+      time: formatRelative(l.openedMs, now),
+      text: "Borrowed against stream",
+      amount: usd(l.principalBase),
+    }));
+
+    const pendingItems = pendingBorrows
+      .filter((p) => !pool.loans.some((l) => l.streamId === p.streamId))
+      .map((p) => ({
+        ts: p.at,
+        time: formatRelative(p.at, now),
+        text: "Borrow pending confirmation",
+        amount: usd(p.principalBase),
+      }));
+
+    return [...loanItems, ...pendingItems, ...dripItems, ...streamItems]
       .sort((a, b) => b.ts - a.ts)
       .slice(0, 5)
       .map(({ time, text, amount }) => ({ time, text, amount }));
-  }, [dripQueries, allStreams, now, addr]);
+  }, [dripQueries, allStreams, now, addr, pool.loans, pendingBorrows]);
 
   const activityLoading =
     !!addr && activityStreamIds.length > 0 && dripQueries.some((q) => q.isLoading);
@@ -358,6 +399,7 @@ export function PhoneHomeView({
             activeStreams.map((s, i) => {
               const dripping = effectiveState(s) === "dripping";
               const isIncoming = s.freelancer === addr;
+              const loan = loanForStream(s.id, pool.loans, pendingBorrows);
               const value = dripping ? earnedBase(s, now) : s.total;
               const progress =
                 s.total > 0 ? Math.min(100, (earnedBase(s, now) / s.total) * 100) : 0;
@@ -382,12 +424,14 @@ export function PhoneHomeView({
                     </div>
                     <span
                       className={`shrink-0 rounded-full px-2 py-0.5 text-[8px] font-semibold uppercase tracking-[0.08em] ${
-                        dripping
-                          ? "bg-[#1d9e75]/10 text-[#1d9e75]"
-                          : "bg-black/5 text-[#777]"
+                        loan
+                          ? "bg-[#e85d2a]/12 text-[#e85d2a]"
+                          : dripping
+                            ? "bg-[#1d9e75]/10 text-[#1d9e75]"
+                            : "bg-black/5 text-[#777]"
                       }`}
                     >
-                      {streamStatusLabel(s)}
+                      {loan ? "Repaying" : streamStatusLabel(s)}
                     </span>
                   </div>
 
@@ -454,6 +498,10 @@ export function PhoneHomeView({
         incoming={selectedStream.freelancer === addr}
         now={now}
         onBack={() => setDetailsView({ kind: "home" })}
+        onBorrowed={() => {
+          pool.refetch();
+          setPendingBorrows(readPendingBorrows());
+        }}
       />
     );
   }
