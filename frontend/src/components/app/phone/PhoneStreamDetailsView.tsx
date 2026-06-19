@@ -36,6 +36,9 @@ type PhoneStreamDetailsViewProps = {
   incoming: boolean;
   now: number;
   onBack: () => void;
+  onRaiseMilestone?: (streamId: string) => void;
+  raising?: boolean;
+  raiseStatus?: string | null;
   onBorrowed?: () => void;
 };
 
@@ -68,6 +71,9 @@ export function PhoneStreamDetailsView({
   incoming,
   now,
   onBack,
+  onRaiseMilestone,
+  raising,
+  raiseStatus,
   onBorrowed,
 }: PhoneStreamDetailsViewProps) {
   const pool = useLending();
@@ -225,6 +231,26 @@ export function PhoneStreamDetailsView({
             {statusLine}
           </p>
         </section>
+
+        {incoming && view === "locked" && onRaiseMilestone && (
+          <div>
+            <button
+              type="button"
+              disabled={raising}
+              onClick={() => onRaiseMilestone(stream.id)}
+              className="w-full rounded-2xl bg-[#111] px-4 py-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-white disabled:opacity-40"
+            >
+              {raising ? "Raising…" : `Apply for milestone ${next}`}
+            </button>
+            <p className="mt-1.5 text-center text-[10px] leading-snug text-[#888]">
+              Marks milestone {done} done and sends it to the client to approve —
+              dripping resumes once approved.
+            </p>
+            {raiseStatus && (
+              <p className="mt-1 text-center text-[10px] text-[#666]">{raiseStatus}</p>
+            )}
+          </div>
+        )}
 
         <div className="grid grid-cols-2 gap-2">
           <MiniStat label="Milestone" value={milestoneLabel} />

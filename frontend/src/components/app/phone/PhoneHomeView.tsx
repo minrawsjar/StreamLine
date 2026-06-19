@@ -498,6 +498,9 @@ export function PhoneHomeView({
         incoming={selectedStream.freelancer === addr}
         now={now}
         onBack={() => setDetailsView({ kind: "home" })}
+        onRaiseMilestone={onRaiseCompletion}
+        raising={isPending}
+        raiseStatus={actionStatus}
         onBorrowed={() => {
           pool.refetch();
           setPendingBorrows(readPendingBorrows());
