@@ -73,7 +73,7 @@ export function RequestPreviewCard({ request }: { request: StreamRequestParams }
               <div key={i} className="flex justify-between text-[11px] text-[#444]">
                 <span>
                   {s.label}
-                  {s.yield ? " ↗" : ""}
+                  {s.yield ? " · yield" : ""}
                 </span>
                 <span className="tabular">{s.pct}%</span>
               </div>

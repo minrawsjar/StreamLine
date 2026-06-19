@@ -9,6 +9,18 @@ const YEAR_MS = 31_536_000_000;
 /** Present-value discount on a stream's remaining balance (mirrors PV_DISCOUNT_BPS). */
 export const PV_DISCOUNT = 0.9;
 
+/** Max borrowable base units: 90% of remaining, capped by pool liquidity. */
+export function streamPresentValueBase(remainingBase: number): number {
+  return Math.floor(remainingBase * PV_DISCOUNT);
+}
+
+export function maxBorrowableBase(
+  remainingBase: number,
+  poolReserveBase: number
+): number {
+  return Math.min(streamPresentValueBase(remainingBase), poolReserveBase);
+}
+
 export type Loan = {
   loanId: string;
   streamId: string;

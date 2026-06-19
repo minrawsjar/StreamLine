@@ -6,15 +6,12 @@ import { QRCodeSVG } from "qrcode.react";
 
 import { copyToClipboard } from "@/lib/format";
 import type { DurationUnit } from "@/lib/stream-math";
-import { MIN_DRIP_USDC } from "@/lib/stream-math";
 import {
   PhoneDurationField,
   PhoneField,
   PhoneToggleRow,
   phoneInputClass,
-  phonePctInputClass,
 } from "./PhoneFormParts";
-import { BorrowFlow, YieldSplitFlow } from "../FinanceFlowViz";
 import { RequestPreviewCard } from "./RequestPreviewCard";
 import type { StreamRequestParams } from "@/lib/request-link";
 
@@ -26,10 +23,7 @@ type PhoneRequestStreamModalProps = {
 type SplitRow = { label: string; pct: number; yield: boolean };
 type RequestStep = 1 | 2 | 3;
 
-const DEFAULT_SPLITS: SplitRow[] = [
-  { label: "Spending wallet", pct: 70, yield: false },
-  { label: "Scallop (yield)", pct: 30, yield: true },
-];
+const DEFAULT_SPLITS: SplitRow[] = [{ label: "Wallet", pct: 100, yield: false }];
 
 const STEP_COPY: Record<RequestStep, { title: string; subtitle: string }> = {
   1: {
@@ -42,7 +36,7 @@ const STEP_COPY: Record<RequestStep, { title: string; subtitle: string }> = {
   },
   3: {
     title: "Payout setup",
-    subtitle: "Configure splits and add a note.",
+    subtitle: "Optionally split drips between wallet and yield, then add a note.",
   },
 };
 
@@ -113,7 +107,6 @@ export function PhoneRequestStreamModal({
   }, [recipient, streamName, amount, durationValue, durationUnit, milestones, note, isPrivate, useMilestones, useSplitConfig, splits]);
 
   const splitSum = splits.reduce((s, r) => s + (Number(r.pct) || 0), 0);
-  const dripUsd = MIN_DRIP_USDC;
 
   const updateSplit = (i: number, patch: Partial<SplitRow>) =>
     setSplits((rows) => rows.map((r, j) => (j === i ? { ...r, ...patch } : r)));
@@ -289,9 +282,13 @@ export function PhoneRequestStreamModal({
             {step === 3 && (
               <>
                 <PhoneToggleRow
-                  title="Split config"
+                  title="Split each drip"
                   subtitle={
-                    isPrivate ? "Not available for private" : `Route each drip (${splitSum}%)`
+                    isPrivate
+                      ? "Not available for private streams"
+                      : splitSum === 100
+                        ? "Send each drip to one or more destinations"
+                        : `Must total 100% (currently ${splitSum}%)`
                   }
                   checked={useSplitConfig}
                   disabled={isPrivate}
@@ -299,37 +296,43 @@ export function PhoneRequestStreamModal({
                 >
                   <div className="flex flex-col gap-2">
                     {splits.map((row, i) => (
-                      <div key={i} className="flex flex-wrap items-center gap-2">
+                      <div key={i} className="flex items-center gap-1.5">
                         <input
                           value={row.label}
                           onChange={(e) => updateSplit(i, { label: e.target.value })}
-                          className="min-w-0 flex-1 rounded-xl border border-black/15 bg-white px-3 py-2 text-[11px] outline-none focus:border-[#5b54e6]"
+                          placeholder="Wallet"
+                          className="min-w-0 flex-1 rounded-xl border border-black/15 bg-white px-3 py-2 text-[12px] outline-none focus:border-[#5b54e6]"
                         />
-                        <input
-                          type="number"
-                          inputMode="numeric"
-                          value={row.pct === 0 ? "" : row.pct}
-                          placeholder="0"
-                          onChange={(e) =>
-                            updateSplit(i, {
-                              pct: e.target.value === "" ? 0 : Number(e.target.value),
-                            })
-                          }
-                          className={phonePctInputClass}
-                        />
-                        <span className="text-[10px] text-[#777]">%</span>
-                        <label className="flex items-center gap-1 text-[10px] text-[#666]">
+                        <div className="flex shrink-0 items-center gap-0.5">
+                          <input
+                            type="number"
+                            inputMode="numeric"
+                            value={row.pct === 0 ? "" : row.pct}
+                            placeholder="0"
+                            onChange={(e) =>
+                              updateSplit(i, {
+                                pct: e.target.value === "" ? 0 : Number(e.target.value),
+                              })
+                            }
+                            className="w-9 rounded-lg border border-black/15 bg-white px-1 py-1.5 text-center text-[10px] tabular outline-none focus:border-[#5b54e6] [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                          />
+                          <span className="text-[9px] text-[#888]">%</span>
+                        </div>
+                        <label
+                          className="flex shrink-0 items-center gap-1 rounded-lg border border-black/10 px-1.5 py-1 text-[9px] text-[#555]"
+                          title="Route this portion to a yield vault instead of your wallet"
+                        >
                           <input
                             type="checkbox"
                             checked={row.yield}
                             onChange={(e) => updateSplit(i, { yield: e.target.checked })}
                           />
-                          yield
+                          Yield
                         </label>
                         <button
                           type="button"
                           onClick={() => setSplits((s) => s.filter((_, j) => j !== i))}
-                          className="px-1 text-[#c0533a]"
+                          className="shrink-0 px-1 text-[#c0533a]"
                           aria-label="Remove split"
                         >
                           ×
@@ -346,24 +349,15 @@ export function PhoneRequestStreamModal({
                       }
                       className="self-start rounded-lg border border-black/15 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-[#444]"
                     >
-                      + add split
+                      + add destination
                     </button>
+                    {useSplitConfig && !isPrivate && (
+                      <p className="text-[10px] leading-snug text-[#888]">
+                    
+                      </p>
+                    )}
                   </div>
                 </PhoneToggleRow>
-
-                {useSplitConfig && !isPrivate && (
-                  <YieldSplitFlow
-                    compact
-                    legs={splits.map((s) => ({
-                      label: s.label,
-                      pct: s.pct,
-                      yield: s.yield,
-                    }))}
-                    dripUsd={dripUsd}
-                  />
-                )}
-
-                <BorrowFlow compact />
 
                 <PhoneField label="Note (optional)">
                   <input

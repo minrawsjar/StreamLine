@@ -417,14 +417,12 @@ function MilestoneAction({
 
       {view === "dripping" && (
         <p className="text-[12px] text-[#2b2a5e]/70">
-          Milestone {next} of {total} is dripping live. It will stop automatically
-          when this milestone&apos;s allocation is fully paid.
         </p>
       )}
 
       {view === "paused" && (
         <p className="text-[12px] text-[#b4541f]">
-          Stream paused — a dispute is in progress.
+          Stream paused.
         </p>
       )}
 

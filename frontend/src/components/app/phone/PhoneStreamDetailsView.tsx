@@ -1,5 +1,7 @@
 "use client";
 
+import { useEffect, useState } from "react";
+
 import type { StreamRecord } from "@/lib/indexer";
 import { USDC_BASE, formatInterval } from "@/lib/stream-math";
 import {
@@ -9,7 +11,8 @@ import {
   effectiveState,
   nextMilestoneNo,
 } from "@/lib/stream-state";
-import { DonutProgress, StateBadge, short } from "../dashboard-ui";
+import { DonutProgress, short } from "../dashboard-ui";
+import { PhoneBorrowAgainstView } from "./PhoneBorrowAgainstView";
 
 const usd = (base: number, digits = 3) =>
   (base / USDC_BASE).toLocaleString("en-US", {
@@ -34,6 +37,22 @@ export function PhoneStreamDetailsView({
   now,
   onBack,
 }: PhoneStreamDetailsViewProps) {
+  const [screen, setScreen] = useState<"details" | "borrow">("details");
+
+  useEffect(() => {
+    setScreen("details");
+  }, [stream.id]);
+
+  if (screen === "borrow") {
+    return (
+      <PhoneBorrowAgainstView
+        stream={stream}
+        label={label}
+        onBack={() => setScreen("details")}
+      />
+    );
+  }
+
   const view = effectiveState(stream);
   const earned = earnedBase(stream, now);
   const progress = stream.total > 0 ? (earned / stream.total) * 100 : 0;
@@ -78,7 +97,19 @@ export function PhoneStreamDetailsView({
                 : "Outgoing stream from your wallet."}
             </p>
           </div>
-          <StateBadge state={view} />
+          {incoming ? (
+            <button
+              type="button"
+              onClick={() => setScreen("borrow")}
+              className="shrink-0 rounded-full border border-[#c0533a]/25 bg-[#c0533a]/[0.06] px-3 py-1.5 text-[9px] font-semibold uppercase tracking-[0.1em] text-[#c0533a] transition-colors hover:bg-[#c0533a]/10"
+            >
+              Borrow against
+            </button>
+          ) : (
+            <span className="shrink-0 rounded-full border border-black/10 bg-[#fafafa] px-3 py-1.5 text-[9px] font-semibold uppercase tracking-[0.1em] text-[#888]">
+              {view.replace("_", " ")}
+            </span>
+          )}
         </div>
 
         <section className="rounded-2xl border border-black/10 bg-white p-4">
