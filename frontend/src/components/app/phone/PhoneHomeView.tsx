@@ -547,6 +547,10 @@ export function PhoneHomeView({
         onBorrowed={() => {
           pool.refetch();
           setPendingBorrows(readPendingBorrows());
+          // Borrowed USDC lands in the wallet — refresh the balance now and
+          // again after RPC propagation settles.
+          balanceQ.refetch();
+          window.setTimeout(() => balanceQ.refetch(), 2500);
         }}
       />
     );
