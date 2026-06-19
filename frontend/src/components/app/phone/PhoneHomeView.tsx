@@ -29,6 +29,8 @@ import {
 import { useLending } from "@/lib/use-lending";
 import { useGaslessExecute } from "@/lib/use-gasless";
 import { buildRaiseCompletion, buildApproveMilestone } from "@/lib/streamline-tx";
+import { usePrivateStreams } from "@/lib/use-private-streams";
+import type { PrivateStreamOnChain } from "@/lib/private-streams";
 import {
   PhoneDashboardView,
   type PhoneActivityItem,
@@ -65,12 +67,60 @@ function streamStatusLabel(s: StreamRecord): string {
   return "Idle";
 }
 
-function streamBackLabel(s: StreamRecord, addr: string, index: number): string {
-  if (s.freelancer === addr) {
-    return index === 1 ? "Private stream" : "Work stream";
-  }
+// NB: public streams are never private — confidential streams come from a
+// separate source (usePrivateStreams) and are tagged explicitly below.
+function streamBackLabel(s: StreamRecord, addr: string): string {
+  if (s.freelancer === addr) return "Work stream";
   if (s.sender === addr) return "Pay stream";
   return "Stream";
+}
+
+/** Numeric on-chain state → label for confidential streams. */
+const PRIV_STATE_LABEL: Record<number, string> = {
+  0: "Awaiting completion",
+  1: "Awaiting approval",
+  2: "Dripping",
+  3: "Paused",
+  4: "Completed",
+};
+
+function PrivateStreamCard({
+  p,
+  isIncoming,
+}: {
+  p: PrivateStreamOnChain;
+  isIncoming: boolean;
+}) {
+  return (
+    <div className="rounded-2xl border border-[#6c5ce7]/25 bg-white p-3.5 shadow-[0_4px_20px_rgba(0,0,0,0.05)]">
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <p className="truncate text-[11px] font-semibold tracking-tight text-[#111]">
+            Private stream
+          </p>
+          <p className="mt-0.5 text-[9px] font-medium uppercase tracking-[0.12em] text-[#888]">
+            {isIncoming ? "Incoming" : "Outgoing"}
+          </p>
+        </div>
+        <span className="shrink-0 rounded-full bg-[#6c5ce7]/12 px-2 py-0.5 text-[8px] font-bold uppercase tracking-[0.08em] text-[#6c5ce7]">
+          🔒 Private
+        </span>
+      </div>
+      <p className="mt-3 text-[18px] font-bold tabular-nums leading-none text-[#111]">
+        {usd(Number(p.reserve), 2)}
+        <span className="ml-1.5 text-[10px] font-medium text-[#888]">
+          locked reserve
+        </span>
+      </p>
+      <p className="mt-2 text-[10px] text-[#666]">
+        {PRIV_STATE_LABEL[p.state] ?? "—"} · milestone {p.currentMilestone + 1}/
+        {p.nMilestones}
+      </p>
+      <p className="mt-2 text-[9px] leading-snug text-[#999]">
+        Amounts are encrypted on-chain — only the locked reserve is public.
+      </p>
+    </div>
+  );
 }
 
 type PhoneHomeViewProps = {
@@ -135,6 +185,16 @@ export function PhoneHomeView({
     }
     return map;
   }, [capsQ.data]);
+
+  // Confidential streams live off the public indexer (amounts hidden); pull both
+  // roles so they can be shown alongside public ones, tagged Private.
+  const privIncomingQ = usePrivateStreams("freelancer");
+  const privOutgoingQ = usePrivateStreams("sender");
+  const privateStreams = useMemo(() => {
+    const inc = privIncomingQ.data ?? [];
+    const out = privOutgoingQ.data ?? [];
+    return [...inc, ...out.filter((o) => !inc.some((i) => i.id === o.id))];
+  }, [privIncomingQ.data, privOutgoingQ.data]);
   const balanceQ = useSuiClientQuery(
     "getBalance",
     {
@@ -251,7 +311,7 @@ export function PhoneHomeView({
             : streamStatusLabel(s);
         return {
           id: s.id,
-          label: resolveStreamLabel(s) ?? (addr ? streamBackLabel(s, addr, i) : "Stream"),
+          label: resolveStreamLabel(s) ?? (addr ? streamBackLabel(s, addr) : "Stream"),
           amount: usd(value, 3),
           subtitle: status,
           isLive: dripping && isIncoming,
@@ -430,7 +490,7 @@ export function PhoneHomeView({
               Open a stream to see full details.
             </p>
           </div>
-          {activeStreams.length === 0 ? (
+          {activeStreams.length === 0 && privateStreams.length === 0 ? (
             <div className="rounded-2xl border border-dashed border-black/10 bg-white px-3 py-6 text-center">
               <p className="text-[12px] font-medium text-[#555]">No streams yet</p>
               <p className="mt-1 text-[11px] text-[#888]">
@@ -438,7 +498,8 @@ export function PhoneHomeView({
               </p>
             </div>
           ) : (
-            activeStreams.map((s, i) => {
+            <>
+            {activeStreams.map((s, i) => {
               const dripping = effectiveState(s) === "dripping";
               const isIncoming = s.freelancer === addr;
               const loan = loanForStream(s.id, pool.loans, pendingBorrows);
@@ -446,7 +507,7 @@ export function PhoneHomeView({
               const progress =
                 s.total > 0 ? Math.min(100, (earnedBase(s, now) / s.total) * 100) : 0;
               const label =
-                resolveStreamLabel(s) ?? (addr ? streamBackLabel(s, addr, i) : "Stream");
+                resolveStreamLabel(s) ?? (addr ? streamBackLabel(s, addr) : "Stream");
 
               return (
                 <button
@@ -521,7 +582,15 @@ export function PhoneHomeView({
                   </div>
                 </button>
               );
-            })
+            })}
+            {privateStreams.map((p) => (
+              <PrivateStreamCard
+                key={p.id}
+                p={p}
+                isIncoming={p.freelancer === addr}
+              />
+            ))}
+            </>
           )}
         </div>
       </div>
@@ -535,7 +604,7 @@ export function PhoneHomeView({
         stream={selectedStream}
         label={
           resolveStreamLabel(selectedStream) ??
-          (addr ? streamBackLabel(selectedStream, addr, streamIndex) : "Stream")
+          (addr ? streamBackLabel(selectedStream, addr) : "Stream")
         }
         incoming={selectedStream.freelancer === addr}
         now={now}
