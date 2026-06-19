@@ -207,6 +207,7 @@ export function PhoneHomeView({
           amount: usd(value, 3),
           subtitle: streamStatusLabel(s),
           isLive: dripping && isIncoming,
+          meta: `${isIncoming ? "Incoming" : "Outgoing"} · ${usd(s.remaining, 0)} left`,
         };
       });
   }, [activeStreams, addr, now]);
@@ -356,28 +357,82 @@ export function PhoneHomeView({
           ) : (
             activeStreams.map((s, i) => {
               const dripping = effectiveState(s) === "dripping";
+              const isIncoming = s.freelancer === addr;
               const value = dripping ? earnedBase(s, now) : s.total;
+              const progress =
+                s.total > 0 ? Math.min(100, (earnedBase(s, now) / s.total) * 100) : 0;
+              const label =
+                resolveStreamLabel(s) ?? (addr ? streamBackLabel(s, addr, i) : "Stream");
+
               return (
                 <button
                   key={s.id}
                   type="button"
                   onClick={() => openStream(s.id)}
-                  className="rounded-2xl border border-black/10 bg-white px-3 py-2.5 text-left"
+                  className="rounded-2xl border border-black/8 bg-white p-3.5 text-left shadow-[0_4px_20px_rgba(0,0,0,0.05)] transition-colors hover:border-black/14"
                 >
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#888]">
-                    {resolveStreamLabel(s) ?? (addr ? streamBackLabel(s, addr, i) : "Stream")}
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="truncate text-[11px] font-semibold tracking-tight text-[#111]">
+                        {label}
+                      </p>
+                      <p className="mt-0.5 text-[9px] font-medium uppercase tracking-[0.12em] text-[#888]">
+                        {isIncoming ? "Incoming" : "Outgoing"}
+                      </p>
+                    </div>
+                    <span
+                      className={`shrink-0 rounded-full px-2 py-0.5 text-[8px] font-semibold uppercase tracking-[0.08em] ${
+                        dripping
+                          ? "bg-[#1d9e75]/10 text-[#1d9e75]"
+                          : "bg-black/5 text-[#777]"
+                      }`}
+                    >
+                      {streamStatusLabel(s)}
+                    </span>
+                  </div>
+
+                  <p className="mt-3 text-[18px] font-bold tabular-nums leading-none text-[#111]">
+                    {usd(value, 2)}
+                    <span className="ml-1.5 text-[10px] font-medium text-[#888]">
+                      {dripping ? "earned" : "locked"}
+                    </span>
                   </p>
-                  <p className="mt-1 text-[14px] font-semibold tabular-nums text-[#111]">
-                    {usd(value, 3)}
-                    {!dripping && (
-                      <span className="ml-1 text-[10px] font-medium uppercase tracking-wide text-[#999]">
-                        locked
-                      </span>
-                    )}
-                  </p>
-                  <p className="mt-0.5 text-[10px] text-[#666]">
-                    {streamStatusLabel(s)} · milestone {s.current_milestone + 1}/{s.n_milestones}
-                  </p>
+
+                  <div className="mt-3 h-1 overflow-hidden rounded-full bg-black/[0.06]">
+                    <div
+                      className={`h-full rounded-full transition-[width] duration-500 ${
+                        dripping ? "bg-[#1d9e75]" : "bg-[#5b54e6]/50"
+                      }`}
+                      style={{ width: `${progress}%` }}
+                    />
+                  </div>
+
+                  <div className="mt-3 grid grid-cols-3 gap-2 border-t border-black/6 pt-2.5">
+                    <div>
+                      <p className="text-[7px] font-semibold uppercase tracking-[0.12em] text-[#aaa]">
+                        Remaining
+                      </p>
+                      <p className="mt-0.5 text-[10px] font-semibold tabular-nums text-[#333]">
+                        {usd(s.remaining, 0)}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-[7px] font-semibold uppercase tracking-[0.12em] text-[#aaa]">
+                        Milestone
+                      </p>
+                      <p className="mt-0.5 text-[10px] font-semibold tabular-nums text-[#333]">
+                        {s.current_milestone + 1}/{s.n_milestones}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-[7px] font-semibold uppercase tracking-[0.12em] text-[#aaa]">
+                        Drip/min
+                      </p>
+                      <p className="mt-0.5 text-[10px] font-semibold tabular-nums text-[#333]">
+                        {usd(dripRatePerMinuteBase(s), 2)}
+                      </p>
+                    </div>
+                  </div>
                 </button>
               );
             })

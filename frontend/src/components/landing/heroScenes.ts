@@ -82,7 +82,7 @@ export const HERO_SCENES: HeroScene[] = [
       label: "earn more",
       headline: "Earn Yield ",
       accent: "with your Stream.",
-      body: "Money shouldn't sit idle, so split your stream into yield, and savings, and let the your earnings compound from the 1st second. Automatically.",
+      body: "Money shouldn't sit idle, so split your stream into yield, and savings, and let your earnings compound from the 1st second. Automatically.",
       bullets: [
       ],
       headlineLarge: true,
@@ -103,9 +103,9 @@ export const HERO_SCENES: HeroScene[] = [
     theme: "light",
     left: {
       label: "Remain Private",
-      headline: "Your salary is",
+      headline: "Your money is",
       accent: "nobody's business.",
-      body: "You don't want salary, rates, clients visible on-chain, so use your streams privately. No configuration needed.",
+      body: "When you don't want salary, rates or clients visible on-chain, use your streams privately. No configuration needed.",
       bullets: [
   
       ],
@@ -113,8 +113,8 @@ export const HERO_SCENES: HeroScene[] = [
     },
     right: {
       label: "Provable on demand",
-      headline: "Share earnings",
-      accent: "cryptographically.",
+      headline: "Audit trail &",
+      accent: "Selective Disclosure.",
       body: "Accountant, bank, tax authority — share a proof they can verify. Streamline gives you selective disclosure on your terms, visible only to you, and whoever you choose to show.",
       bullets: [
    

@@ -44,13 +44,13 @@ export function HeroNav({
       <button
         type="button"
         onClick={inApp ? onBackToMain : onLaunchApp}
-        className={
+        className={`font-semibold ${
           isPro
             ? "sl-glass-btn-dark sl-glass-btn-dark-primary"
             : "sl-glass-btn sl-glass-btn-primary"
-        }
+        }`}
       >
-        {inApp ? "Back to main" : "Launch App"}
+        {inApp ? "Back to main" : "Start App"}
       </button>
     </nav>
   );

@@ -125,8 +125,8 @@ export function PhoneBorrowAgainstView({
             {usd(maxBorrowBase, 2)}
           </p>
           <p className="mt-2 text-[11px] leading-snug text-[#666]">
-            {(PV_DISCOUNT * 100).toFixed(0)}% of remaining ({usd(stream.remaining, 2)}),
-            capped by pool liquidity ({usd(pool.reserveBase, 2)}).
+            {(PV_DISCOUNT * 100).toFixed(0)}% of remaining ({usd(stream.remaining, 2)})
+            
           </p>
         </section>
 

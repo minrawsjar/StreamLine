@@ -98,12 +98,13 @@ function DashboardScreen() {
   return (
     <div className="mt-1">
       <PhoneDashboardView
+        heroPreview
         cards={[
           {
             id: "demo-macro",
             label: "Total balance",
             amount: formatted,
-            subtitle: "3 streams · 1 active",
+            subtitle: "3 streams",
           },
           { id: "demo-work", label: "Work stream", amount: "$90.00", subtitle: "Active stream" },
           {

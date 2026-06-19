@@ -237,9 +237,9 @@ export function ScrollHero() {
               <button
                 type="button"
                 onClick={launchApp}
-                className="sl-glass-btn sl-glass-btn-primary mt-5"
+                className="sl-glass-btn sl-glass-btn-primary mt-5 font-semibold"
               >
-                Launch App →
+                Start App →
               </button>
             )}
           </div>

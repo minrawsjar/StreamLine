@@ -101,7 +101,7 @@ export function PhoneStreamDetailsView({
             <button
               type="button"
               onClick={() => setScreen("borrow")}
-              className="shrink-0 rounded-full border border-[#c0533a]/25 bg-[#c0533a]/[0.06] px-3 py-1.5 text-[9px] font-semibold uppercase tracking-[0.1em] text-[#c0533a] transition-colors hover:bg-[#c0533a]/10"
+              className="shrink-0 rounded-full border border-[#1d9e75]/30 bg-[#1d9e75]/10 px-3 py-1.5 text-[9px] font-semibold uppercase tracking-[0.1em] text-[#1d9e75] transition-colors hover:bg-[#1d9e75]/15"
             >
               Borrow against
             </button>
@@ -153,36 +153,6 @@ export function PhoneStreamDetailsView({
           </p>
           <DonutProgress percent={progress} caption="of this stream" />
         </section>
-
-        <section className="rounded-2xl border border-black/10 bg-white p-3">
-          <p className="mb-2 text-[9px] font-semibold uppercase tracking-[0.16em] text-[#888]">
-            Milestones
-          </p>
-          <div className="flex flex-wrap gap-1.5">
-            {Array.from({ length: stream.n_milestones }).map((_, i) => {
-              const isDone = i < done;
-              const isCurrent = i === done && view !== "done";
-              return (
-                <span
-                  key={i}
-                  title={`Milestone ${i + 1} of ${stream.n_milestones}`}
-                  className={`flex h-6 min-w-6 items-center justify-center rounded-md px-2 text-[10px] font-semibold tabular-nums ${
-                    isDone
-                      ? "bg-[#1d9e75] text-white"
-                      : isCurrent
-                        ? "border border-[#5b54e6] text-[#5b54e6]"
-                        : "border border-black/15 text-[#999]"
-                  }`}
-                >
-                  {i + 1}
-                </span>
-              );
-            })}
-          </div>
-          <p className="mt-3 text-[11px] leading-snug text-[#666]">
-            <MilestoneStatus stream={stream} view={view} done={done} next={next} />
-          </p>
-        </section>
       </div>
     </div>
   );
@@ -199,43 +169,4 @@ function MiniStat({ label, value }: { label: string; value: string }) {
       </p>
     </div>
   );
-}
-
-function MilestoneStatus({
-  stream,
-  view,
-  done,
-  next,
-}: {
-  stream: StreamRecord;
-  view: ReturnType<typeof effectiveState>;
-  done: number;
-  next: number;
-}) {
-  if (view === "locked") {
-    return (
-      <>
-        Milestone {done} finished. Apply for milestone {next} when your work is
-        ready — the client will review, then dripping resumes.
-      </>
-    );
-  }
-  if (view === "pending_review") {
-    return <>Milestone {next} submitted — awaiting client approval.</>;
-  }
-  if (view === "dripping") {
-    return (
-      <>
-        Milestone {next} of {stream.n_milestones} is dripping live. It stops
-        automatically when this milestone&apos;s allocation is fully paid.
-      </>
-    );
-  }
-  if (view === "paused") {
-    return <>Stream paused — a dispute is in progress.</>;
-  }
-  if (view === "done") {
-    return <>All {stream.n_milestones} milestones complete — stream fully settled.</>;
-  }
-  return null;
 }

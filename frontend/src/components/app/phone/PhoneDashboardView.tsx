@@ -48,6 +48,7 @@ export type StreamCardData = {
   label: string;
   amount?: string;
   subtitle?: string;
+  meta?: string;
   isLive?: boolean;
   empty?: boolean;
 };
@@ -64,12 +65,18 @@ type PhoneDashboardViewProps = {
   topStats?: readonly PhoneTopStat[];
   activity: readonly PhoneActivityItem[];
   activityLoading?: boolean;
+  /** Landing hero phone only — macro layout + subtitle under balance amount. */
+  heroPreview?: boolean;
   onQuickAction?: (id: string) => void;
   onShiftCards?: () => void;
   onPrimaryCardClick?: () => void;
   onPrimaryCardDetails?: () => void;
   trailing?: ReactNode;
 };
+
+function isBalanceCard(card: StreamCardData) {
+  return card.id === "macro" || card.id === "demo-macro";
+}
 
 const BACK_OFFSETS = [
   { inset: "mx-5", top: 6, tone: "bg-white/38 border-white/30" },
@@ -82,26 +89,45 @@ function StreamCardFace({
   className = "",
   macro = false,
   amountLive = false,
+  macroSubtitle = false,
   onDetails,
 }: {
-  card: { label: string; amount: string; subtitle: string; empty?: boolean };
+  card: StreamCardData;
   belowStats?: readonly PhoneTopStat[];
   className?: string;
   macro?: boolean;
   amountLive?: boolean;
+  macroSubtitle?: boolean;
   onDetails?: () => void;
 }) {
+  const isBalance = card.id === "macro" || card.id === "demo-macro";
+  const isStream = !isBalance && !card.empty;
+
   return (
     <div className={`rounded-2xl border border-white/70 bg-white/88 p-4 shadow-[0_10px_32px_rgba(0,0,0,0.1)] backdrop-blur-md ${className}`}>
       <div className="min-w-0">
         <div className="flex items-start justify-between gap-2">
-          <p
-            className={`text-[10px] font-semibold uppercase tracking-wider ${
-              card.empty ? "text-[#bbb]" : "text-[#888]"
-            }`}
-          >
-            {card.label}
-          </p>
+          <div className="min-w-0">
+            <p
+              className={`text-[10px] font-semibold uppercase tracking-wider ${
+                card.empty ? "text-[#bbb]" : "text-[#888]"
+              }`}
+            >
+              {card.label}
+            </p>
+            {isStream && card.subtitle && (
+              <p
+                className={`mt-1 inline-flex items-center gap-1 text-[9px] font-semibold uppercase tracking-[0.08em] ${
+                  amountLive ? "text-[#1d9e75]" : "text-[#666]"
+                }`}
+              >
+                {amountLive && (
+                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[#1d9e75]" aria-hidden />
+                )}
+                {card.subtitle}
+              </p>
+            )}
+          </div>
           {!!onDetails && (
             <button
               type="button"
@@ -109,9 +135,9 @@ function StreamCardFace({
                 e.stopPropagation();
                 onDetails();
               }}
-              className="text-[8px] font-semibold uppercase tracking-[0.14em] text-[#666]"
+              className="shrink-0 text-[8px] font-semibold uppercase tracking-[0.14em] text-[#666]"
             >
-              Show details
+              Details
             </button>
           )}
         </div>
@@ -120,7 +146,7 @@ function StreamCardFace({
             macro ? "text-[1.85rem]" : "text-[1.35rem]"
           } ${card.empty ? "text-[#ccc]" : amountLive ? "text-[#1a5c38]" : "text-[#111]"}`}
         >
-          {card.amount}
+          {card.amount ?? "$0.00"}
         </p>
         {belowStats.length > 0 && (
           <div className="mt-3 flex flex-wrap items-baseline gap-x-6 gap-y-1">
@@ -140,13 +166,39 @@ function StreamCardFace({
             ))}
           </div>
         )}
-        {card.subtitle && (
+        {macroSubtitle && card.subtitle && (
           <p className="mt-2 text-[10px] font-medium leading-snug text-[#555]">
             {card.subtitle}
           </p>
         )}
+        {!macro && isStream && card.meta && (
+          <p className="mt-2 text-[9px] font-medium tracking-wide text-[#888]">
+            {card.meta}
+          </p>
+        )}
       </div>
     </div>
+  );
+}
+
+function StackCardPeek({ card }: { card: StreamCardData }) {
+  if (card.empty) return null;
+  const isLive = !!card.isLive;
+  return (
+  <>
+    <p className="truncate text-[10px] font-semibold uppercase tracking-wider text-[#666]/80">
+      {card.label}
+    </p>
+    {card.amount && (
+      <p
+        className={`mt-1 text-[13px] font-bold tabular-nums leading-none ${
+          isLive ? "text-[#1d9e75]/70" : "text-[#111]/45"
+        }`}
+      >
+        {card.amount}
+      </p>
+    )}
+  </>
   );
 }
 
@@ -156,6 +208,7 @@ export function PhoneDashboardView({
   topStats = [],
   activity,
   activityLoading = false,
+  heroPreview = false,
   onQuickAction,
   onShiftCards,
   onPrimaryCardClick,
@@ -168,7 +221,7 @@ export function PhoneDashboardView({
   const n = normalizedCards.length;
   const active = ((activeCardIndex % n) + n) % n;
   const mainCard = normalizedCards[active];
-  const nextCard = n > 1 ? normalizedCards[(active + 1) % n] : null;
+  const peekNext = n > 1 ? normalizedCards[(active + 1) % n] : null;
   const decorativeCard: StreamCardData = {
     id: "decorative",
     label: "",
@@ -176,8 +229,8 @@ export function PhoneDashboardView({
   };
   const layers = BACK_OFFSETS.map((layer, i) => ({
     ...layer,
-    card: i === 0 && nextCard ? nextCard : decorativeCard,
-    clickable: i === 0 && n > 1,
+    card: i === 1 && peekNext ? peekNext : decorativeCard,
+    clickable: i === 1 && n > 1,
   }));
 
   return (
@@ -188,13 +241,7 @@ export function PhoneDashboardView({
             <div
               className={`flex min-h-[118px] flex-col justify-start rounded-2xl border p-4 shadow-[0_4px_16px_rgba(0,0,0,0.04)] backdrop-blur-md ${layer.tone}`}
             >
-              <p
-                className={`text-[10px] font-semibold uppercase tracking-wider ${
-                  layer.card.empty ? "text-[#aaa]/70" : "text-[#666]/50"
-                }`}
-              >
-                {!layer.card.empty && i === 0 ? layer.card.label : ""}
-              </p>
+              <StackCardPeek card={layer.card} />
             </div>
           );
           return layer.clickable ? (
@@ -232,15 +279,12 @@ export function PhoneDashboardView({
           className="relative z-30 mt-[56px] block w-full cursor-pointer text-left"
         >
           <StreamCardFace
-            macro
-            amountLive={mainCard.id !== "macro" && !!mainCard.isLive}
+            macro={mainCard.id === "macro" || (heroPreview && isBalanceCard(mainCard))}
+            macroSubtitle={heroPreview && isBalanceCard(mainCard)}
+            amountLive={!isBalanceCard(mainCard) && !!mainCard.isLive}
             onDetails={onPrimaryCardDetails}
-            belowStats={topStats}
-            card={{
-              label: mainCard.label,
-              amount: mainCard.amount ?? "$0.00",
-              subtitle: mainCard.subtitle ?? "",
-            }}
+            belowStats={mainCard.id === "macro" ? topStats : []}
+            card={mainCard}
           />
         </div>
       </div>

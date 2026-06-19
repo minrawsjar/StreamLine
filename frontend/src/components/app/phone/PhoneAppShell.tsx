@@ -6,6 +6,7 @@ import { WalletButton } from "@/components/wallet/WalletButton";
 import { StreamLineMark } from "@/components/landing/StreamLineMark";
 import type { StreamRequestParams } from "@/lib/request-link";
 import { ScanIconButton } from "./PhoneHeaderActions";
+import { ProActionButtons, ProTitleWithDemo } from "@/components/app/pro/ProHeaderExtras";
 import { PhoneLauncher } from "./PhoneLauncher";
 import { PhoneUserApp } from "./PhoneUserApp";
 import { PhoneProApp } from "./PhoneProApp";
@@ -29,7 +30,7 @@ export function PhoneAppShell({ route, onNavigate }: PhoneAppShellProps) {
   );
 
   const openScan = () => {
-    setScanReturnRoute(route === "launcher" ? "launcher" : "user");
+    setScanReturnRoute(route === "launcher" ? "launcher" : route);
     onNavigate("scan");
   };
 
@@ -78,15 +79,13 @@ export function PhoneAppShell({ route, onNavigate }: PhoneAppShellProps) {
             aria-label="Back to apps"
           >
             <StreamLineMark size="sm" variant={isPro ? "pro" : "default"} />
-            <span
-              className={`truncate text-sm font-semibold tracking-tight ${
-                isPro
-                  ? "font-[family-name:var(--font-inter)] text-white"
-                  : "font-bold text-[#111]"
-              }`}
-            >
-              {isPro ? "Pro" : "StreamLine"}
-            </span>
+            {isPro ? (
+              <ProTitleWithDemo compact />
+            ) : (
+              <span className="truncate text-sm font-bold tracking-tight text-[#111]">
+                StreamLine
+              </span>
+            )}
           </button>
         ) : (
           <div className="flex min-w-0 items-center gap-2">
@@ -97,7 +96,9 @@ export function PhoneAppShell({ route, onNavigate }: PhoneAppShellProps) {
           </div>
         )}
         <div className="flex shrink-0 items-center gap-1.5">
-          {!isPro && !isScan && !isFulfill && <ScanIconButton onClick={openScan} />}
+          {!isScan && !isFulfill && (
+            <ScanIconButton pro={isPro} onClick={openScan} />
+          )}
           <WalletButton
             variant="profile"
             showFaucetInMenu={!isPro}
@@ -105,6 +106,12 @@ export function PhoneAppShell({ route, onNavigate }: PhoneAppShellProps) {
           />
         </div>
       </div>
+
+      {isPro && inWorkspace && (
+        <div className="mt-2 shrink-0">
+          <ProActionButtons compact />
+        </div>
+      )}
 
       <div className="mt-2 flex min-h-0 flex-1 flex-col overflow-hidden">
         {route === "launcher" && <PhoneLauncher onOpen={onNavigate} />}
