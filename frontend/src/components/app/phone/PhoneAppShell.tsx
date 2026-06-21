@@ -12,6 +12,8 @@ import { PhoneUserApp } from "./PhoneUserApp";
 import { PhoneProApp } from "./PhoneProApp";
 import { PhoneScanView } from "./PhoneScanView";
 import { PhoneFulfillRequestView } from "./PhoneFulfillRequestView";
+import { PhoneRequestStreamView } from "./PhoneRequestStreamView";
+import { PhoneCreateStreamView } from "./PhoneCreateStreamView";
 import type { PhoneAppRoute } from "./types";
 
 type PhoneAppShellProps = {
@@ -38,7 +40,10 @@ export function PhoneAppShell({ route, onNavigate }: PhoneAppShellProps) {
   const isPro = route === "pro";
   const isScan = route === "scan";
   const isFulfill = route === "fulfill";
-  const inWorkspace = route !== "launcher" && !isScan && !isFulfill;
+  const isRequest = route === "request";
+  const isCreate = route === "create";
+  const inWorkspace =
+    route !== "launcher" && !isScan && !isFulfill && !isRequest && !isCreate;
   const [scanReturnRoute, setScanReturnRoute] = useState<PhoneAppRoute>("user");
   const [pendingRequest, setPendingRequestState] =
     useState<StreamRequestParams | null>(readStoredRequest);
@@ -95,6 +100,30 @@ export function PhoneAppShell({ route, onNavigate }: PhoneAppShellProps) {
               Review
             </span>
           </button>
+        ) : isRequest ? (
+          <button
+            type="button"
+            onClick={() => onNavigate("user")}
+            className="flex min-w-0 cursor-pointer items-center gap-2 text-left"
+            aria-label="Back"
+          >
+            <StreamLineMark size="sm" variant="default" />
+            <span className="truncate text-sm font-bold tracking-tight text-[#111]">
+              Request
+            </span>
+          </button>
+        ) : isCreate ? (
+          <button
+            type="button"
+            onClick={() => onNavigate("user")}
+            className="flex min-w-0 cursor-pointer items-center gap-2 text-left"
+            aria-label="Back"
+          >
+            <StreamLineMark size="sm" variant="default" />
+            <span className="truncate text-sm font-bold tracking-tight text-[#111]">
+              Create
+            </span>
+          </button>
         ) : inWorkspace ? (
           <button
             type="button"
@@ -120,7 +149,7 @@ export function PhoneAppShell({ route, onNavigate }: PhoneAppShellProps) {
           </div>
         )}
         <div className="flex shrink-0 items-center gap-1.5">
-          {!isScan && !isFulfill && (
+          {!isScan && !isFulfill && !isRequest && !isCreate && (
             <ScanIconButton pro={isPro} onClick={openScan} />
           )}
           <WalletButton
@@ -139,7 +168,9 @@ export function PhoneAppShell({ route, onNavigate }: PhoneAppShellProps) {
 
       <div className="mt-2 flex min-h-0 flex-1 flex-col overflow-hidden">
         {route === "launcher" && <PhoneLauncher onOpen={onNavigate} />}
-        {route === "user" && <PhoneUserApp />}
+        {route === "user" && (
+          <PhoneUserApp onNavigate={onNavigate} />
+        )}
         {route === "pro" && <PhoneProApp />}
         {route === "scan" && (
           <PhoneScanView
@@ -153,6 +184,12 @@ export function PhoneAppShell({ route, onNavigate }: PhoneAppShellProps) {
             onAccepted={clearRequest}
             onDecline={clearRequest}
           />
+        )}
+        {route === "request" && (
+          <PhoneRequestStreamView onClose={() => onNavigate("user")} />
+        )}
+        {route === "create" && (
+          <PhoneCreateStreamView onClose={() => onNavigate("user")} />
         )}
         {route === "fulfill" && !pendingRequest && (
           <div className="flex flex-1 flex-col items-center justify-center gap-3 px-6 text-center">

@@ -50,6 +50,8 @@ export type StreamCardData = {
   subtitle?: string;
   meta?: string;
   isLive?: boolean;
+  /** Dripping pay stream (outgoing) — purple live styling */
+  liveOutgoing?: boolean;
   empty?: boolean;
 };
 
@@ -89,6 +91,7 @@ function StreamCardFace({
   className = "",
   macro = false,
   amountLive = false,
+  liveOutgoing = false,
   macroSubtitle = false,
   onDetails,
 }: {
@@ -97,6 +100,7 @@ function StreamCardFace({
   className?: string;
   macro?: boolean;
   amountLive?: boolean;
+  liveOutgoing?: boolean;
   macroSubtitle?: boolean;
   onDetails?: () => void;
 }) {
@@ -118,11 +122,16 @@ function StreamCardFace({
             {isStream && card.subtitle && !amountLive && (
               <p
                 className={`mt-1 inline-flex items-center gap-1 text-[9px] font-semibold uppercase tracking-[0.08em] ${
-                  amountLive ? "text-[#1d9e75]" : "text-[#666]"
+                  liveOutgoing ? "text-[#5b54e6]" : amountLive ? "text-[#1d9e75]" : "text-[#666]"
                 }`}
               >
                 {amountLive && (
-                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[#1d9e75]" aria-hidden />
+                  <span
+                    className={`h-1.5 w-1.5 animate-pulse rounded-full ${
+                      liveOutgoing ? "bg-[#5b54e6]" : "bg-[#1d9e75]"
+                    }`}
+                    aria-hidden
+                  />
                 )}
                 {card.subtitle}
               </p>
@@ -144,7 +153,7 @@ function StreamCardFace({
         <p
           className={`mt-1.5 font-bold tabular-nums leading-none transition-[color] duration-300 ${
             macro ? "text-[1.85rem]" : "text-[1.35rem]"
-          } ${card.empty ? "text-[#ccc]" : amountLive ? "text-[#1a5c38]" : "text-[#111]"}`}
+          } ${card.empty ? "text-[#ccc]" : amountLive ? (liveOutgoing ? "text-[#5b54e6]" : "text-[#1a5c38]") : "text-[#111]"}`}
         >
           {card.amount ?? "$0.00"}
         </p>
@@ -184,6 +193,7 @@ function StreamCardFace({
 function StackCardPeek({ card }: { card: StreamCardData }) {
   if (card.empty) return null;
   const isLive = !!card.isLive;
+  const outgoing = !!card.liveOutgoing;
   return (
   <>
     <p className="truncate text-[10px] font-semibold uppercase tracking-wider text-[#666]/80">
@@ -192,7 +202,11 @@ function StackCardPeek({ card }: { card: StreamCardData }) {
     {card.amount && (
       <p
         className={`mt-1 text-[13px] font-bold tabular-nums leading-none ${
-          isLive ? "text-[#1d9e75]/70" : "text-[#111]/45"
+          isLive
+            ? outgoing
+              ? "text-[#5b54e6]/70"
+              : "text-[#1d9e75]/70"
+            : "text-[#111]/45"
         }`}
       >
         {card.amount}
@@ -282,6 +296,7 @@ export function PhoneDashboardView({
             macro={mainCard.id === "macro" || (heroPreview && isBalanceCard(mainCard))}
             macroSubtitle={heroPreview && isBalanceCard(mainCard)}
             amountLive={!isBalanceCard(mainCard) && !!mainCard.isLive}
+            liveOutgoing={!!mainCard.liveOutgoing}
             onDetails={onPrimaryCardDetails}
             belowStats={mainCard.id === "macro" ? topStats : []}
             card={mainCard}

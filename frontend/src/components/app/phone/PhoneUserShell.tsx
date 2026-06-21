@@ -4,15 +4,16 @@ import { useState } from "react";
 import { useCurrentAccount } from "@mysten/dapp-kit";
 
 import { PhoneHomeView } from "./PhoneHomeView";
-import { PhoneCreateStreamModal } from "./PhoneCreateStreamModal";
-import { PhoneRequestStreamModal } from "./PhoneRequestStreamModal";
 import { PhoneTransferModal } from "./PhoneTransferModal";
+import type { PhoneAppRoute } from "./types";
 
-export function PhoneUserShell() {
+type PhoneUserShellProps = {
+  onNavigate: (route: PhoneAppRoute) => void;
+};
+
+export function PhoneUserShell({ onNavigate }: PhoneUserShellProps) {
   const account = useCurrentAccount();
   const [showAllStreams, setShowAllStreams] = useState(false);
-  const [createOpen, setCreateOpen] = useState(false);
-  const [requestOpen, setRequestOpen] = useState(false);
   const [transferOpen, setTransferOpen] = useState(false);
 
   if (!account) {
@@ -30,19 +31,11 @@ export function PhoneUserShell() {
           showAllStreams={showAllStreams}
           onShowAllStreams={() => setShowAllStreams(true)}
           onBackToHome={() => setShowAllStreams(false)}
-          onCreate={() => setCreateOpen(true)}
-          onRequest={() => setRequestOpen(true)}
+          onCreate={() => onNavigate("create")}
+          onRequest={() => onNavigate("request")}
           onTransfer={() => setTransferOpen(true)}
         />
       </div>
-      <PhoneCreateStreamModal
-        open={createOpen}
-        onClose={() => setCreateOpen(false)}
-      />
-      <PhoneRequestStreamModal
-        open={requestOpen}
-        onClose={() => setRequestOpen(false)}
-      />
       <PhoneTransferModal
         open={transferOpen}
         onClose={() => setTransferOpen(false)}

@@ -9,6 +9,8 @@ import {
   dripRatePerMinuteBase,
   earnedBase,
   effectiveState,
+  isAwaitingClientApproval,
+  isAwaitingFreelancerRaise,
   nextMilestoneNo,
 } from "@/lib/stream-state";
 import {
@@ -29,6 +31,10 @@ const usd = (base: number, digits = 3) =>
     minimumFractionDigits: digits,
     maximumFractionDigits: digits,
   });
+
+function milestoneActionName(no: number): string {
+  return no === 1 ? "request start" : `milestone ${no}`;
+}
 
 type PhoneStreamDetailsViewProps = {
   stream: StreamRecord;
@@ -122,16 +128,23 @@ export function PhoneStreamDetailsView({
 
   const done = completedMilestones(stream);
   const next = nextMilestoneNo(stream);
+  const nextName = milestoneActionName(next);
+  const awaitingApproval = isAwaitingClientApproval(stream);
+  const awaitingRaise = isAwaitingFreelancerRaise(stream);
 
   const statusLine = loan
     ? `−${repayRate.toFixed(6)} / sec repaying · +${netRate.toFixed(6)} / sec to wallet`
     : view === "dripping"
       ? `+${netRate.toFixed(6)} / sec · live, gasless`
       : view === "locked"
-        ? `Milestone ${done} finished — apply for milestone ${next}`
-        : `Status: ${view.replace("_", " ")}`;
+        ? next === 1
+          ? "Waiting for request start — recipient submits, then you approve"
+          : `Milestone ${done} finished — apply for ${nextName}`
+        : awaitingApproval
+          ? `${nextName} submitted — approve to start dripping`
+          : `Status: ${view.replace("_", " ")}`;
 
-  const milestoneLabel =
+  const milestoneStat =
     view === "locked"
       ? `${done}/${stream.n_milestones} done · next ${next}`
       : `${next}/${stream.n_milestones}`;
@@ -234,7 +247,7 @@ export function PhoneStreamDetailsView({
           </p>
         </section>
 
-        {incoming && view === "locked" && onRaiseMilestone && (
+        {incoming && awaitingRaise && onRaiseMilestone && (
           <div>
             <button
               type="button"
@@ -242,11 +255,16 @@ export function PhoneStreamDetailsView({
               onClick={() => onRaiseMilestone(stream.id)}
               className="w-full rounded-2xl bg-[#111] px-4 py-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-white disabled:opacity-40"
             >
-              {raising ? "Raising…" : `Apply for milestone ${next}`}
+              {raising
+                ? "Submitting…"
+                : next === 1
+                  ? "Submit request start"
+                  : `Apply for ${nextName}`}
             </button>
             <p className="mt-1.5 text-center text-[10px] leading-snug text-[#888]">
-              Marks milestone {done} done and sends it to the client to approve —
-              dripping resumes once approved.
+              {next === 1
+                ? "Sends request start to the client for approval — dripping begins once approved."
+                : `Marks ${milestoneActionName(done)} done and sends it to the client to approve — dripping resumes once approved.`}
             </p>
             {raiseStatus && (
               <p className="mt-1 text-center text-[10px] text-[#666]">{raiseStatus}</p>
@@ -254,7 +272,18 @@ export function PhoneStreamDetailsView({
           </div>
         )}
 
-        {!incoming && view === "pending_review" && onApproveMilestone && (
+        {!incoming && awaitingRaise && stream.current_milestone === 0 && (
+          <section className="rounded-2xl border border-black/10 bg-[#fafafa] px-3 py-3">
+            <p className="text-[10px] font-semibold text-[#111]">Awaiting request start</p>
+            <p className="mt-1 text-[10px] leading-snug text-[#666]">
+              The recipient must submit <span className="font-medium">request start</span>{" "}
+              before you can approve and unlock dripping — even when no extra milestones
+              were added.
+            </p>
+          </section>
+        )}
+
+        {!incoming && awaitingApproval && onApproveMilestone && (
           <div>
             <button
               type="button"
@@ -262,11 +291,16 @@ export function PhoneStreamDetailsView({
               onClick={() => onApproveMilestone(stream.id)}
               className="w-full rounded-2xl bg-[#1d9e75] px-4 py-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-white disabled:opacity-40"
             >
-              {raising ? "Approving…" : `Approve milestone ${next}`}
+              {raising
+                ? "Approving…"
+                : next === 1
+                  ? "Approve request start"
+                  : `Approve ${nextName}`}
             </button>
             <p className="mt-1.5 text-center text-[10px] leading-snug text-[#888]">
-              Releases milestone {next} so the stream resumes dripping. Otherwise it
-              auto-approves after the 48h review window.
+              {next === 1
+                ? "Approves request start so the stream begins dripping. Otherwise it auto-approves after the 48h review window."
+                : `Releases ${nextName} so the stream resumes dripping. Otherwise it auto-approves after the 48h review window.`}
             </p>
             {raiseStatus && (
               <p className="mt-1 text-center text-[10px] text-[#666]">{raiseStatus}</p>
@@ -275,7 +309,7 @@ export function PhoneStreamDetailsView({
         )}
 
         <div className="grid grid-cols-2 gap-2">
-          <MiniStat label="Milestone" value={milestoneLabel} />
+          <MiniStat label="Milestone" value={milestoneStat} />
           <MiniStat
             label="Settles every"
             value={formatInterval(stream.drip_interval_ms)}

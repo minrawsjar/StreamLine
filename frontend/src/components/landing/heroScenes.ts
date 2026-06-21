@@ -47,7 +47,7 @@ export const HERO_SCENES: HeroScene[] = [
     },
     right: {
       label: "",
-      headline: "Continuously, ",
+      headline: "Simply, ",
       accent: "Securely & Privately.",
       body: "Gasless, yield-bearing, liquid.",
       bullets: [],

@@ -2,11 +2,16 @@
 
 import { PhoneEmbeddedProvider } from "./PhoneEmbeddedContext";
 import { PhoneUserShell } from "./PhoneUserShell";
+import type { PhoneAppRoute } from "./types";
 
-export function PhoneUserApp() {
+type PhoneUserAppProps = {
+  onNavigate: (route: PhoneAppRoute) => void;
+};
+
+export function PhoneUserApp({ onNavigate }: PhoneUserAppProps) {
   return (
     <PhoneEmbeddedProvider>
-      <PhoneUserShell />
+      <PhoneUserShell onNavigate={onNavigate} />
     </PhoneEmbeddedProvider>
   );
 }

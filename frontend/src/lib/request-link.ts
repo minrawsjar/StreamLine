@@ -42,8 +42,8 @@ export function resolveStreamRequest(
     isPrivate: request.isPrivate,
     milestones:
       request.useMilestones && request.milestones.length > 0
-        ? request.milestones
-        : [request.streamName.trim() || "Payment"],
+        ? ["request start", ...request.milestones.slice(1)]
+        : ["request start"],
     splits:
       request.useSplitConfig && request.splits.length > 0
         ? request.splits.map((s) => ({

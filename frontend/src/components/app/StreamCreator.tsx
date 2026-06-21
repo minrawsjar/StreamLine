@@ -84,7 +84,7 @@ export function StreamCreator({
     prefill?.durationUnit ?? "days"
   );
   const [milestones, setMilestones] = useState<string[]>(
-    prefill?.milestones ?? ["Wireframes", "Mockups", "Revisions", "Final"]
+    prefill?.milestones ?? ["request start", "Milestone 2", "Milestone 3"]
   );
   const [splits, setSplits] = useState<SplitRow[]>(prefill?.splits ?? DEFAULT_SPLITS);
   const [status, setStatus] = useState<string | null>(null);
@@ -95,9 +95,9 @@ export function StreamCreator({
   const [useSplitConfig, setUseSplitConfig] = useState(prefill?.useSplitConfig ?? false);
 
   const durationMs = durationToMs(durationValue, durationUnit);
-  const defaultMilestoneName = streamName.trim() || "Payment";
-  const effectiveMilestones =
-    embedded && !useMilestones ? [defaultMilestoneName] : milestones;
+  const effectiveMilestones = useMilestones
+    ? ["request start", ...milestones.slice(1)]
+    : ["request start"];
   const rate = ratePerSecond(amount, durationMs);
   const interval = dripIntervalMs(amount, durationMs);
   const splitSum = splits.reduce((s, r) => s + (Number(r.pct) || 0), 0);
@@ -322,25 +322,33 @@ export function StreamCreator({
         >
           <div className="flex flex-col gap-2">
             {milestones.map((m, i) => (
-              <div key={i} className="flex gap-2">
-                <span className="flex w-7 items-center justify-center rounded-lg bg-[#2b2a5e] text-[10px] text-white">
+              <div key={i} className="flex items-center gap-2">
+                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#111] text-[10px] font-semibold text-white">
                   {i + 1}
                 </span>
-                <input
-                  value={m}
-                  onChange={(e) => updateMilestone(i, e.target.value)}
-                  className="w-full rounded-xl border border-black/15 bg-white px-3 py-2 text-[12px] outline-none focus:border-[#5b54e6]"
-                />
-                <button
-                  type="button"
-                  onClick={() =>
-                    setMilestones((arr) => arr.filter((_, j) => j !== i))
-                  }
-                  className="px-2 text-[#c0533a]"
-                  aria-label="Remove milestone"
-                >
-                  ×
-                </button>
+                {i === 0 ? (
+                  <span className="min-w-0 flex-1 rounded-xl border border-black/10 bg-[#f5f5f5] px-3 py-2 text-[12px] text-[#444]">
+                    Start
+                  </span>
+                ) : (
+                  <input
+                    value={m}
+                    onChange={(e) => updateMilestone(i, e.target.value)}
+                    className="w-full rounded-xl border border-black/15 bg-white px-3 py-2 text-[12px] outline-none focus:border-[#5b54e6]"
+                  />
+                )}
+                {i > 0 && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setMilestones((arr) => arr.filter((_, j) => j !== i))
+                    }
+                    className="px-2 text-[#c0533a]"
+                    aria-label="Remove milestone"
+                  >
+                    ×
+                  </button>
+                )}
               </div>
             ))}
             <button

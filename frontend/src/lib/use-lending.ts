@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useCurrentAccount, useSuiClientQuery } from "@mysten/dapp-kit";
 
 import { useNetworkVariable } from "./networks";
@@ -82,25 +82,29 @@ export function useLending(): LendingState {
       : undefined;
   const borrowAprBps = pf ? Number(pf["borrow_apr_bps"]) : 0;
 
-  const loans: Loan[] = (loansQ.data?.data ?? [])
-    .map((o) => {
-      const c = o.data?.content;
-      if (c?.dataType !== "moveObject") return null;
-      const f = c.fields as Record<string, string>;
-      const principal = Number(f["principal"] ?? 0);
-      const opened = Number(f["opened_ms"] ?? 0);
-      const aprBps = Number(f["borrow_apr_bps"] ?? borrowAprBps);
-      const dt = Math.max(0, now - opened);
-      const interest = (principal * aprBps * dt) / (10_000 * YEAR_MS);
-      return {
-        loanId: o.data!.objectId,
-        streamId: String(f["stream_id"]),
-        principalBase: principal,
-        owedBase: principal + interest,
-        openedMs: opened,
-      };
-    })
-    .filter((l): l is Loan => l !== null && l.principalBase > 0);
+  const loans: Loan[] = useMemo(
+    () =>
+      (loansQ.data?.data ?? [])
+        .map((o) => {
+          const c = o.data?.content;
+          if (c?.dataType !== "moveObject") return null;
+          const f = c.fields as Record<string, string>;
+          const principal = Number(f["principal"] ?? 0);
+          const opened = Number(f["opened_ms"] ?? 0);
+          const aprBps = Number(f["borrow_apr_bps"] ?? borrowAprBps);
+          const dt = Math.max(0, now - opened);
+          const interest = (principal * aprBps * dt) / (10_000 * YEAR_MS);
+          return {
+            loanId: o.data!.objectId,
+            streamId: String(f["stream_id"]),
+            principalBase: principal,
+            owedBase: principal + interest,
+            openedMs: opened,
+          };
+        })
+        .filter((l): l is Loan => l !== null && l.principalBase > 0),
+    [loansQ.data, now, borrowAprBps]
+  );
 
   return {
     poolId,

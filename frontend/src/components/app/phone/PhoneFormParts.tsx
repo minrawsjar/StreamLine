@@ -36,7 +36,7 @@ export function PhoneToggleRow({
 }) {
   return (
     <div
-      className={`rounded-2xl border border-black/12 bg-[#fafafa] ${
+      className={`rounded-2xl border border-white/70 bg-white/75 backdrop-blur-md ${
         disabled ? "opacity-45" : ""
       }`}
     >
@@ -52,11 +52,11 @@ export function PhoneToggleRow({
           disabled={disabled}
           onClick={() => !disabled && onChange(!checked)}
           className={`relative h-5 w-10 shrink-0 rounded-full transition-colors ${
-            checked ? "bg-[#5b54e6]" : "bg-[#2b2a5e]/25"
+            checked ? "bg-[#111]" : "bg-black/15"
           }`}
         >
           <span
-            className={`absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-white transition-transform ${
+            className={`absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-white shadow-sm transition-transform ${
               checked ? "translate-x-5" : "translate-x-0"
             }`}
           />

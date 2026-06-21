@@ -1,9 +1,6 @@
 # StreamLine — Frontend
 
-The StreamLine web app: a marketing landing page plus the dApp where clients create streams, freelancers watch money arrive in real time, and either side manages milestones — all gasless via zkLogin + Enoki-sponsored transactions.
-
 - **Framework:** Next.js 15 (App Router) · React 19
-- **Styling:** Tailwind CSS v4 · sharp-corner / monospace aesthetic · three.js **Bayer-dither** hero
 - **Sui:** `@mysten/dapp-kit`, `@mysten/sui` (PTBs), `@mysten/enoki` (zkLogin + sponsorship)
 
 ## Quick start

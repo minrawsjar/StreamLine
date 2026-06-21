@@ -6,6 +6,7 @@ import { Transaction } from "@mysten/sui/transactions";
 
 import { useNetworkVariable } from "@/lib/networks";
 import { useGaslessExecute } from "@/lib/use-gasless";
+import { phoneFlowOverlay } from "./phoneStyles";
 
 type TransferMode = "wallet" | "crosschain" | "bank";
 type TransferStep = "menu" | TransferMode;
@@ -149,7 +150,7 @@ export function PhoneTransferModal({ open, onClose }: PhoneTransferModalProps) {
   };
 
   return (
-    <div className="absolute inset-0 z-30 flex flex-col bg-white">
+    <div className={phoneFlowOverlay}>
       <div className="min-h-0 flex-1 overflow-y-auto px-3 py-4">
         {step === "menu" && (
           <div className="flex flex-col gap-4">

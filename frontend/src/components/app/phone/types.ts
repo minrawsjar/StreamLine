@@ -1,1 +1,8 @@
-export type PhoneAppRoute = "launcher" | "user" | "pro" | "scan" | "fulfill";
+export type PhoneAppRoute =
+  | "launcher"
+  | "user"
+  | "pro"
+  | "scan"
+  | "fulfill"
+  | "request"
+  | "create";
