@@ -16,7 +16,7 @@ export function TokenBalance({ dark }: { dark?: boolean }) {
   const { data } = useSuiClientQuery(
     "getBalance",
     { owner: account?.address ?? "", coinType: usdcType },
-    { enabled: !!account, refetchInterval: 4000 }
+    { enabled: !!account, refetchInterval: 15000 }
   );
 
   if (!account) return null;

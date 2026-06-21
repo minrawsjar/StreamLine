@@ -99,6 +99,9 @@ export function fetchStreamDrips(streamId: string): Promise<DripRecord[]> {
  * Subscribe to the indexer's live feed. Reconnects on drop. `onUpdate` is held
  * in a ref so changing the callback doesn't churn the socket.
  */
+/** Coalesce bursts of live frames so a refetch fan-out fires at most this often. */
+const LIVE_UPDATE_THROTTLE_MS = 5000;
+
 export function useLiveUpdates(onUpdate: (u: LiveUpdate) => void) {
   const cb = useRef(onUpdate);
   cb.current = onUpdate;
@@ -108,11 +111,41 @@ export function useLiveUpdates(onUpdate: (u: LiveUpdate) => void) {
     let retry: ReturnType<typeof setTimeout> | null = null;
     let closed = false;
 
+    // Throttle: during an active drip the indexer emits frequently. Firing the
+    // full refetch fan-out per frame bursts past RPC rate limits (429s), so
+    // coalesce — fire immediately if idle, otherwise once on a trailing timer.
+    let lastFire = 0;
+    let pending: LiveUpdate | null = null;
+    let trailing: ReturnType<typeof setTimeout> | null = null;
+
+    const fire = (u: LiveUpdate) => {
+      lastFire = Date.now();
+      cb.current(u);
+    };
+    const schedule = (u: LiveUpdate) => {
+      const since = Date.now() - lastFire;
+      if (since >= LIVE_UPDATE_THROTTLE_MS) {
+        fire(u);
+        return;
+      }
+      pending = u;
+      if (!trailing) {
+        trailing = setTimeout(() => {
+          trailing = null;
+          if (pending) {
+            const next = pending;
+            pending = null;
+            fire(next);
+          }
+        }, LIVE_UPDATE_THROTTLE_MS - since);
+      }
+    };
+
     const connect = () => {
       ws = new WebSocket(WS);
       ws.onmessage = (e) => {
         try {
-          cb.current(JSON.parse(e.data) as LiveUpdate);
+          schedule(JSON.parse(e.data) as LiveUpdate);
         } catch {
           /* ignore malformed frames */
         }
@@ -127,6 +160,7 @@ export function useLiveUpdates(onUpdate: (u: LiveUpdate) => void) {
     return () => {
       closed = true;
       if (retry) clearTimeout(retry);
+      if (trailing) clearTimeout(trailing);
       ws?.close();
     };
   }, []);
