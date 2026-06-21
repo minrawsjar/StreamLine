@@ -305,22 +305,16 @@ export function PhoneHomeView({
       balanceQ.data?.totalBalance !== null
         ? Number(balanceQ.data.totalBalance)
         : lastWalletBase;
-    const isLive = netLiveBase !== 0 || liveAccrualBase > 0 || outgoingAccrualBase > 0;
-
     return {
       id: "macro",
       label: "Total balance",
       amount: usd(walletBase + netLiveBase, 3),
       subtitle: "",
-      isLive,
-      amountDecreasing: netLiveBase < 0,
     };
   }, [
     balanceQ.data?.totalBalance,
     lastWalletBase,
     netLiveBase,
-    liveAccrualBase,
-    outgoingAccrualBase,
   ]);
 
   const streamCards = useMemo(() => {
@@ -395,21 +389,26 @@ export function PhoneHomeView({
 
   const topStats = useMemo((): PhoneTopStat[] => {
     const streamCount = allStreams.length;
-    const ratePerMinuteBase = incomingDripping.reduce(
+    const incomingRate = incomingDripping.reduce(
       (acc, s) => acc + dripRatePerMinuteBase(s),
       0
     );
-    const isLive = ratePerMinuteBase > 0;
+    const outgoingRate = outgoingDripping.reduce(
+      (acc, s) => acc + dripRatePerMinuteBase(s),
+      0
+    );
+    const netRatePerMinuteBase = incomingRate - outgoingRate;
 
     return [
       {
         label: "Drip/min",
-        value: usd(ratePerMinuteBase, 3),
-        live: isLive,
+        value: usd(netRatePerMinuteBase, 3),
+        live: netRatePerMinuteBase > 0,
+        negative: netRatePerMinuteBase < 0,
       },
       { label: "Streams", value: String(streamCount) },
     ];
-  }, [allStreams, incomingDripping]);
+  }, [allStreams, incomingDripping, outgoingDripping]);
 
   const activity = useMemo((): PhoneActivityItem[] => {
     const drips = dripQueries.flatMap((q) => q.data ?? []);

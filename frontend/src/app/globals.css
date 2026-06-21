@@ -239,11 +239,31 @@ body {
   .sl-drift,
   .sl-float-tile,
   .animate-shiny,
+  .animate-sl-shake,
   .sl-flow-dot-h,
   .sl-flow-dot,
   .sl-shrink-pulse {
     animation: none;
   }
+}
+
+@keyframes sl-shake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  20%,
+  60% {
+    transform: translateX(-5px);
+  }
+  40%,
+  80% {
+    transform: translateX(5px);
+  }
+}
+
+.animate-sl-shake {
+  animation: sl-shake 0.45s ease-in-out;
 }
 
 @keyframes sl-flow-dot-h {

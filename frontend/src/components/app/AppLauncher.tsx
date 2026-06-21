@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useState } from "react";
 import { useCurrentAccount } from "@mysten/dapp-kit";
 
 import { WalletButton } from "@/components/wallet/WalletButton";
@@ -21,6 +22,7 @@ const APPS = [
     subtitle: "Business",
     description: "Payroll & contractor ops",
     variant: "pro" as const,
+    disabled: true,
   },
 ];
 
@@ -47,54 +49,91 @@ function ConnectGate() {
 
 function AppIcon({
   app,
+  shaking,
+  onDisabledClick,
 }: {
   app: (typeof APPS)[number];
+  shaking: boolean;
+  onDisabledClick: () => void;
 }) {
   const isPro = app.variant === "pro";
+
+  const iconShell = (
+    <div
+      className={`flex h-[72px] w-[72px] items-center justify-center rounded-[18px] shadow-[0_8px_28px_rgba(0,0,0,0.12)] transition-transform duration-300 md:h-[84px] md:w-[84px] md:rounded-[22px] ${
+        shaking ? "animate-sl-shake" : ""
+      } ${
+        app.disabled
+          ? ""
+          : "group-hover:scale-105 group-active:scale-95"
+      } ${
+        isPro
+          ? "border border-white/12 bg-[#141414]"
+          : "border border-white/80 bg-white"
+      }`}
+    >
+      <StreamLineMark
+        size="md"
+        variant={isPro ? "pro" : "default"}
+        className="!h-11 !w-11 md:!h-12 md:!w-12"
+      />
+    </div>
+  );
+
+  const label = (
+    <div>
+      <p
+        className={`text-[13px] font-semibold tracking-tight ${
+          isPro ? "text-white" : "text-[#111]"
+        }`}
+      >
+        {app.name}
+        {app.proSuffix && (
+          <span className="font-medium text-white/40">.pro</span>
+        )}
+      </p>
+      <p
+        className={`text-[10px] uppercase tracking-[0.16em] ${
+          isPro ? "text-white/35" : "text-[#888]"
+        }`}
+      >
+        {app.subtitle}
+      </p>
+    </div>
+  );
+
+  if (app.disabled) {
+    return (
+      <button
+        type="button"
+        onClick={onDisabledClick}
+        className="group flex flex-col items-center gap-2.5 text-center"
+      >
+        {iconShell}
+        {label}
+      </button>
+    );
+  }
 
   return (
     <Link
       href={app.href}
       className="group flex flex-col items-center gap-2.5 text-center"
     >
-      <div
-        className={`flex h-[72px] w-[72px] items-center justify-center rounded-[18px] shadow-[0_8px_28px_rgba(0,0,0,0.12)] transition-transform duration-300 group-hover:scale-105 group-active:scale-95 md:h-[84px] md:w-[84px] md:rounded-[22px] ${
-          isPro
-            ? "border border-white/12 bg-[#141414]"
-            : "border border-white/80 bg-white"
-        }`}
-      >
-        <StreamLineMark
-          size="md"
-          variant={isPro ? "pro" : "default"}
-          className="!h-11 !w-11 md:!h-12 md:!w-12"
-        />
-      </div>
-      <div>
-        <p
-          className={`text-[13px] font-semibold tracking-tight ${
-            isPro ? "text-white" : "text-[#111]"
-          }`}
-        >
-          {app.name}
-          {app.proSuffix && (
-            <span className="font-medium text-white/40">.pro</span>
-          )}
-        </p>
-        <p
-          className={`text-[10px] uppercase tracking-[0.16em] ${
-            isPro ? "text-white/35" : "text-[#888]"
-          }`}
-        >
-          {app.subtitle}
-        </p>
-      </div>
+      {iconShell}
+      {label}
     </Link>
   );
 }
 
 export function AppLauncher() {
   const account = useCurrentAccount();
+  const [proShaking, setProShaking] = useState(false);
+
+  const shakePro = () => {
+    setProShaking(true);
+    window.setTimeout(() => setProShaking(false), 450);
+  };
 
   if (!account) {
     return <ConnectGate />;
@@ -114,7 +153,12 @@ export function AppLauncher() {
 
       <div className="mt-12 grid grid-cols-2 gap-10 sm:gap-14 md:gap-20">
         {APPS.map((app) => (
-          <AppIcon key={app.href} app={app} />
+          <AppIcon
+            key={app.href}
+            app={app}
+            shaking={!!app.disabled && proShaking}
+            onDisabledClick={shakePro}
+          />
         ))}
       </div>
     </div>

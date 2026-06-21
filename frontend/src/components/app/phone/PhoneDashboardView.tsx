@@ -60,7 +60,10 @@ export type StreamCardData = {
 export type PhoneTopStat = {
   label: string;
   value: string;
+  /** Net positive drip rate */
   live?: boolean;
+  /** Net negative drip rate */
+  negative?: boolean;
 };
 
 type PhoneDashboardViewProps = {
@@ -111,8 +114,8 @@ function StreamCardFace({
 }) {
   const isBalance = card.id === "macro" || card.id === "demo-macro";
   const isStream = !isBalance && !card.empty;
-  const liveUp = amountLive && !amountDecreasing;
-  const liveDown = amountLive && amountDecreasing;
+  const liveUp = amountLive && !amountDecreasing && !isBalance;
+  const liveDown = amountLive && amountDecreasing && !isBalance;
   const showFooter = primary && (belowStats.length > 0 || (isStream && card.meta) || macroSubtitle);
 
   return (
@@ -192,7 +195,11 @@ function StreamCardFace({
                     </span>
                     <span
                       className={`text-[10px] font-semibold tabular-nums ${
-                        stat.live ? "text-[#1a5c38]" : "text-[#111]"
+                        stat.negative
+                          ? "text-[#9a3b28]"
+                          : stat.live
+                            ? "text-[#1a5c38]"
+                            : "text-[#111]"
                       }`}
                     >
                       {stat.value}
@@ -328,12 +335,9 @@ export function PhoneDashboardView({
           <StreamCardFace
             primary
             macroSubtitle={heroPreview && isBalanceCard(mainCard)}
-            amountLive={
-              (mainCard.id === "macro" && !!mainCard.isLive) ||
-              (!isBalanceCard(mainCard) && !!mainCard.isLive)
-            }
-            liveOutgoing={!!mainCard.liveOutgoing}
-            amountDecreasing={!!mainCard.amountDecreasing}
+            amountLive={!isBalanceCard(mainCard) && !!mainCard.isLive}
+            liveOutgoing={!isBalanceCard(mainCard) && !!mainCard.liveOutgoing}
+            amountDecreasing={!isBalanceCard(mainCard) && !!mainCard.amountDecreasing}
             onDetails={onPrimaryCardDetails}
             belowStats={isBalanceCard(mainCard) ? topStats : []}
             card={mainCard}

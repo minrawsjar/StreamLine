@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { useCurrentAccount } from "@mysten/dapp-kit";
 
 import { WalletButton } from "@/components/wallet/WalletButton";
@@ -11,9 +12,10 @@ const APPS: {
   label: string;
   sublabel?: string;
   pro?: boolean;
+  disabled?: boolean;
 }[] = [
   { route: "user", label: "StreamLine" },
-  { route: "pro", label: "StreamLine", sublabel: "Pro", pro: true },
+  { route: "pro", label: "StreamLine", sublabel: "Pro", pro: true, disabled: true },
 ];
 
 type PhoneLauncherProps = {
@@ -22,6 +24,16 @@ type PhoneLauncherProps = {
 
 export function PhoneLauncher({ onOpen }: PhoneLauncherProps) {
   const account = useCurrentAccount();
+  const [shaking, setShaking] = useState<PhoneAppRoute | null>(null);
+
+  const handleAppClick = (route: PhoneAppRoute, disabled?: boolean) => {
+    if (disabled) {
+      setShaking(route);
+      window.setTimeout(() => setShaking(null), 450);
+      return;
+    }
+    onOpen(route);
+  };
 
   if (!account) {
     return (
@@ -45,11 +57,13 @@ export function PhoneLauncher({ onOpen }: PhoneLauncherProps) {
           <button
             key={app.route}
             type="button"
-            onClick={() => onOpen(app.route)}
+            onClick={() => handleAppClick(app.route, app.disabled)}
             className="group flex flex-col items-center gap-2 text-center"
           >
             <div
               className={`flex h-14 w-14 items-center justify-center rounded-2xl shadow-[0_4px_16px_rgba(0,0,0,0.08)] transition-transform group-active:scale-95 ${
+                shaking === app.route ? "animate-sl-shake" : ""
+              } ${
                 app.pro
                   ? "border border-white/12 bg-[#141414]"
                   : "border border-white/70 bg-white"
