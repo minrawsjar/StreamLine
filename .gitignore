@@ -53,3 +53,6 @@ data/
 
 # Local tool binaries (e.g. pinned sui CLI)
 .tools/
+
+# Excalidraw diagrams (local working files)
+*.excalidraw

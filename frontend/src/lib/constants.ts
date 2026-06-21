@@ -108,11 +108,18 @@ export const USDC_TYPE = {
   devnet: "0x2::sui::SUI",
 } as const;
 
-/** Standard Sui fullnode endpoints (getFullnodeUrl was removed in Sui SDK v2). */
+/**
+ * Sui fullnode endpoints (getFullnodeUrl was removed in Sui SDK v2).
+ * The public fullnodes rate-limit browser traffic (surfaces as CORS/ERR_FAILED
+ * floods), so allow overriding with a keyed RPC (e.g. Ankr) via env.
+ */
 export const FULLNODE_URLS = {
-  mainnet: "https://fullnode.mainnet.sui.io:443",
-  testnet: "https://fullnode.testnet.sui.io:443",
-  devnet: "https://fullnode.devnet.sui.io:443",
+  mainnet:
+    process.env.NEXT_PUBLIC_SUI_MAINNET_RPC ?? "https://fullnode.mainnet.sui.io:443",
+  testnet:
+    process.env.NEXT_PUBLIC_SUI_TESTNET_RPC ?? "https://fullnode.testnet.sui.io:443",
+  devnet:
+    process.env.NEXT_PUBLIC_SUI_DEVNET_RPC ?? "https://fullnode.devnet.sui.io:443",
 } as const;
 
 export type NetworkName = keyof typeof PACKAGE_IDS;
