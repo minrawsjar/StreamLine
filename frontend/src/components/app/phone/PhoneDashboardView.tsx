@@ -50,8 +50,10 @@ export type StreamCardData = {
   subtitle?: string;
   meta?: string;
   isLive?: boolean;
-  /** Dripping pay stream (outgoing) — purple live styling */
+  /** Dripping pay stream (outgoing) — live outflow styling */
   liveOutgoing?: boolean;
+  /** Amount ticks down (remaining / net outflow) vs up */
+  amountDecreasing?: boolean;
   empty?: boolean;
 };
 
@@ -89,27 +91,37 @@ function StreamCardFace({
   card,
   belowStats = [],
   className = "",
-  macro = false,
+  primary = false,
   amountLive = false,
   liveOutgoing = false,
+  amountDecreasing = false,
   macroSubtitle = false,
   onDetails,
 }: {
   card: StreamCardData;
   belowStats?: readonly PhoneTopStat[];
   className?: string;
-  macro?: boolean;
+  /** Front / active card — same size and type scale as total balance */
+  primary?: boolean;
   amountLive?: boolean;
   liveOutgoing?: boolean;
+  amountDecreasing?: boolean;
   macroSubtitle?: boolean;
   onDetails?: () => void;
 }) {
   const isBalance = card.id === "macro" || card.id === "demo-macro";
   const isStream = !isBalance && !card.empty;
+  const liveUp = amountLive && !amountDecreasing;
+  const liveDown = amountLive && amountDecreasing;
+  const showFooter = primary && (belowStats.length > 0 || (isStream && card.meta) || macroSubtitle);
 
   return (
-    <div className={`rounded-2xl border border-white/70 bg-white/88 p-4 shadow-[0_10px_32px_rgba(0,0,0,0.1)] backdrop-blur-md ${className}`}>
-      <div className="min-w-0">
+    <div
+      className={`rounded-2xl border border-white/70 bg-white/88 p-4 shadow-[0_10px_32px_rgba(0,0,0,0.1)] backdrop-blur-md ${
+        primary ? "min-h-[7.875rem] flex flex-col" : ""
+      } ${className}`}
+    >
+      <div className={`min-w-0 ${primary ? "flex flex-1 flex-col" : ""}`}>
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
             <p
@@ -119,16 +131,20 @@ function StreamCardFace({
             >
               {card.label}
             </p>
-            {isStream && card.subtitle && !amountLive && (
+            {isStream && card.subtitle && !amountLive && !primary && (
               <p
                 className={`mt-1 inline-flex items-center gap-1 text-[9px] font-semibold uppercase tracking-[0.08em] ${
-                  liveOutgoing ? "text-[#5b54e6]" : amountLive ? "text-[#1d9e75]" : "text-[#666]"
+                  liveDown || liveOutgoing
+                    ? "text-[#c0533a]"
+                    : liveUp
+                      ? "text-[#1d9e75]"
+                      : "text-[#666]"
                 }`}
               >
                 {amountLive && (
                   <span
                     className={`h-1.5 w-1.5 animate-pulse rounded-full ${
-                      liveOutgoing ? "bg-[#5b54e6]" : "bg-[#1d9e75]"
+                      liveDown || liveOutgoing ? "bg-[#c0533a]" : "bg-[#1d9e75]"
                     }`}
                     aria-hidden
                   />
@@ -151,36 +167,53 @@ function StreamCardFace({
           )}
         </div>
         <p
-          className={`mt-1.5 font-bold tabular-nums leading-none transition-[color] duration-300 ${
-            macro ? "text-[1.85rem]" : "text-[1.35rem]"
-          } ${card.empty ? "text-[#ccc]" : amountLive ? (liveOutgoing ? "text-[#5b54e6]" : "text-[#1a5c38]") : "text-[#111]"}`}
+          className={`mt-3 font-bold tabular-nums leading-none transition-[color] duration-300 ${
+            primary ? "text-[1.85rem]" : "text-[1.35rem]"
+          } ${
+            card.empty
+              ? "text-[#ccc]"
+              : liveDown
+                ? "text-[#9a3b28]"
+                : liveUp
+                  ? "text-[#1a5c38]"
+                  : "text-[#111]"
+          }`}
         >
           {card.amount ?? "$0.00"}
         </p>
-        {belowStats.length > 0 && (
-          <div className="mt-3 flex flex-wrap items-baseline gap-x-6 gap-y-1">
-            {belowStats.map((stat) => (
-              <div key={stat.label} className="flex items-baseline gap-1.5">
-                <span className="text-[7px] uppercase tracking-[0.14em] text-[#8a8a8a]">
-                  {stat.label}
-                </span>
-                <span
-                  className={`text-[10px] font-semibold tabular-nums ${
-                    stat.live ? "text-[#1a5c38]" : "text-[#111]"
-                  }`}
-                >
-                  {stat.value}
-                </span>
+        {primary && (
+          <div className={`mt-auto pt-3 ${showFooter ? "" : "min-h-[1.25rem]"}`}>
+            {belowStats.length > 0 && (
+              <div className="flex flex-wrap items-baseline gap-x-6 gap-y-1">
+                {belowStats.map((stat) => (
+                  <div key={stat.label} className="flex items-baseline gap-1.5">
+                    <span className="text-[7px] uppercase tracking-[0.14em] text-[#8a8a8a]">
+                      {stat.label}
+                    </span>
+                    <span
+                      className={`text-[10px] font-semibold tabular-nums ${
+                        stat.live ? "text-[#1a5c38]" : "text-[#111]"
+                      }`}
+                    >
+                      {stat.value}
+                    </span>
+                  </div>
+                ))}
               </div>
-            ))}
+            )}
+            {macroSubtitle && card.subtitle && (
+              <p className="text-[10px] font-medium leading-snug text-[#555]">
+                {card.subtitle}
+              </p>
+            )}
+            {isStream && card.meta && belowStats.length === 0 && (
+              <p className="text-[9px] font-medium leading-snug tracking-wide text-[#888]">
+                {card.meta}
+              </p>
+            )}
           </div>
         )}
-        {macroSubtitle && card.subtitle && (
-          <p className="mt-2 text-[10px] font-medium leading-snug text-[#555]">
-            {card.subtitle}
-          </p>
-        )}
-        {!macro && isStream && card.meta && (
+        {!primary && isStream && card.meta && (
           <p className="mt-2 text-[9px] font-medium tracking-wide text-[#888]">
             {card.meta}
           </p>
@@ -193,7 +226,7 @@ function StreamCardFace({
 function StackCardPeek({ card }: { card: StreamCardData }) {
   if (card.empty) return null;
   const isLive = !!card.isLive;
-  const outgoing = !!card.liveOutgoing;
+  const decreasing = !!card.amountDecreasing || !!card.liveOutgoing;
   return (
   <>
     <p className="truncate text-[10px] font-semibold uppercase tracking-wider text-[#666]/80">
@@ -203,8 +236,8 @@ function StackCardPeek({ card }: { card: StreamCardData }) {
       <p
         className={`mt-1 text-[13px] font-bold tabular-nums leading-none ${
           isLive
-            ? outgoing
-              ? "text-[#5b54e6]/70"
+            ? decreasing
+              ? "text-[#c0533a]/70"
               : "text-[#1d9e75]/70"
             : "text-[#111]/45"
         }`}
@@ -248,12 +281,12 @@ export function PhoneDashboardView({
   }));
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
-      <div className={`relative z-20 mx-0.5 mt-2 overflow-visible pb-2 ${SECTION_GAP}`}>
+    <div className="flex min-h-0 flex-1 flex-col overflow-visible">
+      <div className={`relative z-20 mt-2 shrink-0 overflow-visible pb-3 ${SECTION_GAP}`}>
         {layers.map((layer, i) => {
           const inner = (
             <div
-              className={`flex min-h-[118px] flex-col justify-start rounded-2xl border p-4 shadow-[0_4px_16px_rgba(0,0,0,0.04)] backdrop-blur-md ${layer.tone}`}
+              className={`flex min-h-[7.875rem] flex-col justify-start rounded-2xl border p-4 shadow-[0_4px_16px_rgba(0,0,0,0.04)] backdrop-blur-md ${layer.tone}`}
             >
               <StackCardPeek card={layer.card} />
             </div>
@@ -293,17 +326,22 @@ export function PhoneDashboardView({
           className="relative z-30 mt-[56px] block w-full cursor-pointer text-left"
         >
           <StreamCardFace
-            macro={mainCard.id === "macro" || (heroPreview && isBalanceCard(mainCard))}
+            primary
             macroSubtitle={heroPreview && isBalanceCard(mainCard)}
-            amountLive={!isBalanceCard(mainCard) && !!mainCard.isLive}
+            amountLive={
+              (mainCard.id === "macro" && !!mainCard.isLive) ||
+              (!isBalanceCard(mainCard) && !!mainCard.isLive)
+            }
             liveOutgoing={!!mainCard.liveOutgoing}
+            amountDecreasing={!!mainCard.amountDecreasing}
             onDetails={onPrimaryCardDetails}
-            belowStats={mainCard.id === "macro" ? topStats : []}
+            belowStats={isBalanceCard(mainCard) ? topStats : []}
             card={mainCard}
           />
         </div>
       </div>
 
+      <div className="sl-scrollbar-hidden min-h-0 flex-1 overflow-y-auto">
       <div className={`mt-2 grid grid-cols-3 gap-2 ${SECTION_GAP}`}>
         {PHONE_QUICK_ACTIONS.map((action) => (
           <button
@@ -355,6 +393,7 @@ export function PhoneDashboardView({
       </div>
 
       {trailing}
+      </div>
     </div>
   );
 }

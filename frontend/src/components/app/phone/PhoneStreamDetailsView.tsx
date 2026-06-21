@@ -9,9 +9,13 @@ import {
   dripRatePerMinuteBase,
   earnedBase,
   effectiveState,
+  estimateReserveYieldBase,
   isAwaitingClientApproval,
   isAwaitingFreelancerRaise,
+  liveRemainingBase,
   nextMilestoneNo,
+  outflowPerSecBase,
+  paidBase,
 } from "@/lib/stream-state";
 import {
   loanRepayPerSec,
@@ -119,7 +123,18 @@ export function PhoneStreamDetailsView({
   const grossEarned = earnedBase(stream, now);
   const netEarned = netEarnedBase(grossEarned, loan, stream);
   const displayEarned = loan ? netEarned : grossEarned;
-  const progress = stream.total > 0 ? (grossEarned / stream.total) * 100 : 0;
+  const disbursed = paidBase(stream);
+  const liveRemaining = liveRemainingBase(stream, now);
+  const yieldEst = estimateReserveYieldBase(
+    stream.remaining,
+    now,
+    stream.last_drip_ms || stream.created_at_ms
+  );
+  const outflowPerSec = outflowPerSecBase(stream) / USDC_BASE;
+  const progress = stream.total > 0 ? (disbursed / stream.total) * 100 : 0;
+  const outflowShare =
+    stream.total > 0 ? Math.min(100, (disbursed / stream.total) * 100) : 0;
+  const yieldShare = 100 - outflowShare;
   const netRate = netDripPerSec(loan, stream) / USDC_BASE;
   const repayRate = loan ? loanRepayPerSec(loan, stream) / USDC_BASE : 0;
   const repayShare =
@@ -134,9 +149,11 @@ export function PhoneStreamDetailsView({
 
   const statusLine = loan
     ? `−${repayRate.toFixed(6)} / sec repaying · +${netRate.toFixed(6)} / sec to wallet`
-    : view === "dripping"
-      ? `+${netRate.toFixed(6)} / sec · live, gasless`
-      : view === "locked"
+    : !incoming && view === "dripping"
+      ? `−${outflowPerSec.toFixed(6)} / sec paid out · yield on ${usd(stream.remaining, 0)} reserve`
+      : view === "dripping"
+        ? `+${netRate.toFixed(6)} / sec · live, gasless`
+        : view === "locked"
         ? next === 1
           ? "Waiting for request start — recipient submits, then you approve"
           : `Milestone ${done} finished — apply for ${nextName}`
@@ -199,20 +216,51 @@ export function PhoneStreamDetailsView({
 
         <section className="rounded-2xl border border-black/10 bg-white p-4">
           <p className="text-[9px] font-semibold uppercase tracking-[0.16em] text-[#888]">
-            {loan ? "Net to wallet · " : "Earned so far · "}
+            {!incoming
+              ? "Remaining in stream · "
+              : loan
+                ? "Net to wallet · "
+                : "Earned so far · "}
             {short(stream.id)}
           </p>
           <p className="mt-2 text-[2rem] font-bold tabular-nums leading-none text-[#111]">
-            {usd(displayEarned, 3)}
+            {usd(!incoming ? liveRemaining : displayEarned, 3)}
           </p>
-          {loan && grossEarned > netEarned && (
+          {!incoming && (
+            <p className="mt-1 text-[11px] tabular text-[#888]">
+              <span className="text-[#c0533a]">{usd(disbursed, 3)} paid out</span>
+              <span className="text-[#888]"> · </span>
+              <span className="text-[#1d9e75]">+{usd(yieldEst, 3)} yield est.</span>
+            </p>
+          )}
+          {incoming && loan && grossEarned > netEarned && (
             <p className="mt-1 text-[11px] tabular text-[#888]">
               Gross {usd(grossEarned, 3)} ·{" "}
               <span className="text-[#e85d2a]">{usd(grossEarned - netEarned, 3)} to loan</span>
             </p>
           )}
 
-          {loan && view === "dripping" && (
+          {!incoming && view === "dripping" && (
+            <div className="mt-3">
+              <div className="flex h-1.5 overflow-hidden rounded-full bg-black/[0.06]">
+                <div
+                  className="h-full bg-[#1d9e75] transition-[width] duration-500"
+                  style={{ width: `${yieldShare}%` }}
+                />
+                <div
+                  className="h-full bg-[#c0533a] transition-[width] duration-500"
+                  style={{ width: `${outflowShare}%` }}
+                />
+              </div>
+              <p className="mt-1.5 text-[10px] font-medium leading-snug">
+                <span className="text-[#1d9e75]">Yield on reserve</span>
+                <span className="text-[#888]"> · </span>
+                <span className="text-[#c0533a]">Payment outflow</span>
+              </p>
+            </div>
+          )}
+
+          {incoming && loan && view === "dripping" && (
             <div className="mt-3">
               <div className="flex h-1.5 overflow-hidden rounded-full bg-black/[0.06]">
                 <div
@@ -236,11 +284,13 @@ export function PhoneStreamDetailsView({
             className={`mt-2 text-[11px] font-medium ${
               loan
                 ? "text-[#e85d2a]"
-                : view === "dripping"
-                  ? "text-[#1d9e75]"
-                  : view === "paused"
-                    ? "text-[#c0533a]"
-                    : "text-[#666]"
+                : !incoming && view === "dripping"
+                  ? "text-[#c0533a]"
+                  : view === "dripping"
+                    ? "text-[#1d9e75]"
+                    : view === "paused"
+                      ? "text-[#c0533a]"
+                      : "text-[#666]"
             }`}
           >
             {statusLine}

@@ -50,6 +50,27 @@ export function pendingAccrualBase(s: StreamRecord, nowMs: number): number {
   return Math.max(0, earnedBase(s, nowMs) - paidBase(s));
 }
 
+/** Outflow rate while dripping (base units / second). */
+export function outflowPerSecBase(s: StreamRecord): number {
+  if (effectiveState(s) !== "dripping") return 0;
+  return streamRatePerMs(s) * 1000;
+}
+
+/** Remaining balance including live outflow accrual (sender / outgoing view). */
+export function liveRemainingBase(s: StreamRecord, nowMs: number): number {
+  return Math.max(0, s.remaining - pendingAccrualBase(s, nowMs));
+}
+
+/** Illustrative yield on the locked reserve (~5% APR, UI only). */
+export function estimateReserveYieldBase(
+  remaining: number,
+  nowMs: number,
+  sinceMs: number
+): number {
+  const elapsedSec = Math.max(0, (nowMs - sinceMs) / 1000);
+  return remaining * 0.05 * (elapsedSec / (365 * 24 * 3600));
+}
+
 /**
  * UI-facing state. The indexer can lag after a milestone completes (the contract
  * flips to LOCKED inside the same `drip` tx with no extra event).

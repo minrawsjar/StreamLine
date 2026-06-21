@@ -211,7 +211,7 @@ export function AccountMenu({
             {showFaucet && (
               <FaucetButton
                 amount={1000}
-                label="Mint test USDC"
+                label="Fund (test USDC)"
                 className={profileBtnSecondary(dark)}
               />
             )}

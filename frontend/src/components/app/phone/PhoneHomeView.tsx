@@ -18,6 +18,7 @@ import {
   effectiveState,
   isAwaitingClientApproval,
   isAwaitingFreelancerRaise,
+  liveRemainingBase,
   paidBase,
   pendingAccrualBase,
 } from "@/lib/stream-state";
@@ -279,11 +280,24 @@ export function PhoneHomeView({
     [incoming]
   );
 
+  const outgoingDripping = useMemo(
+    () => outgoing.filter((s) => effectiveState(s) === "dripping"),
+    [outgoing]
+  );
+
   const liveAccrualBase = useMemo(
     () =>
       incomingDripping.reduce((acc, s) => acc + pendingAccrualBase(s, now), 0),
     [incomingDripping, now]
   );
+
+  const outgoingAccrualBase = useMemo(
+    () =>
+      outgoingDripping.reduce((acc, s) => acc + pendingAccrualBase(s, now), 0),
+    [outgoingDripping, now]
+  );
+
+  const netLiveBase = liveAccrualBase - outgoingAccrualBase;
 
   const macroCard = useMemo(() => {
     const walletBase =
@@ -291,16 +305,23 @@ export function PhoneHomeView({
       balanceQ.data?.totalBalance !== null
         ? Number(balanceQ.data.totalBalance)
         : lastWalletBase;
-    const isLive = liveAccrualBase > 0;
+    const isLive = netLiveBase !== 0 || liveAccrualBase > 0 || outgoingAccrualBase > 0;
 
     return {
       id: "macro",
       label: "Total balance",
-      amount: usd(walletBase + liveAccrualBase, 3),
+      amount: usd(walletBase + netLiveBase, 3),
       subtitle: "",
       isLive,
+      amountDecreasing: netLiveBase < 0,
     };
-  }, [balanceQ.data?.totalBalance, lastWalletBase, liveAccrualBase]);
+  }, [
+    balanceQ.data?.totalBalance,
+    lastWalletBase,
+    netLiveBase,
+    liveAccrualBase,
+    outgoingAccrualBase,
+  ]);
 
   const streamCards = useMemo(() => {
     return [...activeStreams]
@@ -309,8 +330,14 @@ export function PhoneHomeView({
         const isIncoming = s.freelancer === addr;
         const dripping = effectiveState(s) === "dripping";
         const loan = loanForStream(s.id, pool.loans, pendingBorrows);
-        const disbursed = dripping ? earnedBase(s, now) : paidBase(s);
-        const value = dripping ? disbursed : s.total;
+        const paid = paidBase(s);
+        const value = dripping
+          ? isIncoming
+            ? earnedBase(s, now)
+            : liveRemainingBase(s, now)
+          : isIncoming
+            ? s.total
+            : s.remaining;
         const status = loan
           ? "Repaying loan"
           : dripping
@@ -323,11 +350,12 @@ export function PhoneHomeView({
           subtitle: status,
           isLive: dripping,
           liveOutgoing: !isIncoming && dripping,
+          amountDecreasing: !isIncoming && dripping,
           meta: loan
             ? `Borrowed ${usd(loan.principalBase, 0)} · owe ${usd(loan.owedBase, 0)}`
             : isIncoming
               ? `Incoming · ${usd(s.remaining, 0)} left`
-              : `Outgoing · ${usd(disbursed, 0)} disbursed · ${usd(s.remaining, 0)} left`,
+              : `Outgoing · ${usd(paid, 0)} paid · ${usd(s.remaining, 0)} left`,
         };
       });
   }, [activeStreams, addr, now, pool.loans, pendingBorrows]);
@@ -468,7 +496,7 @@ export function PhoneHomeView({
 
   if (showAllStreams) {
     return (
-      <div className="flex min-h-0 flex-1 flex-col">
+      <div className="sl-scrollbar-hidden flex min-h-0 flex-1 flex-col overflow-y-auto">
         <button
           type="button"
           onClick={onBackToHome}
@@ -483,7 +511,7 @@ export function PhoneHomeView({
 
   if (detailsView.kind === "total") {
     return (
-      <div className="flex min-h-0 flex-1 flex-col">
+      <div className="sl-scrollbar-hidden flex min-h-0 flex-1 flex-col overflow-y-auto">
         <button
           type="button"
           onClick={() => setDetailsView({ kind: "home" })}
@@ -513,8 +541,20 @@ export function PhoneHomeView({
               const dripping = effectiveState(s) === "dripping";
               const isIncoming = s.freelancer === addr;
               const loan = loanForStream(s.id, pool.loans, pendingBorrows);
-              const progress =
-                s.total > 0 ? Math.min(100, (earnedBase(s, now) / s.total) * 100) : 0;
+              const progress = isIncoming
+                ? s.total > 0
+                  ? Math.min(100, (earnedBase(s, now) / s.total) * 100)
+                  : 0
+                : s.total > 0
+                  ? Math.min(100, (paidBase(s) / s.total) * 100)
+                  : 0;
+              const displayAmount = dripping
+                ? isIncoming
+                  ? earnedBase(s, now)
+                  : liveRemainingBase(s, now)
+                : isIncoming
+                  ? s.total
+                  : s.remaining;
               const label =
                 resolveStreamLabel(s) ?? (addr ? streamBackLabel(s, addr) : "Stream");
 
@@ -539,7 +579,9 @@ export function PhoneHomeView({
                         loan
                           ? "bg-[#e85d2a]/12 text-[#e85d2a]"
                           : dripping
-                            ? "bg-[#1d9e75]/10 text-[#1d9e75]"
+                            ? isIncoming
+                              ? "bg-[#1d9e75]/10 text-[#1d9e75]"
+                              : "bg-[#c0533a]/10 text-[#c0533a]"
                             : "bg-black/5 text-[#777]"
                       }`}
                     >
@@ -547,10 +589,20 @@ export function PhoneHomeView({
                     </span>
                   </div>
 
-                  <p className="mt-3 text-[18px] font-bold tabular-nums leading-none text-[#111]">
-                    {usd(dripping ? earnedBase(s, now) : s.total, 2)}
+                  <p
+                    className={`mt-3 text-[18px] font-bold tabular-nums leading-none ${
+                      dripping && !isIncoming ? "text-[#9a3b28]" : "text-[#111]"
+                    }`}
+                  >
+                    {usd(displayAmount, 2)}
                     <span className="ml-1.5 text-[10px] font-medium text-[#888]">
-                      {dripping ? (isIncoming ? "earned" : "disbursed") : "locked"}
+                      {dripping
+                        ? isIncoming
+                          ? "earned"
+                          : "remaining"
+                        : isIncoming
+                          ? "locked"
+                          : "remaining"}
                     </span>
                   </p>
 
@@ -560,7 +612,7 @@ export function PhoneHomeView({
                         dripping
                           ? isIncoming
                             ? "bg-[#1d9e75]"
-                            : "bg-[#5b54e6]/70"
+                            : "bg-[#c0533a]/80"
                           : "bg-[#5b54e6]/50"
                       }`}
                       style={{ width: `${progress}%` }}

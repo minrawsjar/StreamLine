@@ -99,12 +99,15 @@ function DashboardScreen() {
     <div className="mt-1">
       <PhoneDashboardView
         heroPreview
+        topStats={[
+          { label: "Drip/min", value: "$0.50", live: true },
+          { label: "Streams", value: "3" },
+        ]}
         cards={[
           {
             id: "demo-macro",
             label: "Total balance",
             amount: formatted,
-            subtitle: "3 streams",
           },
           { id: "demo-work", label: "Work stream", amount: "$90.00", subtitle: "Active stream" },
           {
@@ -299,10 +302,10 @@ export function PhoneMockup({
         />
 
         <div
-          className={`relative rounded-[3rem] p-[11px] shadow-[0_48px_96px_rgba(0,0,0,0.2)] transition-colors duration-700 ${
+          className={`relative rounded-[3rem] p-[11px] transition-colors duration-700 ${
             useDarkGlass
-              ? "liquid-glass border border-white/10 bg-[#0e1014]/90 backdrop-blur-2xl"
-              : "liquid-glass liquid-glass-light border border-black/[0.08] backdrop-blur-2xl"
+              ? "phone-chassis-dark liquid-glass"
+              : "phone-chassis-light liquid-glass liquid-glass-light"
           }`}
         >
         <div
@@ -336,7 +339,7 @@ export function PhoneMockup({
 
           <div
             className={`absolute inset-0 z-10 flex flex-col px-6 pb-8 transition-all duration-[420ms] ease-out ${
-              inApp ? "min-h-0 overflow-hidden" : ""
+              inApp ? "min-h-0" : ""
             } ${
               isLaunchScene ? "justify-center pt-12" : "pt-14"
             } ${
@@ -386,7 +389,7 @@ export function PhoneMockup({
 
   return (
     <div
-      className={`relative mx-auto transition-all duration-700 ${
+      className={`relative mx-auto shrink-0 transition-all duration-700 ${
         compact
           ? "w-[min(72vw,260px)]"
           : "w-[min(88vw,300px)] sm:w-[320px] lg:w-[340px]"

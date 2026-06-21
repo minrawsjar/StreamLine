@@ -16,6 +16,7 @@ import {
   buildCreateStreamV2,
   splitMilestoneAmounts,
   DEFAULT_DISPUTE_WINDOW_MS,
+  DEFAULT_STREAM_YIELD_BPS,
 } from "@/lib/streamline-tx";
 import {
   buildCreateConfidentialStreamV2,
@@ -41,19 +42,12 @@ type PhoneCreateStreamViewProps = {
   onClose: () => void;
 };
 
-type SplitRow = { label: string; pct: number; yield: boolean };
-type CreateStep = 1 | 2 | 3 | 4;
-
-const DEFAULT_SPLITS: SplitRow[] = [
-  { label: "Spending wallet", pct: 70, yield: false },
-  { label: "Scallop (yield)", pct: 30, yield: true },
-];
+type CreateStep = 1 | 2 | 3;
 
 const STEP_TITLES: Record<CreateStep, string> = {
   1: "Recipient",
   2: "Stream details",
   3: "Stream settings",
-  4: "Payout setup",
 };
 
 const ADDRESS_RE = /^0x[0-9a-fA-F]{64}$/;
@@ -72,15 +66,14 @@ export function PhoneCreateStreamView({ onClose }: PhoneCreateStreamViewProps) {
   const [amount, setAmount] = useState("800");
   const [durationValue, setDurationValue] = useState("14");
   const [durationUnit, setDurationUnit] = useState<DurationUnit>("days");
+  const [note, setNote] = useState("");
   const [isPrivate, setIsPrivate] = useState(false);
   const [useMilestones, setUseMilestones] = useState(false);
-  const [useSplitConfig, setUseSplitConfig] = useState(false);
   const [milestones, setMilestones] = useState<string[]>([
     "request start",
     "Milestone 2",
     "Milestone 3",
   ]);
-  const [splits, setSplits] = useState<SplitRow[]>(DEFAULT_SPLITS);
   const [stepError, setStepError] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
   const [proving, setProving] = useState(false);
@@ -91,8 +84,6 @@ export function PhoneCreateStreamView({ onClose }: PhoneCreateStreamViewProps) {
   const effectiveMilestones = useMilestones
     ? ["request start", ...milestones.slice(1)]
     : ["request start"];
-  const splitSum = splits.reduce((s, r) => s + (Number(r.pct) || 0), 0);
-  const activeSplits = useSplitConfig && !isPrivate ? splits : DEFAULT_SPLITS;
 
   useEffect(() => {
     setStep(1);
@@ -100,9 +91,6 @@ export function PhoneCreateStreamView({ onClose }: PhoneCreateStreamViewProps) {
     setStepError(null);
     setStatus(null);
   }, []);
-
-  const updateSplit = (i: number, patch: Partial<SplitRow>) =>
-    setSplits((rows) => rows.map((r, j) => (j === i ? { ...r, ...patch } : r)));
 
   const validateStep = (current: CreateStep): string | null => {
     if (current === 1) {
@@ -119,9 +107,6 @@ export function PhoneCreateStreamView({ onClose }: PhoneCreateStreamViewProps) {
         return "Enter a valid duration.";
       }
     }
-    if (current === 4 && useSplitConfig && !isPrivate && splitSum !== 100) {
-      return `Splits must total 100% (currently ${splitSum}%).`;
-    }
     return null;
   };
 
@@ -132,7 +117,7 @@ export function PhoneCreateStreamView({ onClose }: PhoneCreateStreamViewProps) {
       return;
     }
     setStepError(null);
-    if (step < 4) setStep((s) => (s + 1) as CreateStep);
+    if (step < 3) setStep((s) => (s + 1) as CreateStep);
   };
 
   const goBack = () => {
@@ -219,7 +204,7 @@ export function PhoneCreateStreamView({ onClose }: PhoneCreateStreamViewProps) {
   };
 
   const onCreate = () => {
-    const err = validateStep(4);
+    const err = validateStep(3);
     if (err) {
       setStepError(err);
       return;
@@ -235,11 +220,6 @@ export function PhoneCreateStreamView({ onClose }: PhoneCreateStreamViewProps) {
     }
 
     const totalBase = toBaseUnits(Number(amount));
-    const yieldBps = Math.round(
-      activeSplits
-        .filter((s) => s.yield)
-        .reduce((a, s) => a + (Number(s.pct) || 0), 0) * 100
-    );
     const tx = buildCreateStreamV2({
       packageId,
       usdcType,
@@ -249,7 +229,7 @@ export function PhoneCreateStreamView({ onClose }: PhoneCreateStreamViewProps) {
       milestoneAmountsBase: splitMilestoneAmounts(totalBase, effectiveMilestones.length),
       totalBase,
       durationMs: durationToMs(Number(durationValue), durationUnit),
-      yieldBps,
+      yieldBps: DEFAULT_STREAM_YIELD_BPS,
     });
     setStatus("Awaiting wallet signature…");
     execute(tx, {
@@ -270,8 +250,8 @@ export function PhoneCreateStreamView({ onClose }: PhoneCreateStreamViewProps) {
   if (created) {
     return (
       <PhoneFlowShell
-        step={4}
-        totalSteps={4}
+        step={3}
+        totalSteps={3}
         title="Stream created"
         footer={
           <button type="button" onClick={onDone} className={btnPrimary}>
@@ -280,7 +260,8 @@ export function PhoneCreateStreamView({ onClose }: PhoneCreateStreamViewProps) {
         }
       >
         <p className="text-center text-[12px] leading-snug text-[#666]">
-          {status ?? "Your stream is locked on-chain. Approve request start when the recipient submits it."}
+          {status ??
+            "Funds are locked and earning yield. Approve request start when the recipient submits it."}
         </p>
       </PhoneFlowShell>
     );
@@ -289,11 +270,11 @@ export function PhoneCreateStreamView({ onClose }: PhoneCreateStreamViewProps) {
   return (
     <PhoneFlowShell
       step={step}
-      totalSteps={4}
+      totalSteps={3}
       title={STEP_TITLES[step]}
       footer={
         <>
-          {step < 4 ? (
+          {step < 3 ? (
             <button type="button" onClick={goNext} className={btnPrimary}>
               Continue
             </button>
@@ -366,6 +347,15 @@ export function PhoneCreateStreamView({ onClose }: PhoneCreateStreamViewProps) {
               onUnitChange={setDurationUnit}
             />
           )}
+
+          <PhoneField label="Note (optional)">
+            <input
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              placeholder="Design + implementation"
+              className={phoneInputClass}
+            />
+          </PhoneField>
         </>
       )}
 
@@ -375,10 +365,7 @@ export function PhoneCreateStreamView({ onClose }: PhoneCreateStreamViewProps) {
             title="Private stream"
             subtitle="Hide amounts on-chain"
             checked={isPrivate}
-            onChange={(v) => {
-              setIsPrivate(v);
-              if (v) setUseSplitConfig(false);
-            }}
+            onChange={setIsPrivate}
           />
 
           <PhoneToggleRow
@@ -433,87 +420,18 @@ export function PhoneCreateStreamView({ onClose }: PhoneCreateStreamViewProps) {
               </button>
             </div>
           </PhoneToggleRow>
-        </>
-      )}
 
-      {step === 4 && (
-        <>
-          <PhoneToggleRow
-            title="Split each drip"
-            subtitle={
-              isPrivate
-                ? "Not available for private streams"
-                : splitSum === 100
-                  ? "Route each drip to one or more destinations"
-                  : `Must total 100% (currently ${splitSum}%)`
-            }
-            checked={useSplitConfig}
-            disabled={isPrivate}
-            onChange={setUseSplitConfig}
-          >
-            <div className="flex flex-col gap-2">
-              {splits.map((row, i) => (
-                <div key={i} className="flex items-center gap-1.5">
-                  <input
-                    value={row.label}
-                    onChange={(e) => updateSplit(i, { label: e.target.value })}
-                    placeholder="Wallet"
-                    className="min-w-0 flex-1 rounded-xl border border-black/15 bg-white/80 px-3 py-2 text-[12px] outline-none backdrop-blur-sm focus:border-[#5b54e6]"
-                  />
-                  <div className="flex shrink-0 items-center gap-0.5">
-                    <input
-                      type="number"
-                      inputMode="numeric"
-                      value={row.pct === 0 ? "" : row.pct}
-                      placeholder="0"
-                      onChange={(e) =>
-                        updateSplit(i, {
-                          pct: e.target.value === "" ? 0 : Number(e.target.value),
-                        })
-                      }
-                      className="w-9 rounded-lg border border-black/15 bg-white/80 px-1 py-1.5 text-center text-[10px] tabular outline-none backdrop-blur-sm focus:border-[#5b54e6] [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-                    />
-                    <span className="text-[9px] text-[#888]">%</span>
-                  </div>
-                  <label
-                    className="flex shrink-0 items-center gap-1 rounded-lg border border-black/10 bg-white/60 px-1.5 py-1 text-[9px] text-[#555] backdrop-blur-sm"
-                    title="Route this portion to a yield vault instead of your wallet"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={row.yield}
-                      onChange={(e) => updateSplit(i, { yield: e.target.checked })}
-                    />
-                    Yield
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() => setSplits((s) => s.filter((_, j) => j !== i))}
-                    className="shrink-0 px-1 text-[#c0533a]"
-                    aria-label="Remove split"
-                  >
-                    ×
-                  </button>
-                </div>
-              ))}
-              <button
-                type="button"
-                onClick={() =>
-                  setSplits((s) => [...s, { label: "Destination", pct: 0, yield: false }])
-                }
-                className="self-start rounded-lg border border-black/15 bg-white/60 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-[#444] backdrop-blur-sm"
-              >
-                + add destination
-              </button>
-            </div>
-          </PhoneToggleRow>
+          <p className="text-center text-[10px] leading-snug text-[#888]">
+            Locked funds earn yield automatically — payments stream from the pool as
+            milestones are approved.
+          </p>
 
           {!deployed && (
             <p className="text-center text-[11px] text-[#888]">
               Move package not set for this network.
             </p>
           )}
-          {status && !created && (
+          {status && (
             <p className="text-center text-[11px] leading-snug text-[#666]">{status}</p>
           )}
         </>

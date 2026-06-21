@@ -85,7 +85,7 @@ export function ScrollHero() {
           ))}
         </div>
 
-        <div className="flex items-center justify-center px-4 py-2">
+        <div className="flex shrink-0 items-center justify-center px-4 py-2">
           <PhoneMockup
             scene={scene.phone}
             sceneProgress={sceneProgress}

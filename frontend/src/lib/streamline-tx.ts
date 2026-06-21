@@ -11,6 +11,9 @@ const CLOCK = "0x6";
 /** Default review window before a raised milestone auto-approves (48h). */
 export const DEFAULT_DISPUTE_WINDOW_MS = 48 * 60 * 60 * 1000;
 
+/** Route essentially all drips through the yield vault; payments draw from the pool. */
+export const DEFAULT_STREAM_YIELD_BPS = 9_999;
+
 export type CreateStreamArgs = {
   packageId: string;
   usdcType: string;

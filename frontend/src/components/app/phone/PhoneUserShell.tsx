@@ -25,17 +25,15 @@ export function PhoneUserShell({ onNavigate }: PhoneUserShellProps) {
   }
 
   return (
-    <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
-      <div className="sl-scrollbar-hidden min-h-0 flex-1 overflow-y-auto pr-0.5">
-        <PhoneHomeView
-          showAllStreams={showAllStreams}
-          onShowAllStreams={() => setShowAllStreams(true)}
-          onBackToHome={() => setShowAllStreams(false)}
-          onCreate={() => onNavigate("create")}
-          onRequest={() => onNavigate("request")}
-          onTransfer={() => setTransferOpen(true)}
-        />
-      </div>
+    <div className="relative flex min-h-0 flex-1 flex-col overflow-visible">
+      <PhoneHomeView
+        showAllStreams={showAllStreams}
+        onShowAllStreams={() => setShowAllStreams(true)}
+        onBackToHome={() => setShowAllStreams(false)}
+        onCreate={() => onNavigate("create")}
+        onRequest={() => onNavigate("request")}
+        onTransfer={() => setTransferOpen(true)}
+      />
       <PhoneTransferModal
         open={transferOpen}
         onClose={() => setTransferOpen(false)}
