@@ -2,6 +2,35 @@ import type { StreamRecord } from "./indexer";
 
 export type StreamState = StreamRecord["state"];
 
+export function normalizeSuiAddress(addr: string): string {
+  return addr.toLowerCase();
+}
+
+/** Paying client / sponsor who locked funds and approves milestones. */
+export function isStreamOutgoingParties(
+  stream: Pick<StreamRecord, "sender" | "freelancer">,
+  addr: string
+): boolean {
+  return normalizeSuiAddress(stream.sender) === normalizeSuiAddress(addr);
+}
+
+/** Recipient / freelancer view — never when the same wallet is also the sender. */
+export function isStreamIncomingParties(
+  stream: Pick<StreamRecord, "sender" | "freelancer">,
+  addr: string
+): boolean {
+  if (isStreamOutgoingParties(stream, addr)) return false;
+  return normalizeSuiAddress(stream.freelancer) === normalizeSuiAddress(addr);
+}
+
+export function isStreamOutgoing(s: StreamRecord, addr: string): boolean {
+  return isStreamOutgoingParties(s, addr);
+}
+
+export function isStreamIncoming(s: StreamRecord, addr: string): boolean {
+  return isStreamIncomingParties(s, addr);
+}
+
 /** USDC already settled on-chain for this stream (base units). */
 export function paidBase(s: StreamRecord): number {
   return s.total - s.remaining;

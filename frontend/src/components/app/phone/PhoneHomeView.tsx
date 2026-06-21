@@ -18,6 +18,9 @@ import {
   effectiveState,
   isAwaitingClientApproval,
   isAwaitingFreelancerRaise,
+  isStreamIncoming,
+  isStreamIncomingParties,
+  isStreamOutgoing,
   liveRemainingBase,
   paidBase,
   pendingAccrualBase,
@@ -64,10 +67,16 @@ function isActiveStream(s: StreamRecord): boolean {
 }
 
 /** Human-readable reason a stream is or isn't flowing. */
-function streamStatusLabel(s: StreamRecord): string {
+function streamStatusLabel(s: StreamRecord, addr?: string): string {
   if (effectiveState(s) === "dripping") return "Dripping";
-  if (isAwaitingClientApproval(s)) return "Awaiting approval";
-  if (isAwaitingFreelancerRaise(s)) return "Awaiting completion";
+  if (isAwaitingClientApproval(s)) {
+    return addr && isStreamOutgoing(s, addr) ? "Approve to start" : "Awaiting approval";
+  }
+  if (isAwaitingFreelancerRaise(s)) {
+    return addr && isStreamOutgoing(s, addr)
+      ? "Waiting for request start"
+      : "Awaiting completion";
+  }
   if (s.state === "done") return "Completed";
   if (s.state === "paused") return "Paused";
   return "Idle";
@@ -76,8 +85,8 @@ function streamStatusLabel(s: StreamRecord): string {
 // NB: public streams are never private — confidential streams come from a
 // separate source (usePrivateStreams) and are tagged explicitly below.
 function streamBackLabel(s: StreamRecord, addr: string): string {
-  if (s.freelancer === addr) return "Work stream";
-  if (s.sender === addr) return "Pay stream";
+  if (isStreamIncoming(s, addr)) return "Work stream";
+  if (isStreamOutgoing(s, addr)) return "Pay stream";
   return "Stream";
 }
 
@@ -321,7 +330,7 @@ export function PhoneHomeView({
     return [...activeStreams]
       .sort((a, b) => a.created_at_ms - b.created_at_ms)
       .map((s, i) => {
-        const isIncoming = s.freelancer === addr;
+        const isIncoming = addr ? isStreamIncoming(s, addr) : false;
         const dripping = effectiveState(s) === "dripping";
         const loan = loanForStream(s.id, pool.loans, pendingBorrows);
         const paid = paidBase(s);
@@ -336,7 +345,7 @@ export function PhoneHomeView({
           ? "Repaying loan"
           : dripping
             ? ""
-            : streamStatusLabel(s);
+            : streamStatusLabel(s, addr);
         return {
           id: s.id,
           label: resolveStreamLabel(s) ?? (addr ? streamBackLabel(s, addr) : "Stream"),
@@ -424,7 +433,7 @@ export function PhoneHomeView({
     const streamItems = allStreams.map((s) => ({
       ts: s.created_at_ms,
       time: formatRelative(s.created_at_ms, now),
-      text: s.freelancer === addr ? "Stream request received" : "Stream created",
+      text: addr && isStreamIncoming(s, addr) ? "Stream request received" : "Stream funded",
       amount: null as string | null,
     }));
 
@@ -538,7 +547,7 @@ export function PhoneHomeView({
             <>
             {activeStreams.map((s, i) => {
               const dripping = effectiveState(s) === "dripping";
-              const isIncoming = s.freelancer === addr;
+              const isIncoming = addr ? isStreamIncoming(s, addr) : false;
               const loan = loanForStream(s.id, pool.loans, pendingBorrows);
               const progress = isIncoming
                 ? s.total > 0
@@ -651,7 +660,7 @@ export function PhoneHomeView({
               <PrivateStreamCard
                 key={p.id}
                 p={p}
-                isIncoming={p.freelancer === addr}
+                isIncoming={addr ? isStreamIncomingParties(p, addr) : false}
               />
             ))}
             </>
@@ -670,7 +679,7 @@ export function PhoneHomeView({
           resolveStreamLabel(selectedStream) ??
           (addr ? streamBackLabel(selectedStream, addr) : "Stream")
         }
-        incoming={selectedStream.freelancer === addr}
+        incoming={addr ? isStreamIncoming(selectedStream, addr) : false}
         now={now}
         onBack={() => setDetailsView({ kind: "home" })}
         onRaiseMilestone={onRaiseCompletion}
