@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Inter, Poppins } from "next/font/google";
 import "./globals.css";
+import { InvisibleTurnstile } from "@/components/providers/InvisibleTurnstile";
 import { SuiProviders } from "@/components/providers/SuiProviders";
 
 const poppins = Poppins({
@@ -38,6 +39,7 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${poppins.variable} ${inter.variable}`}>
       <body>
+        <InvisibleTurnstile />
         <SuiProviders>{children}</SuiProviders>
       </body>
     </html>
