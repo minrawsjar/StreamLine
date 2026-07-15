@@ -149,10 +149,15 @@ export function useCreateStreamFromRequest() {
       }
 
       const totalBase = toBaseUnits(amount);
-      const yieldBps = Math.round(
-        splits
-          .filter((s) => s.yield)
-          .reduce((a, s) => a + (Number(s.pct) || 0), 0) * 100
+      // Contract asserts yield_bps < 10000 (EBadSplits) — needs a nonzero cash
+      // leg, so 100% yield must clamp to 9999.
+      const yieldBps = Math.min(
+        9_999,
+        Math.round(
+          splits
+            .filter((s) => s.yield)
+            .reduce((a, s) => a + (Number(s.pct) || 0), 0) * 100
+        )
       );
       const tx = buildCreateStreamV2({
         packageId,
