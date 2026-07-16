@@ -6,7 +6,7 @@ import { WalletButton } from "@/components/wallet/WalletButton";
 import { StreamLineMark } from "@/components/landing/StreamLineMark";
 import type { StreamRequestParams } from "@/lib/request-link";
 import { ScanIconButton } from "./PhoneHeaderActions";
-import { ProActionButtons, ProTitleWithDemo } from "@/components/app/pro/ProHeaderExtras";
+import { ProTitleWithDemo } from "@/components/app/pro/ProHeaderExtras";
 import { PhoneLauncher } from "./PhoneLauncher";
 import { PhoneUserApp } from "./PhoneUserApp";
 import { PhoneProApp } from "./PhoneProApp";
@@ -149,8 +149,8 @@ export function PhoneAppShell({ route, onNavigate }: PhoneAppShellProps) {
           </div>
         )}
         <div className="flex shrink-0 items-center gap-1.5">
-          {!isScan && !isFulfill && !isRequest && !isCreate && (
-            <ScanIconButton pro={isPro} onClick={openScan} />
+          {!isPro && !isScan && !isFulfill && !isRequest && !isCreate && (
+            <ScanIconButton onClick={openScan} />
           )}
           <WalletButton
             variant="profile"
@@ -160,13 +160,11 @@ export function PhoneAppShell({ route, onNavigate }: PhoneAppShellProps) {
         </div>
       </div>
 
-      {isPro && inWorkspace && (
-        <div className="mt-2 shrink-0">
-          <ProActionButtons compact />
-        </div>
-      )}
-
-      <div className="mt-2 flex min-h-0 flex-1 flex-col">
+      <div
+        className={`flex min-h-0 flex-1 flex-col ${
+          isPro ? "relative mt-1.5 overflow-hidden" : "mt-2"
+        }`}
+      >
         {route === "launcher" && <PhoneLauncher onOpen={onNavigate} />}
         {route === "user" && (
           <PhoneUserApp onNavigate={onNavigate} />

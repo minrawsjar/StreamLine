@@ -1,5 +1,5 @@
-import { redirect } from "next/navigation";
+import { AppLauncher } from "@/components/app/AppLauncher";
 
 export default function AppRootPage() {
-  redirect("/");
+  return <AppLauncher />;
 }

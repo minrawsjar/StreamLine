@@ -1,5 +1,7 @@
-import { ProDashboard } from "@/components/app/pro/ProDashboard";
+"use client";
 
-export default function ProAppPage() {
-  return <ProDashboard />;
+import { OverviewScreen } from "@/components/app/pro/screens/OverviewScreen";
+
+export default function ProOverviewPage() {
+  return <OverviewScreen />;
 }

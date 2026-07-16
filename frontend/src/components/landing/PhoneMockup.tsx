@@ -338,10 +338,12 @@ export function PhoneMockup({
           {useDarkGlass ? <ProWallpaper /> : <PhoneWallpaper />}
 
           <div
-            className={`absolute inset-0 z-10 flex flex-col px-6 pb-8 transition-all duration-[420ms] ease-out ${
-              inApp ? "min-h-0" : ""
+            className={`absolute inset-0 z-10 flex flex-col transition-all duration-[420ms] ease-out ${
+              inApp
+                ? "min-h-0 overflow-hidden px-4 pb-5 pt-12"
+                : "px-6 pb-8"
             } ${
-              isLaunchScene ? "justify-center pt-12" : "pt-14"
+              isLaunchScene ? "justify-center pt-12" : inApp ? "" : "pt-14"
             } ${
               transitioning && !inApp
                 ? "scale-[0.97] opacity-0"

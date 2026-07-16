@@ -2,22 +2,18 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
 import { useCurrentAccount, useSuiClientContext } from "@mysten/dapp-kit";
 
 import { WalletButton } from "@/components/wallet/WalletButton";
 import { FaucetButton } from "@/components/wallet/FaucetButton";
 import { TokenBalance } from "@/components/wallet/TokenBalance";
 import { StreamLineMark } from "@/components/landing/StreamLineMark";
-import { ScanIconButton } from "@/components/app/phone/PhoneHeaderActions";
 import { ProActionButtons, ProTitleWithDemo } from "@/components/app/pro/ProHeaderExtras";
-import { ProScanModal } from "@/components/app/pro/ProScanModal";
 
 export function AppChrome({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const account = useCurrentAccount();
   const { network } = useSuiClientContext();
-  const [scanOpen, setScanOpen] = useState(false);
   const isLauncher = pathname === "/app" || pathname === "/app/";
   const isPro = pathname?.startsWith("/app/pro");
 
@@ -69,7 +65,6 @@ export function AppChrome({ children }: { children: React.ReactNode }) {
         <div className="flex shrink-0 items-center gap-2">
           {account && <TokenBalance dark={isPro} />}
           {account && !isPro && <FaucetButton amount={1000} />}
-          {isPro && account && <ScanIconButton pro onClick={() => setScanOpen(true)} />}
           <WalletButton
             showFaucetInMenu={!isPro}
             className={
@@ -80,18 +75,7 @@ export function AppChrome({ children }: { children: React.ReactNode }) {
           />
         </div>
       </header>
-      {isPro && (
-        <div className="border-b border-white/10 bg-[#0a0a0a]/90 px-5 py-2.5 md:hidden">
-          <ProActionButtons compact />
-        </div>
-      )}
       {children}
-      {scanOpen && (
-        <ProScanModal
-          onClose={() => setScanOpen(false)}
-          onResult={() => setScanOpen(false)}
-        />
-      )}
     </div>
   );
 }
