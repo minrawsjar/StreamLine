@@ -36,7 +36,25 @@ export type ProWorker = {
   startedAt?: number;
   pausedAt?: number;
   totalPausedMs?: number;
+  /** On-chain stream id once funded via `create_stream_v2` (undefined = local only). */
+  streamId?: string;
 };
+
+/** Map an indexer stream `state` onto a worker status for the reconciled view. */
+export function streamStateToWorkerStatus(
+  state: string
+): ProWorkerStatus {
+  switch (state) {
+    case "dripping":
+      return "dripping";
+    case "paused":
+      return "paused";
+    case "done":
+      return "stopped";
+    default:
+      return "pending"; // locked / pending_review
+  }
+}
 
 export type ProPoolAllocation = Record<ProPoolBucket, number>;
 
@@ -68,6 +86,10 @@ export type ProWorkspace = {
   /** Simulated yield accrued on invested float. */
   yieldEarned: number;
   updatedAt: number;
+  /** On-chain org treasury (Pro pool) once opened. */
+  treasuryId?: string;
+  /** Net USDC principal moved into the yield vault (to derive real accrued yield). */
+  investedPrincipal?: number;
 };
 
 /** Legacy demo shape (v1 localStorage). */

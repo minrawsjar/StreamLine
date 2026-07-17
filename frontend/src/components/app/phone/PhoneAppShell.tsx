@@ -154,7 +154,8 @@ export function PhoneAppShell({ route, onNavigate }: PhoneAppShellProps) {
           )}
           <WalletButton
             variant="profile"
-            showFaucetInMenu={!isPro}
+            showFaucetInMenu
+            faucetAmount={isPro ? 10000 : 1000}
             profilePro={isPro}
           />
         </div>

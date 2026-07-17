@@ -48,11 +48,13 @@ function profileBtnDanger(dark: boolean) {
 export function AccountMenu({
   className,
   showFaucet = false,
+  faucetAmount = 1000,
   variant = "default",
   profilePro = false,
 }: {
   className?: string;
   showFaucet?: boolean;
+  faucetAmount?: number;
   variant?: "default" | "profile";
   profilePro?: boolean;
 }) {
@@ -210,8 +212,8 @@ export function AccountMenu({
 
             {showFaucet && (
               <FaucetButton
-                amount={1000}
-                label="Fund (test USDC)"
+                amount={faucetAmount}
+                label={`Mint ${faucetAmount.toLocaleString()} USDC`}
                 className={profileBtnSecondary(dark)}
               />
             )}
@@ -292,7 +294,8 @@ export function AccountMenu({
           {showFaucet && (
             <div className="border-t border-[#2b2a5e]/10 px-3 py-2">
               <FaucetButton
-                amount={1000}
+                amount={faucetAmount}
+                label={`Mint ${faucetAmount.toLocaleString()} USDC`}
                 className="w-full rounded-xl border border-[#2b2a5e]/20 bg-white px-3 py-2 text-[11px] font-medium text-[#2b2a5e]/85 transition-colors hover:border-[#5b54e6] hover:bg-[#2b2a5e]/[0.03] disabled:opacity-40"
               />
             </div>

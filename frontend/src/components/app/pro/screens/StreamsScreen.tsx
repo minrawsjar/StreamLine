@@ -21,6 +21,8 @@ export function StreamsScreen() {
     totals,
     setModal,
     setWorkerStatus,
+    createWorkerStream,
+    creating,
     deleteWorker,
   } = useProWorkspace();
   const alloc = workspace.pool.allocation;
@@ -167,10 +169,15 @@ export function StreamsScreen() {
                         {w.status === "paused" || w.status === "pending" ? (
                           <button
                             type="button"
-                            className="rounded-full border border-white/12 px-2.5 py-1 text-[10px] text-white/70 hover:bg-white/5"
-                            onClick={() => setWorkerStatus(w.id, "dripping")}
+                            disabled={creating}
+                            className="rounded-full border border-white/12 px-2.5 py-1 text-[10px] text-white/70 hover:bg-white/5 disabled:opacity-50"
+                            onClick={() =>
+                              w.streamId
+                                ? setWorkerStatus(w.id, "dripping")
+                                : createWorkerStream(w.id)
+                            }
                           >
-                            Resume
+                            {w.streamId ? "Resume" : "Start"}
                           </button>
                         ) : null}
                         <button

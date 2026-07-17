@@ -14,11 +14,13 @@ import { AccountMenu } from "./AccountMenu";
 export function WalletButton({
   className,
   showFaucetInMenu = false,
+  faucetAmount,
   variant = "default",
   profilePro = false,
 }: {
   className?: string;
   showFaucetInMenu?: boolean;
+  faucetAmount?: number;
   variant?: "default" | "profile";
   profilePro?: boolean;
 }) {
@@ -48,6 +50,7 @@ export function WalletButton({
       <AccountMenu
         className={className}
         showFaucet={showFaucetInMenu}
+        faucetAmount={faucetAmount}
         variant={variant}
         profilePro={profilePro}
       />

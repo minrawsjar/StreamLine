@@ -1,0 +1,134 @@
+/// StreamLine — org treasury (the "Pro pool").
+///
+/// A per-org float of coin `T`: deposit idle USDC, withdraw it, or park it in the
+/// `yield_vault` to earn while unclaimed. One shared object per org; anyone may
+/// top it up (`deposit`), but only the owner may `withdraw` / `invest` / `divest`.
+/// The invested position is held as a single `VaultReceipt<T>` — `invest`
+/// consolidates any prior position so we never accumulate receipts.
+///
+/// ponytail: treasury holds the yield-earning float only; worker streams are
+/// still funded from the org wallet. Add `create_stream_from_treasury` in
+/// `stream.move` if you want substreams to draw straight from the pool.
+module streamline::treasury;
+
+use sui::balance::{Self, Balance};
+use sui::clock::Clock;
+use sui::coin::{Self, Coin};
+use sui::event;
+use streamline::yield_vault::{Self, YieldVault, VaultReceipt};
+
+const ENotOwner: u64 = 0;
+const EZeroAmount: u64 = 1;
+const EInsufficientIdle: u64 = 2;
+const ENotInvested: u64 = 3;
+
+/// An org's capital pool. Shared so the keeper / sponsor can co-sign; `owner`
+/// gates every value-removing call.
+public struct Treasury<phantom T> has key {
+    id: UID,
+    owner: address,
+    /// Liquid, un-invested float.
+    idle: Balance<T>,
+    /// Invested position in the yield vault, if any (one consolidated receipt).
+    invested: Option<VaultReceipt<T>>,
+}
+
+public struct TreasuryOpened has copy, drop { treasury_id: ID, owner: address }
+public struct Funded has copy, drop { treasury_id: ID, amount: u64 }
+public struct Withdrawn has copy, drop { treasury_id: ID, amount: u64 }
+public struct Invested has copy, drop { treasury_id: ID, amount: u64 }
+public struct Divested has copy, drop { treasury_id: ID, amount: u64 }
+
+/// Open an empty treasury for coin `T`, owned by the caller.
+public fun open<T>(ctx: &mut TxContext) {
+    let t = Treasury<T> {
+        id: object::new(ctx),
+        owner: ctx.sender(),
+        idle: balance::zero<T>(),
+        invested: option::none(),
+    };
+    event::emit(TreasuryOpened { treasury_id: object::id(&t), owner: t.owner });
+    transfer::share_object(t);
+}
+
+/// Deposit USDC into the float (anyone may fund the pool).
+public fun deposit<T>(t: &mut Treasury<T>, coin: Coin<T>) {
+    let amount = coin.value();
+    assert!(amount > 0, EZeroAmount);
+    t.idle.join(coin.into_balance());
+    event::emit(Funded { treasury_id: object::id(t), amount });
+}
+
+/// Withdraw idle float back to the owner.
+public fun withdraw<T>(
+    t: &mut Treasury<T>,
+    amount: u64,
+    ctx: &mut TxContext,
+): Coin<T> {
+    assert!(ctx.sender() == t.owner, ENotOwner);
+    assert!(amount > 0, EZeroAmount);
+    assert!(t.idle.value() >= amount, EInsufficientIdle);
+    event::emit(Withdrawn { treasury_id: object::id(t), amount });
+    coin::from_balance(t.idle.split(amount), ctx)
+}
+
+/// Move `amount` of idle float into the yield vault. Redeems any prior position
+/// first so the treasury holds exactly one receipt; net idle drops by `amount`.
+public fun invest<T>(
+    t: &mut Treasury<T>,
+    vault: &mut YieldVault<T>,
+    amount: u64,
+    clock: &Clock,
+    ctx: &mut TxContext,
+) {
+    assert!(ctx.sender() == t.owner, ENotOwner);
+    assert!(amount > 0, EZeroAmount);
+    assert!(t.idle.value() >= amount, EInsufficientIdle);
+
+    let mut invest_total = amount;
+    if (t.invested.is_some()) {
+        let prev = t.invested.extract();
+        let back = yield_vault::redeem(vault, prev, clock, ctx);
+        invest_total = invest_total + back.value();
+        t.idle.join(back.into_balance());
+    };
+    let coin = coin::from_balance(t.idle.split(invest_total), ctx);
+    let receipt = yield_vault::deposit(vault, coin, clock, ctx);
+    t.invested.fill(receipt);
+    event::emit(Invested { treasury_id: object::id(t), amount });
+}
+
+/// Redeem the entire invested position (principal + accrued yield) back to idle.
+public fun divest<T>(
+    t: &mut Treasury<T>,
+    vault: &mut YieldVault<T>,
+    clock: &Clock,
+    ctx: &mut TxContext,
+) {
+    assert!(ctx.sender() == t.owner, ENotOwner);
+    assert!(t.invested.is_some(), ENotInvested);
+    let receipt = t.invested.extract();
+    let back = yield_vault::redeem(vault, receipt, clock, ctx);
+    let amount = back.value();
+    t.idle.join(back.into_balance());
+    event::emit(Divested { treasury_id: object::id(t), amount });
+}
+
+// === Views ===
+
+/// Liquid float available to withdraw or invest.
+public fun idle_value<T>(t: &Treasury<T>): u64 { t.idle.value() }
+
+/// Current underlying value of the invested position at `now` (0 if none).
+public fun invested_value<T>(
+    t: &Treasury<T>,
+    vault: &YieldVault<T>,
+    now: u64,
+): u64 {
+    if (t.invested.is_some()) {
+        yield_vault::receipt_value(vault, t.invested.borrow(), now)
+    } else { 0 }
+}
+
+public fun owner<T>(t: &Treasury<T>): address { t.owner }
+public fun is_invested<T>(t: &Treasury<T>): bool { t.invested.is_some() }

@@ -328,6 +328,96 @@ export function buildMintTestUsdc(a: {
   return tx;
 }
 
+// === Org treasury (the Pro pool) ===
+
+export type TreasuryRef = {
+  packageId: string;
+  usdcType: string;
+  sender: string;
+  treasuryId: string;
+};
+
+/** Open a new org treasury (shared object) owned by the signer. */
+export function buildOpenTreasury(a: {
+  packageId: string;
+  usdcType: string;
+  sender: string;
+}): Transaction {
+  const tx = new Transaction();
+  tx.setSenderIfNotSet(a.sender);
+  tx.moveCall({
+    target: `${a.packageId}::treasury::open`,
+    typeArguments: [a.usdcType],
+    arguments: [],
+  });
+  return tx;
+}
+
+/** Deposit USDC into the treasury float (Fund pool). */
+export function buildTreasuryDeposit(
+  a: TreasuryRef & { amountBase: bigint }
+): Transaction {
+  const tx = new Transaction();
+  tx.setSenderIfNotSet(a.sender);
+  tx.moveCall({
+    target: `${a.packageId}::treasury::deposit`,
+    typeArguments: [a.usdcType],
+    arguments: [
+      tx.object(a.treasuryId),
+      coinWithBalance({ type: a.usdcType, balance: a.amountBase }),
+    ],
+  });
+  return tx;
+}
+
+/** Withdraw idle float back to the owner. */
+export function buildTreasuryWithdraw(
+  a: TreasuryRef & { amountBase: bigint }
+): Transaction {
+  const tx = new Transaction();
+  tx.setSenderIfNotSet(a.sender);
+  const coin = tx.moveCall({
+    target: `${a.packageId}::treasury::withdraw`,
+    typeArguments: [a.usdcType],
+    arguments: [tx.object(a.treasuryId), tx.pure.u64(a.amountBase)],
+  });
+  tx.transferObjects([coin], a.sender);
+  return tx;
+}
+
+/** Move `amountBase` of idle float into the yield vault (Allocate). */
+export function buildTreasuryInvest(
+  a: TreasuryRef & { vaultId: string; amountBase: bigint }
+): Transaction {
+  const tx = new Transaction();
+  tx.setSenderIfNotSet(a.sender);
+  tx.moveCall({
+    target: `${a.packageId}::treasury::invest`,
+    typeArguments: [a.usdcType],
+    arguments: [
+      tx.object(a.treasuryId),
+      tx.object(a.vaultId),
+      tx.pure.u64(a.amountBase),
+      tx.object(CLOCK),
+    ],
+  });
+  return tx;
+}
+
+/** Redeem the entire invested position back to idle (Divest). */
+export function buildTreasuryDivest(
+  a: TreasuryRef & { vaultId: string }
+): Transaction {
+  const tx = new Transaction();
+  tx.setSenderIfNotSet(a.sender);
+  tx.moveCall({
+    target: `${a.packageId}::treasury::divest`,
+    typeArguments: [a.usdcType],
+    arguments: [tx.object(a.treasuryId), tx.object(a.vaultId), tx.object(CLOCK)],
+  });
+  return tx;
+}
+
 /**
  * Split a total into N per-milestone base-unit amounts that sum exactly to the
  * total (the remainder lands on the last milestone).

@@ -44,6 +44,7 @@ import {
 } from "./PhoneDashboardView";
 import { PhoneStreamsPanel } from "./PhoneStreamsPanel";
 import { PhoneStreamDetailsView } from "./PhoneStreamDetailsView";
+import { PrivateStreamsPanel } from "../PrivateStreamsPanel";
 
 const usd = (base: number, digits = 2) =>
   (base / USDC_BASE).toLocaleString("en-US", {
@@ -102,12 +103,18 @@ const PRIV_STATE_LABEL: Record<number, string> = {
 function PrivateStreamCard({
   p,
   isIncoming,
+  onOpen,
 }: {
   p: PrivateStreamOnChain;
   isIncoming: boolean;
+  onOpen: () => void;
 }) {
   return (
-    <div className="rounded-2xl border border-[#6c5ce7]/25 bg-white p-3.5 shadow-[0_4px_20px_rgba(0,0,0,0.05)]">
+    <button
+      type="button"
+      onClick={onOpen}
+      className="w-full rounded-2xl border border-[#6c5ce7]/25 bg-white p-3.5 text-left shadow-[0_4px_20px_rgba(0,0,0,0.05)] transition-colors hover:border-[#6c5ce7]/50"
+    >
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <p className="truncate text-[11px] font-semibold tracking-tight text-[#111]">
@@ -134,7 +141,10 @@ function PrivateStreamCard({
       <p className="mt-2 text-[9px] leading-snug text-[#999]">
         Amounts are encrypted on-chain — only the locked reserve is public.
       </p>
-    </div>
+      <p className="mt-2 text-[9px] font-semibold text-[#6c5ce7]">
+        Tap to unlock &amp; drip →
+      </p>
+    </button>
   );
 }
 
@@ -150,7 +160,8 @@ type PhoneHomeViewProps = {
 type HomeDetailsView =
   | { kind: "home" }
   | { kind: "total" }
-  | { kind: "stream"; id: string };
+  | { kind: "stream"; id: string }
+  | { kind: "private"; id: string; role: "sender" | "freelancer" };
 
 export function PhoneHomeView({
   showAllStreams = false,
@@ -656,16 +667,44 @@ export function PhoneHomeView({
                 </button>
               );
             })}
-            {privateStreams.map((p) => (
-              <PrivateStreamCard
-                key={p.id}
-                p={p}
-                isIncoming={addr ? isStreamIncomingParties(p, addr) : false}
-              />
-            ))}
+            {privateStreams.map((p) => {
+              const isIncoming = addr
+                ? isStreamIncomingParties(p, addr)
+                : false;
+              return (
+                <PrivateStreamCard
+                  key={p.id}
+                  p={p}
+                  isIncoming={isIncoming}
+                  onOpen={() =>
+                    setDetailsView({
+                      kind: "private",
+                      id: p.id,
+                      role: isIncoming ? "freelancer" : "sender",
+                    })
+                  }
+                />
+              );
+            })}
             </>
           )}
         </div>
+      </div>
+    );
+  }
+
+  if (detailsView.kind === "private") {
+    const view = detailsView;
+    return (
+      <div className="sl-scrollbar-hidden flex min-h-0 flex-1 flex-col overflow-y-auto">
+        <button
+          type="button"
+          onClick={() => setDetailsView({ kind: "home" })}
+          className="mb-3 self-start text-[9px] font-medium text-[#666]"
+        >
+          ← Home
+        </button>
+        <PrivateStreamsPanel role={view.role} only={view.id} />
       </div>
     );
   }

@@ -235,9 +235,9 @@ export function loadProWorkspace(address: string): ProWorkspace {
   } catch {
     /* fall through */
   }
-  const seeded = seedWorkspace();
-  saveProWorkspace(address, seeded);
-  return seeded;
+  // Real orgs start empty; the roster fills from on-chain streams. The demo
+  // fixtures load only via an explicit "Load demo" (resetDemo).
+  return emptyWorkspace();
 }
 
 export function saveProWorkspace(address: string, workspace: ProWorkspace) {

@@ -1,0 +1,281 @@
+# StreamLine — Work Handoff
+
+Running log of work done in this session so another dev can continue. Newest
+sections are the in-progress privacy build (Phase 1). Dates are 2026-07-15 → 07-18.
+
+---
+
+## 0. Critical environment facts (read first)
+
+| Thing | Value |
+|---|---|
+| **Move package (v12, current)** | `0x634db89da9f926dabd83c042c2c6e7af8d6b43e8139699bd604959b4c2e30b31` |
+| Move package (v11/v10/v9, prev) | `0x2a2681a9…4b0b1f7b39` / `0x2bee880e…179a281` / `0xff78b5ef…705ad3` |
+| Original package (type origin / Seal namespace) | `0x9d6e7815d5e11424a68f827e26499078fead7648328f44fdbdeff6d34ed0b3a8` |
+| Upgrade cap (owned by deployer wallet below) | `0x351ff70fa0639fb0c1bf61bbb5402314c4b2d853f22e7274adbec4dba7f5447e` |
+| Yield vault (shared) | `0x8ae9d8805682aabbd00ff0582d93b88f2f86482bcabed194a88a6ded99a88406` |
+| Mock USDC type | `0xf6ce32fe48338464f3947b9d15cd4a0befa0fe9b3926fd9daf6cee3658482ed3::mock_usdc::MOCK_USDC` |
+| Mock USDC faucet treasury | `0xa7cb971f4f93e5713c5703f63f3bc17fdf0f6bf1f9795dc010ac164827715330` |
+| Deployer / keeper wallet | `0x046d80ecab635be43d5e0b7b3ac896388e5e19f37829080ce2e06614e80ad5f0` |
+| Indexer (Railway) | `https://streamline-production-4739.up.railway.app` |
+| **Working testnet RPC** | Ankr (keyed) — set in `frontend/.env` `NEXT_PUBLIC_SUI_TESTNET_RPC`. Fallback: `https://rpc-testnet.suiscan.xyz` |
+
+⚠️ **The public `fullnode.testnet.sui.io` endpoint is DEAD (404).** That was the
+root of all the "RPC flakiness" this session. The frontend is pinned to suiscan
+via `NEXT_PUBLIC_SUI_TESTNET_RPC` in `frontend/.env`. If the indexer/keeper start
+failing again, check their RPC env vars point somewhere alive.
+
+⚠️ **Grep/Bash output redacts some identifiers** (shows `n`, `ln`, `w.ln`). This
+is a harness display quirk, NOT the real source. Always trust the `Read` tool /
+open the file for actual identifiers.
+
+`sui` CLI must be **≥ 1.75** (testnet protocol 129). 1.73 panics. `brew upgrade sui`.
+
+---
+
+## 1. Ops fixes (start of session)
+
+- **Indexer 401 "API key disabled":** the deployed indexer's `SUI_RPC_URL` (Railway
+  env, not the repo `.env`) had a dead keyed provider. Fix = rotate that env var
+  (public fullnode or a fresh key). Not a code bug.
+- **Keeper "Cannot find gas coin":** the keeper wallet's SUI was shredded into
+  sub-budget dust coins. Fixed by faucet top-up
+  (`curl -X POST https://faucet.testnet.sui.io/v2/gas -d '{"FixedAmountRequest":{"recipient":"0x046d..."}}'`).
+  Recurs as coins erode; consider a keeper self-merge if it keeps happening.
+
+## 2. yield_bps clamp bug (create_stream_v2 abort code 2 = EBadSplits)
+
+`frontend/src/lib/use-create-stream-from-request.ts` computed `yieldBps` that could
+reach 10000 (100% yield split), but the contract asserts `yield_bps < 10000`. Fixed
+with `Math.min(9_999, …)`. The `splitMilestoneAmounts` helper was fine (last
+milestone absorbs remainder). The phone flow already used 9999.
+
+## 3. Pro backend wiring (was 100% localStorage mock)
+
+The Pro workspace (`frontend/src/components/app/pro/`) was a pure client-side sim.
+Wired it to real data:
+
+- **Read overlay** in `ProWorkspaceContext.tsx`: `useStreams({ sender: address })`
+  from `frontend/src/lib/indexer.ts` folds real on-chain stream state onto workers
+  (matched by `freelancer === walletAddress`, else builds roster rows straight from
+  chain). Real `streamedUsd`, `status`, `budget`, `pool.streamed`.
+- **De-seeded** `frontend/src/lib/pro-workspace-store.ts` `loadProWorkspace` — new
+  orgs start empty (was auto-seeding fake "Alex Rivera" fixtures). Demo data now
+  loads only via explicit `resetDemo()`. ⚠️ Old localStorage keys (`sl-pro*`) may
+  still hold the stale seed — clear them in DevTools to see real data.
+- **Write path:** "Start" on a pending worker calls `createWorkerStream` →
+  `buildCreateStreamV2` (org=sender, worker=freelancer, budget locked). Wired in
+  `StreamsScreen.tsx` and `PhoneProWorkspace.tsx`.
+- Keeper needs no changes — it drips any dripping stream generically.
+
+## 4. On-chain Treasury (the Pro "pool") — Phases done
+
+Contract: **`contracts/sources/treasury.move`** (in package v9). Per-org shared
+`Treasury<T>`: `open` / `deposit` / `withdraw` / `invest` / `divest`, reusing
+`yield_vault` for real yield (invest = deposit into vault, held as one consolidated
+`VaultReceipt`). Tests: `contracts/tests/treasury_tests.move` (2 tests, full
+lifecycle + owner-gating). **All 21 Move tests pass.**
+
+Deployed via `sui client upgrade` (package v8 `0x28506598…` → v9 `0xff78b5ef…`).
+`deployment.testnet.json` + `Move.toml` `published-at` + `frontend TESTNET_PACKAGE`
+all updated to v9.
+
+Frontend wiring:
+- `frontend/src/lib/streamline-tx.ts`: `buildOpenTreasury/Deposit/Withdraw/Invest/Divest`.
+- `frontend/src/lib/treasury.ts`: reads live `idle`/`invested` via `devInspect` on
+  the `idle_value`/`invested_value` view fns; `findCreatedTreasury(digest)`.
+- `ProWorkspaceContext.tsx`: `fundTreasury/withdrawTreasury/investTreasury` actions;
+  `workspaceView` overlays real `pool.funded/allocation` + **real yieldEarned**
+  (`invested − investedPrincipal`, principal tracked locally in workspace).
+- `ProActionModals.tsx`: Fund / Withdraw / Allocate→Yield-vault sign real txs, with
+  error surfacing.
+- **Enoki allowlist** `frontend/src/lib/enoki-targets.ts`: added the 5 `treasury::*`
+  targets. Without this the sponsor rejects with "not part of an allow-listed move
+  call target" — remember to add any NEW move entry fn here or gasless calls fail.
+
+Bugs fixed during this: a race in `ensureTreasury` (returned before
+`findCreatedTreasury` resolved — `execute`'s onSuccess is fire-and-forget; now
+capture digest synchronously, resolve id after await), and swallowed `onError`
+(now thrown + shown in the modal).
+
+## 5. Smaller UI
+
+- **Mint 10,000 USDC** in the Pro wallet menu: `faucetAmount` prop threaded through
+  `WalletButton → AccountMenu → FaucetButton`; enabled in `PhoneAppShell`/`AppChrome`
+  with `faucetAmount={isPro ? 10000 : 1000}`.
+- **Phone mockup bigger:** `frontend/src/components/landing/PhoneMockup.tsx` non-compact
+  width `340→440px` (lg).
+- **Phone private-stream cards now open:** `PhoneHomeView.tsx` `PrivateStreamCard`
+  was a display-only div; made it a button that opens the full desktop
+  `PrivateStreamsPanel only={id}` (unlock → drip hidden → raise) in a phone detail view.
+
+---
+
+## 6. Privacy — what's real vs mocked (audited this session)
+
+- **Yield:** vault mechanics are REAL on-chain (deposit→shares→index accrual→redeem;
+  live vault has ~56k USDC reserve, index grown past 1.0077). But the 8% APR is
+  **subsidized** from a seeded buffer (a Scallop-shaped testnet stand-in), not market
+  yield. Pro's displayed yield is now real (derived from the vault), not the old sim.
+- **Privacy:** REAL cryptography. Poseidon commitments (`circomlibjs`) hide amounts;
+  real Groth16 proofs (`snarkjs.groth16.fullProve` over the circom circuits) verified
+  on-chain by Sui native `groth16::verify_groth16_proof` (bn254); real Seal
+  (`@mysten/seal`) threshold-encrypts stream secrets to both parties. Caveat: the
+  trusted setup is a dev setup (fine for testnet; needs an MPC ceremony for mainnet).
+- **What today's confidential model LEAKS** (the important gap): `ConfidentialStream`
+  stores `sender`/`freelancer` in **plaintext** and emits per-drip events with
+  timestamps. So amounts are hidden but the **graph (who-pays-whom) and the cadence**
+  are public. `confidential_balance.move` is a shared-pool aggregator but its
+  `transfer(from, to)` also takes addresses in plaintext → graph leaks.
+
+## 7. Privacy roadmap (the "build this fully" plan, testnet-targeted)
+
+Threat-model priority for payroll: hide **graph > rate > amount** (today only amount
+is hidden). Phases:
+
+- **Phase 1 — Lazy private stream (no drips, no keeper).** `earned(t) =
+  min(cap, rate·elapsed)` computed, not dripped. Freelancer settles the whole
+  vested-so-far in one proof, anytime → kills the cadence leak + the keeper-can't-
+  drip-private problem. **← IN PROGRESS, see §8.**
+- **Phase 2 — Graph hiding.** Rewrite `confidential_balance` from account-model to
+  note-commitment + nullifier + Merkle membership (UTXO/Zcash-style) so transfers
+  don't reveal from/to.
+- **Phase 3 — Dual yield.** Pool reserve = one `yield_vault` position; notes
+  denominated in shares → both ends earn, uniform accrual (indistinguishable).
+  Reuses the treasury↔vault plumbing from §4.
+- **Phase 4 — Selective disclosure** via Seal viewing keys (primitive already exists).
+
+---
+
+## 8. Phase 1 status — CONTRACT + CRYPTO + PLUMBING DONE; only UI + live test left
+
+Goal: a confidential stream that vests linearly and settles lazily (one proof, no
+per-drip txs, no keeper). Deployed on-chain in package **v10**.
+
+### DONE ✅ (all tested)
+- **Circuit** `circuits/src/lazydrip.circom` — extends `transfer.circom` with the
+  vesting bound `earned_new ≤ min(cap, rate·(nowSec − start))`, schedule pinned by
+  public `ParamsCommitment = Poseidon(rate, start, cap, blinding)`. 3531 constraints.
+  Rebuild: `cd circuits && POT_POWER=15 ./scripts/build.sh lazydrip`. Sound: valid
+  claim verifies, over-claim fails, `nowSec` is public (clock-bound).
+  Signal order: `[cRemOld, cRemNew, cEarnedOld, cEarnedNew, cParams, nowSec]`.
+- **VK on-chain** — `LAZYDRIP_VK` + `verify_lazydrip(...)` in
+  `contracts/sources/confidential_balance.move` (converter output validated: the
+  proof verifies via Sui native groth16 — see `circuits/move/tests/lazydrip_tests.move`,
+  green). Converter run: `cargo run --manifest-path circuits/converter/Cargo.toml
+  --release -- <dir-with verification_key.json/proof.json/public.json>`.
+- **Contract** `contracts/sources/lazy_stream.move` — `create` / `settle` / `claim`.
+  `settle` verifies the lazydrip proof + updates commitments; `claim` unwraps earned
+  to cash and resets earned to the canonical `ZERO_COMMITMENT = Poseidon(0,0)`.
+  Tests `contracts/tests/lazy_stream_tests.move`: real-proof settle passes; wrong
+  clock (now_sec 51 vs 50) → `EProofInvalid`. **Full suite 23/23 green.**
+- **Deployed** as package v10 (`sui client upgrade`, cost ~0.17 SUI). Records updated.
+- **Enoki allowlist** — `lazy_stream::create/settle/claim` added to `enoki-targets.ts`.
+- **Frontend plumbing** — `frontend/src/lib/confidential.ts`: `proveLazyDrip`,
+  `commitParams` (Poseidon(4)), `lazyNewCommitments`, and builders
+  `buildCreateLazyStream` / `buildSettleLazy` / `buildClaimLazy`. Circuit artifacts
+  copied to `frontend/public/circuits/lazydrip.{wasm,zkey,vkey.json}`. Typecheck green.
+
+### DONE ✅ (UI, in v11)
+- **Timing fix (important):** `settle`'s exact-clock `now_sec` raced proof-gen vs
+  execution and could never succeed live. Added `settle_at(…, now_sec, clock)` — the
+  prover supplies `now_sec` (bound into the proof), the contract only checks it's
+  `≤ clock` (`EFutureTime`). Old `settle` kept for upgrade compat (signature freeze).
+  Tests updated (3/3: valid, wrong-now → proof reject, future → EFutureTime).
+- **UI** `frontend/src/components/app/LazyStreamPanel.tsx` + route
+  `frontend/src/app/app/lazy/page.tsx` (**http://localhost:3000/app/lazy**): create
+  (amount + duration → rate, wrap proof, commitments) / settle (proveLazyDrip →
+  settle_at) / claim (proveUnwrap → claim). Secrets in
+  `frontend/src/lib/lazy-stream-store.ts` (localStorage; each settle mutates
+  remaining/earned + rotates blindings).
+- **Validated headlessly:** frontend `proveLazyDrip` input mapping generates a valid
+  witness+proof against `public/circuits/lazydrip.*` (node test), and a real proof
+  verifies on-chain via `settle_at` (Move test). Typecheck green.
+
+### TODO — remaining
+1. **Live browser click-through:** create → settle → claim at `/app/lazy`, gasless
+   (needs a connected wallet with mock USDC). Every layer is validated headlessly but
+   the full wallet loop hasn't been driven in-browser yet.
+2. **Cross-party secrets:** `LazyStreamPanel` stores openings locally (works when
+   creator == settler, e.g. the sender settling on the freelancer's behalf — settle is
+   permissionless). For a different-wallet freelancer to settle/claim, Seal-encrypt the
+   openings on create (reuse `encryptSecrets` in `seal.ts`) and decrypt on their side,
+   like the existing `ConfidentialStream` flow. `create` already accepts
+   `encrypted_secrets` (currently passed empty).
+3. **Discovery without local store:** index `LazyStreamCreated` events (or add indexer
+   support) so streams show up on a fresh device.
+
+### Watch-outs
+- Rate is base-units **per second**; `start` in seconds. `cap` == initial remaining.
+- Use `settle_at` (not `settle`) — the plain `settle` binds now_sec to the exact clock
+  and will race/fail in practice; it only exists for upgrade compat.
+- Changing a `public fun` signature breaks upgrade compat (that's why `settle_at` is a
+  new fn, not a changed `settle`). Add new fns instead.
+- Every new move entry fn must be added to `enoki-targets.ts`.
+
+---
+
+## Build / run quick ref
+- Frontend dev: `cd frontend && npm run dev` (localhost:3000; Pro at `/app/pro`).
+- Typecheck: `cd frontend && npx tsc --noEmit`.
+- Move tests: `cd contracts && sui move test`.
+- Circuit build: `cd circuits && POT_POWER=15 ./scripts/build.sh <name>`.
+- Deploy upgrade: `cd contracts && sui client upgrade --upgrade-capability 0x351ff70f… --gas-budget 500000000` (keeper wallet must hold a ≥0.5 SUI coin; faucet if needed).
+
+---
+
+## 9. Phase 2 (graph hiding) — COMPLETE at contract layer, deployed (v13)
+
+Full shielded pool (UTXO/note + nullifier + on-chain Merkle tree) that hides the
+payment graph. `sui::poseidon` == circomlib Poseidon (verified), so the on-chain
+tree roots match circuit-proven roots.
+
+Circuits (`circuits/src/`, built with `POT_POWER=15 ./scripts/build.sh <name>`):
+- `shielded.circom` — spend 1 note → 2 (membership + nullifier + conservation), 13445 constraints.
+- `deposit.circom` — bind a note to a public deposited amount, 605 constraints.
+- `withdraw.circom` — spend → reveal public amount + change note, 12840 constraints.
+- ⚠️ snarkjs `groth16.fullProve` HANGS here — use `wtns.calculate` + `groth16.prove`.
+
+Contract:
+- `merkle_tree.move` — incremental Merkle tree (Tornado-style, `sui::poseidon`), 30-root history.
+- `shielded_pool.move` — `deposit` (value in, bound) / `spend` (graph-hiding transfer) /
+  `withdraw` (value out, reveals only the amount). Double-spend + unknown-root guarded.
+- VKs `SHIELDED_VK`/`DEPOSIT_VK`/`WITHDRAW_VK` + `verify_*` in `confidential_balance.move`.
+- Tests `shielded_pool_tests.move` + `merkle_tree_tests.move`: real-proof deposit/spend/
+  withdraw, binding enforced (999≠1000 rejects), double-spend, unknown-root, on-chain
+  root == circuit root. **Full suite 32/32.**
+
+## 10. Phase 3 (dual yield) — DONE at contract layer
+
+`shielded_pool::invest`/`divest` (Phase 3) put the pool's idle reserve into the
+`yield_vault` (position held in a dynamic field, so no upgrade-breaking struct change).
+Value never leaves the vault during a `spend`, so both ends of a transfer keep earning —
+yield → yield. Test `pooled_capital_earns_yield`: invest 100k → ~110k after a year → divest. ✅
+Note: this is *pool-level* yield (the backing capital earns). Per-note yield attribution to
+hidden notes (share-denominated notes) is the harder open problem — the deposit-index race
+(§ earlier design notes) makes it non-trivial; left as future work.
+
+## 11. Phase 4 (selective disclosure) — contract hook DONE
+
+`shielded_pool::publish_note(pool, commitment, ciphertext)` emits an `EncryptedNote` event:
+a Seal ciphertext of a note's opening (value, pk, rho), tagged by commitment. Recipients scan
+these, trial-decrypt via Seal (only theirs opens), and recover the note to spend. Selective
+disclosure = the owner re-encrypts an opening to a chosen auditor identity — nothing public.
+Called in the same PTB as `spend`/`deposit`. Seal primitives already exist (`seal.ts`,
+`seal_approve`).
+
+## 12. What remains — the shielded-pool FRONTEND (not built)
+
+The Phase 2/3/4 contracts are live (v13) and fully tested, but there is **no frontend** for
+the shielded pool yet. It mirrors the Phase 1 lazy-stream frontend pattern:
+- Note store + scanning: watch `Deposited`/`Spent`/`Withdrawn`/`EncryptedNote` events,
+  trial-decrypt `EncryptedNote` via Seal to find your notes, keep openings locally.
+- Build the Merkle path from the public commitment list (or mirror the on-chain tree) for the
+  note you're spending.
+- Prove with `public/circuits/{shielded,deposit,withdraw}.{wasm,zkey}` (use the split
+  `wtns.calculate`+`prove` path if fullProve hangs), serialize via the `confidential.ts`
+  helpers (already byte-compatible with Sui), and call the pool entries.
+- UI: deposit / private transfer / withdraw; a "pool yield" readout from `invested_value`.
+- Add the pool entry fns to `enoki-targets.ts` for gasless.
+
+Also still open from Phase 1: the live browser click-through and cross-party Seal (§8).

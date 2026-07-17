@@ -11,9 +11,9 @@
 // v6 added the Scallop-shaped yield_vault.
 // v5 added mutual dispute resolution (propose/accept resolution).
 // v3 added Seal secrets + confidential milestone review.
-// v2 added confidential_balance + ConfidentialStream.
+// v2 added confidential_balance + ConfidentialStream; v9 added the treasury module.
 const TESTNET_PACKAGE =
-  "0x28506598eccbbde36bbfef6401936c1d907c21a7e8db77c56390b6b291fad0a2";
+  "0x9e9be0f65ce3c45092b25553f6eabc4520bd57bb2f29dacdeb770c3e8e2de3e1";
 
 export const PACKAGE_IDS = {
   mainnet: process.env.NEXT_PUBLIC_PACKAGE_ID_MAINNET ?? "0x0",

@@ -501,7 +501,8 @@ function OverviewTab({
 }
 
 function StreamsTab() {
-  const { workspace, setWorkerStatus, deleteWorker } = useProWorkspace();
+  const { workspace, setWorkerStatus, createWorkerStream, creating, deleteWorker } =
+    useProWorkspace();
 
   return (
     <div className="flex flex-col px-0.5 pb-1 pt-0.5">
@@ -550,8 +551,15 @@ function StreamsTab() {
                   </MiniBtn>
                 ) : null}
                 {w.status === "paused" || w.status === "pending" ? (
-                  <MiniBtn onClick={() => setWorkerStatus(w.id, "dripping")}>
-                    Resume
+                  <MiniBtn
+                    disabled={creating}
+                    onClick={() =>
+                      w.streamId
+                        ? setWorkerStatus(w.id, "dripping")
+                        : createWorkerStream(w.id)
+                    }
+                  >
+                    {w.streamId ? "Resume" : "Start"}
                   </MiniBtn>
                 ) : null}
                 <MiniBtn

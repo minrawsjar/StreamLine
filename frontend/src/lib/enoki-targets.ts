@@ -45,6 +45,17 @@ export function allowedMoveCallTargets(network: NetworkName): string[] {
     // Scallop-shaped yield vault (gasless deposit/redeem).
     targets.push(`${pkg}::yield_vault::deposit`);
     targets.push(`${pkg}::yield_vault::redeem`);
+    // Org treasury / Pro pool (gasless fund/withdraw/invest/divest).
+    targets.push(`${pkg}::treasury::open`);
+    targets.push(`${pkg}::treasury::deposit`);
+    targets.push(`${pkg}::treasury::withdraw`);
+    targets.push(`${pkg}::treasury::invest`);
+    targets.push(`${pkg}::treasury::divest`);
+    // Lazy confidential stream (gasless create/settle/claim).
+    targets.push(`${pkg}::lazy_stream::create`);
+    targets.push(`${pkg}::lazy_stream::settle`);
+    targets.push(`${pkg}::lazy_stream::settle_at`);
+    targets.push(`${pkg}::lazy_stream::claim`);
   }
 
   // Test-USDC faucet is only deployed (and only worth sponsoring) on testnet.

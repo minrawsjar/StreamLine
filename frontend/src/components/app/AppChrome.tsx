@@ -66,7 +66,8 @@ export function AppChrome({ children }: { children: React.ReactNode }) {
           {account && <TokenBalance dark={isPro} />}
           {account && !isPro && <FaucetButton amount={1000} />}
           <WalletButton
-            showFaucetInMenu={!isPro}
+            showFaucetInMenu
+            faucetAmount={isPro ? 10000 : 1000}
             className={
               isPro
                 ? "sl-glass-btn-dark !px-4 !py-2 !text-[10px]"

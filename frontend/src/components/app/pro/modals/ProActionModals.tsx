@@ -41,8 +41,9 @@ export function ProActionModals() {
 }
 
 function FundModal({ onClose }: { onClose: () => void }) {
-  const { fundPool, totals, workspace } = useProWorkspace();
+  const { fundTreasury, totals, workspace, creating } = useProWorkspace();
   const [amount, setAmount] = useState("25000");
+  const [err, setErr] = useState<string | null>(null);
   const pending = workspace.workers.filter((w) => w.status === "pending").length;
 
   return (
@@ -64,6 +65,7 @@ function FundModal({ onClose }: { onClose: () => void }) {
           Coverage floor {fmtUsd(totals.floor)} · {pending} pending substream
           {pending === 1 ? "" : "s"} will activate.
         </p>
+        {err && <p className="text-[12px] text-[#e0866a]">{err}</p>}
         <div className="flex justify-end gap-2 pt-1">
           <button type="button" className="sl-glass-btn-dark !px-4 !py-2 !text-[11px]" onClick={onClose}>
             Cancel
@@ -71,14 +73,19 @@ function FundModal({ onClose }: { onClose: () => void }) {
           <button
             type="button"
             className="sl-glass-btn-dark sl-glass-btn-dark-primary !px-4 !py-2 !text-[11px]"
-            onClick={() => {
+            disabled={creating}
+            onClick={async () => {
               const n = Number(amount);
               if (!Number.isFinite(n) || n <= 0) return;
-              fundPool(n);
-              onClose();
+              setErr(null);
+              try {
+                if (await fundTreasury(n)) onClose();
+              } catch (e) {
+                setErr(e instanceof Error ? e.message : String(e));
+              }
             }}
           >
-            Fund pool
+            {creating ? "Funding…" : "Fund pool"}
           </button>
         </div>
       </div>
@@ -87,9 +94,10 @@ function FundModal({ onClose }: { onClose: () => void }) {
 }
 
 function WithdrawModal({ onClose }: { onClose: () => void }) {
-  const { withdrawExcess, totals } = useProWorkspace();
+  const { withdrawTreasury, totals, creating } = useProWorkspace();
   const max = Math.max(0, totals.investable);
   const [amount, setAmount] = useState(String(Math.floor(max) || 0));
+  const [err, setErr] = useState<string | null>(null);
 
   return (
     <ProModal
@@ -109,6 +117,7 @@ function WithdrawModal({ onClose }: { onClose: () => void }) {
         <p className="text-[12px] text-white/40">
           Available above floor: {fmtUsd(max)}
         </p>
+        {err && <p className="text-[12px] text-[#e0866a]">{err}</p>}
         <div className="flex justify-end gap-2">
           <button type="button" className="sl-glass-btn-dark !px-4 !py-2 !text-[11px]" onClick={onClose}>
             Cancel
@@ -116,15 +125,19 @@ function WithdrawModal({ onClose }: { onClose: () => void }) {
           <button
             type="button"
             className="sl-glass-btn-dark sl-glass-btn-dark-primary !px-4 !py-2 !text-[11px]"
-            disabled={max <= 0}
-            onClick={() => {
+            disabled={max <= 0 || creating}
+            onClick={async () => {
               const n = Number(amount);
               if (!Number.isFinite(n) || n <= 0) return;
-              withdrawExcess(n);
-              onClose();
+              setErr(null);
+              try {
+                if (await withdrawTreasury(n)) onClose();
+              } catch (e) {
+                setErr(e instanceof Error ? e.message : String(e));
+              }
             }}
           >
-            Withdraw
+            {creating ? "Withdrawing…" : "Withdraw"}
           </button>
         </div>
       </div>
@@ -133,8 +146,10 @@ function WithdrawModal({ onClose }: { onClose: () => void }) {
 }
 
 function InvestModal({ onClose }: { onClose: () => void }) {
-  const { investIdle, rebalance, totals, workspace } = useProWorkspace();
+  const { investIdle, investTreasury, rebalance, totals, workspace, creating } =
+    useProWorkspace();
   const [mode, setMode] = useState<"invest" | "rebalance">("invest");
+  const [err, setErr] = useState<string | null>(null);
   const [amount, setAmount] = useState(
     String(Math.floor(totals.investable) || 0)
   );
@@ -234,6 +249,7 @@ function InvestModal({ onClose }: { onClose: () => void }) {
           </>
         )}
 
+        {err && <p className="text-[12px] text-[#e0866a]">{err}</p>}
         <div className="flex justify-end gap-2">
           <button type="button" className="sl-glass-btn-dark !px-4 !py-2 !text-[11px]" onClick={onClose}>
             Cancel
@@ -241,15 +257,27 @@ function InvestModal({ onClose }: { onClose: () => void }) {
           <button
             type="button"
             className="sl-glass-btn-dark sl-glass-btn-dark-primary !px-4 !py-2 !text-[11px]"
-            onClick={() => {
+            disabled={creating}
+            onClick={async () => {
               const n = Number(amount);
               if (!Number.isFinite(n) || n <= 0) return;
+              setErr(null);
+              // Only "invest → yield vault" has on-chain backing; reserve moves
+              // and rebalance stay local policy over the real balances.
+              if (mode === "invest" && bucket === "yield_vault") {
+                try {
+                  if (await investTreasury(n)) onClose();
+                } catch (e) {
+                  setErr(e instanceof Error ? e.message : String(e));
+                }
+                return;
+              }
               if (mode === "invest") investIdle(n, bucket);
               else rebalance(from, to, n);
               onClose();
             }}
           >
-            Confirm
+            {creating ? "Confirming…" : "Confirm"}
           </button>
         </div>
       </div>

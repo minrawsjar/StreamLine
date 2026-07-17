@@ -4,7 +4,7 @@ edition = "2024.beta"
 version = "0.1.0"
 # Latest on-chain package version (what we upgrade FROM). The named address below
 # stays the ORIGINAL package id (type origin), per Sui upgrade rules.
-published-at = "0x20eab08899170843439e7ccba025b113e2fecfc7c1e43b2910caa3d57d0fdb54"
+published-at = "0x9e9be0f65ce3c45092b25553f6eabc4520bd57bb2f29dacdeb770c3e8e2de3e1"
 
 # The Sui / MoveStdlib framework dependencies are managed automatically by the
 # Sui CLI, pinned to the active environment's framework version.

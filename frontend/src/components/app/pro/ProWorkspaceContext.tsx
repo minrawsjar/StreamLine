@@ -9,7 +9,8 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { useCurrentAccount } from "@mysten/dapp-kit";
+import { useCurrentAccount, useSuiClient } from "@mysten/dapp-kit";
+import type { Transaction } from "@mysten/sui/transactions";
 
 import {
   loadProWorkspace,
@@ -17,6 +18,19 @@ import {
   saveProWorkspace,
   seedWorkspace,
 } from "@/lib/pro-workspace-store";
+import { useStreams, type StreamRecord } from "@/lib/indexer";
+import { useGaslessExecute } from "@/lib/use-gasless";
+import { useNetworkVariable } from "@/lib/networks";
+import {
+  buildCreateStreamV2,
+  buildOpenTreasury,
+  buildTreasuryDeposit,
+  buildTreasuryWithdraw,
+  buildTreasuryInvest,
+  DEFAULT_STREAM_YIELD_BPS,
+} from "@/lib/streamline-tx";
+import { findCreatedTreasury, useTreasuryState } from "@/lib/treasury";
+import { USDC_BASE, toBaseUnits } from "@/lib/stream-math";
 import { onProAction } from "./pro-actions";
 import {
   EMPTY_ALLOCATION,
@@ -25,6 +39,7 @@ import {
   investableIdle,
   newId,
   poolTotal,
+  streamStateToWorkerStatus,
   type ProCadence,
   type ProPoolBucket,
   type ProStreamGroup,
@@ -34,6 +49,14 @@ import {
   workerClaimable,
   workspaceMonthlyCommitted,
 } from "./types";
+
+/** Runway a worker's locked stream should cover, by pay cadence. */
+// ponytail: fixed runway per cadence; make per-worker configurable if needed.
+const MONTH_MS = 30 * 24 * 60 * 60 * 1000;
+const CADENCE_DURATION_MS: Record<ProCadence, number> = {
+  MONTHLY: MONTH_MS,
+  HOURLY: 7 * 24 * 60 * 60 * 1000,
+};
 
 type ModalKind =
   | null
@@ -72,6 +95,16 @@ type ProWorkspaceContextValue = {
   }) => void;
   deleteWorker: (workerId: string) => void;
   setWorkerStatus: (workerId: string, status: ProWorkerStatus) => void;
+  /** Lock the worker's budget on-chain (`create_stream_v2`) and record the stream id. */
+  createWorkerStream: (workerId: string) => Promise<boolean>;
+  /** Deposit USDC into the on-chain treasury (opens one on first use). */
+  fundTreasury: (amount: number) => Promise<boolean>;
+  /** Withdraw idle float from the on-chain treasury. */
+  withdrawTreasury: (amount: number) => Promise<boolean>;
+  /** Move idle float into the yield vault on-chain. */
+  investTreasury: (amount: number) => Promise<boolean>;
+  /** True while a treasury/stream tx is in flight. */
+  creating: boolean;
   fundPool: (amount: number) => void;
   withdrawExcess: (amount: number) => void;
   investIdle: (amount: number, bucket?: ProPoolBucket) => void;
@@ -116,6 +149,24 @@ export function ProWorkspaceProvider({ children }: { children: ReactNode }) {
   const [modal, setModal] = useState<ModalKind>(null);
   const [nowMs, setNowMs] = useState(() => Date.now());
 
+  // Real on-chain streams this org created, from the indexer. Poll keeps the
+  // reconciled view (streamed/status/pool) fresh as the keeper drips.
+  const { data: chainStreams } = useStreams({ sender: address });
+  const packageId = useNetworkVariable("packageId");
+  const usdcType = useNetworkVariable("usdcType");
+  const yieldVaultId = useNetworkVariable("yieldVaultId");
+  const suiClient = useSuiClient();
+  const { execute, isPending: creating } = useGaslessExecute();
+
+  // Live treasury (Pro pool) state — real idle + invested USDC on-chain.
+  const { data: treasury } = useTreasuryState(suiClient, {
+    packageId,
+    usdcType,
+    treasuryId: workspace.treasuryId,
+    vaultId: yieldVaultId,
+    sender: address,
+  });
+
   useEffect(() => {
     if (!address) {
       setHydrated(true);
@@ -146,9 +197,10 @@ export function ProWorkspaceProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
-  // Accrue simulated yield on vault allocation each second.
+  // Accrue simulated yield on vault allocation each second — demo only. Once a
+  // real treasury exists, yield comes from the on-chain vault (workspaceView).
   useEffect(() => {
-    if (!hydrated || !address) return;
+    if (!hydrated || !address || workspace.treasuryId) return;
     const vault = workspace.pool.allocation.yield_vault;
     if (vault <= 0) return;
     const perSec = vault * (YIELD_APY / 365 / 24 / 3600);
@@ -313,6 +365,172 @@ export function ProWorkspaceProvider({ children }: { children: ReactNode }) {
       });
     },
     [mutate]
+  );
+
+  const createWorkerStream = useCallback(
+    async (workerId: string): Promise<boolean> => {
+      if (!address) return false;
+      const worker = workspace.workers.find((w) => w.id === workerId);
+      if (!worker) return false;
+      if (worker.streamId) return true; // already funded on-chain
+      if (!packageId || packageId === "0x0") return false;
+      const budget = worker.budget > 0 ? worker.budget : worker.monthlyUsd;
+      if (budget <= 0) return false;
+
+      const totalBase = toBaseUnits(budget);
+      const tx = buildCreateStreamV2({
+        packageId,
+        usdcType,
+        sender: address,
+        freelancer: worker.walletAddress,
+        // Single milestone = full budget; the keeper drips it continuously.
+        milestoneNames: [`${worker.alias} payroll`],
+        milestoneAmountsBase: [totalBase],
+        totalBase,
+        durationMs: CADENCE_DURATION_MS[worker.cadence],
+        yieldBps: DEFAULT_STREAM_YIELD_BPS,
+      });
+
+      let ok = false;
+      await execute(tx, {
+        onSuccess: () => {
+          ok = true;
+          // streamId is bound by the read overlay once the indexer sees it
+          // (matched by freelancer === walletAddress).
+          mutate((prev) =>
+            pushActivity(
+              {
+                ...prev,
+                workers: prev.workers.map((w) =>
+                  w.id === workerId
+                    ? {
+                        ...w,
+                        status: "dripping" as const,
+                        startedAt: Date.now(),
+                        budget,
+                      }
+                    : w
+                ),
+              },
+              {
+                kind: "resumed",
+                label: `Locked ${worker.alias}'s stream on-chain`,
+                amount: budget,
+              }
+            )
+          );
+        },
+        onError: () => {
+          ok = false;
+        },
+      });
+      return ok;
+    },
+    [address, workspace.workers, packageId, usdcType, execute, mutate]
+  );
+
+  // Ensure the org has an on-chain treasury, opening one on first use.
+  const ensureTreasury = useCallback(async (): Promise<string | null> => {
+    if (!address) throw new Error("No wallet connected");
+    if (!packageId || packageId === "0x0") throw new Error("Package not deployed");
+    if (workspace.treasuryId) return workspace.treasuryId;
+    const tx = buildOpenTreasury({ packageId, usdcType, sender: address });
+    // execute() calls onSuccess synchronously before it resolves, so capture the
+    // digest here and resolve the object id AFTER the await — doing it inside the
+    // (un-awaited) callback races the return.
+    let digest: string | null = null;
+    let err: Error | null = null;
+    await execute(tx, {
+      onSuccess: ({ digest: d }) => {
+        digest = d;
+      },
+      onError: (e) => {
+        err = e;
+      },
+    });
+    if (err) throw err;
+    if (!digest) throw new Error("Treasury open returned no digest");
+    const id = await findCreatedTreasury(suiClient, digest);
+    if (!id) throw new Error("Opened treasury but could not read its id");
+    mutate((prev) => ({ ...prev, treasuryId: id }));
+    return id;
+  }, [address, packageId, usdcType, workspace.treasuryId, execute, suiClient, mutate]);
+
+  // Run a treasury tx, mutating on success and throwing the real error on
+  // failure (so the modal can show it instead of silently no-op'ing).
+  const runTreasuryTx = useCallback(
+    async (tx: Transaction, activity: Parameters<typeof pushActivity>[1]) => {
+      let err: Error | null = null;
+      await execute(tx, {
+        onSuccess: () => mutate((prev) => pushActivity(prev, activity)),
+        onError: (e) => {
+          err = e;
+        },
+      });
+      if (err) throw err;
+      return true;
+    },
+    [execute, mutate]
+  );
+
+  const fundTreasury = useCallback(
+    async (amount: number): Promise<boolean> => {
+      if (amount <= 0) return false;
+      const tid = await ensureTreasury();
+      return runTreasuryTx(
+        buildTreasuryDeposit({
+          packageId,
+          usdcType,
+          sender: address,
+          treasuryId: tid!,
+          amountBase: toBaseUnits(amount),
+        }),
+        { kind: "funded", label: "Funded treasury on-chain", amount }
+      );
+    },
+    [ensureTreasury, runTreasuryTx, packageId, usdcType, address]
+  );
+
+  const withdrawTreasury = useCallback(
+    async (amount: number): Promise<boolean> => {
+      if (amount <= 0) return false;
+      if (!workspace.treasuryId) throw new Error("No treasury to withdraw from");
+      return runTreasuryTx(
+        buildTreasuryWithdraw({
+          packageId,
+          usdcType,
+          sender: address,
+          treasuryId: workspace.treasuryId,
+          amountBase: toBaseUnits(amount),
+        }),
+        { kind: "withdrawn", label: "Withdrew from treasury", amount }
+      );
+    },
+    [workspace.treasuryId, runTreasuryTx, packageId, usdcType, address]
+  );
+
+  const investTreasury = useCallback(
+    async (amount: number): Promise<boolean> => {
+      if (amount <= 0) return false;
+      if (!workspace.treasuryId) throw new Error("Fund the pool first");
+      await runTreasuryTx(
+        buildTreasuryInvest({
+          packageId,
+          usdcType,
+          sender: address,
+          treasuryId: workspace.treasuryId,
+          vaultId: yieldVaultId,
+          amountBase: toBaseUnits(amount),
+        }),
+        { kind: "invested", label: "Moved idle into yield vault", amount }
+      );
+      mutate((prev) => ({
+        ...prev,
+        investedPrincipal: (prev.investedPrincipal ?? 0) + amount,
+      }));
+      return true;
+    },
+    [workspace.treasuryId, runTreasuryTx, packageId, usdcType, address, yieldVaultId, mutate]
   );
 
   const fundPool = useCallback(
@@ -490,11 +708,105 @@ export function ProWorkspaceProvider({ children }: { children: ReactNode }) {
     setWorkspace(seedWorkspace());
   }, [address]);
 
+  // Read overlay: fold real on-chain stream state onto the local workspace.
+  // Workers bind to their stream by explicit streamId, else by freelancer
+  // address. Only real-backed fields (streamed, status, budget, pool.streamed)
+  // are overridden — local org metadata (aliases, groups, allocation) is kept.
+  // ponytail: matches newest stream per freelancer; parse tx effects for exact
+  // streamId if a worker ever needs multiple concurrent streams.
+  const workspaceView = useMemo(() => {
+    const streams = chainStreams ?? [];
+    // Real pool float from the on-chain treasury (idle + invested in the vault).
+    const poolOverride = treasury
+      ? {
+          funded: treasury.idle + treasury.invested,
+          allocation: {
+            ...workspace.pool.allocation,
+            idle: treasury.idle,
+            yield_vault: treasury.invested,
+            reserve: 0,
+          },
+        }
+      : null;
+    // Real accrued yield = vault position value − principal we put in.
+    const yieldOverride = treasury
+      ? {
+          yieldEarned: Math.max(
+            0,
+            treasury.invested - (workspace.investedPrincipal ?? 0)
+          ),
+        }
+      : null;
+    if (streams.length === 0) {
+      if (!poolOverride) return workspace;
+      return {
+        ...workspace,
+        pool: { ...workspace.pool, ...poolOverride },
+        ...yieldOverride,
+      };
+    }
+    const byFreelancer = new Map<string, StreamRecord>();
+    for (const s of streams) {
+      const key = s.freelancer.toLowerCase();
+      const cur = byFreelancer.get(key);
+      if (!cur || s.created_at_ms > cur.created_at_ms) byFreelancer.set(key, s);
+    }
+
+    // 1) Fold real state onto existing local workers.
+    const claimed = new Set<string>();
+    const workers = workspace.workers.map((w) => {
+      const s = w.streamId
+        ? streams.find((x) => x.id === w.streamId)
+        : byFreelancer.get(w.walletAddress.toLowerCase());
+      if (!s) return w;
+      claimed.add(s.id);
+      return {
+        ...w,
+        streamId: s.id,
+        budget: s.total / USDC_BASE,
+        streamedUsd: (s.total - s.remaining) / USDC_BASE,
+        status: streamStateToWorkerStatus(s.state),
+      };
+    });
+
+    // 2) Build roster rows from any remaining on-chain streams (real data,
+    // no local worker yet). Alias/group can be edited and will persist locally.
+    for (const s of streams) {
+      if (claimed.has(s.id)) continue;
+      claimed.add(s.id);
+      const total = s.total / USDC_BASE;
+      workers.push({
+        id: `chain:${s.id}`,
+        alias: `${s.freelancer.slice(0, 6)}…${s.freelancer.slice(-4)}`,
+        walletAddress: s.freelancer,
+        groupId: null,
+        monthlyUsd: total / Math.max(s.duration_ms / MONTH_MS, 1 / 30),
+        cadence: "MONTHLY",
+        budget: total,
+        streamedUsd: (s.total - s.remaining) / USDC_BASE,
+        status: streamStateToWorkerStatus(s.state),
+        streamId: s.id,
+        startedAt: s.created_at_ms,
+      });
+    }
+
+    const streamed = workers.reduce(
+      (sum, w) => sum + (w.streamId ? w.streamedUsd : 0),
+      0
+    );
+    return {
+      ...workspace,
+      workers,
+      pool: { ...workspace.pool, streamed, ...(poolOverride ?? {}) },
+      ...yieldOverride,
+    };
+  }, [workspace, chainStreams, treasury]);
+
   const totals = useMemo(() => {
-    const poolBalance = poolTotal(workspace.pool) + workspace.yieldEarned;
-    const monthly = workspaceMonthlyCommitted(workspace);
-    const active = workspace.workers.filter((w) => w.status === "dripping").length;
-    const claimable = workspace.workers.reduce(
+    const poolBalance = poolTotal(workspaceView.pool) + workspaceView.yieldEarned;
+    const monthly = workspaceMonthlyCommitted(workspaceView);
+    const active = workspaceView.workers.filter((w) => w.status === "dripping").length;
+    const claimable = workspaceView.workers.reduce(
       (sum, w) => sum + workerClaimable(w, nowMs),
       0
     );
@@ -503,16 +815,16 @@ export function ProWorkspaceProvider({ children }: { children: ReactNode }) {
       monthly,
       active,
       claimable,
-      yieldEarned: workspace.yieldEarned,
+      yieldEarned: workspaceView.yieldEarned,
       displayTotal: poolBalance,
-      investable: investableIdle(workspace),
-      floor: coverageFloor(workspace),
+      investable: investableIdle(workspaceView),
+      floor: coverageFloor(workspaceView),
     };
-  }, [workspace, nowMs]);
+  }, [workspaceView, nowMs]);
 
   const value: ProWorkspaceContextValue = {
     address,
-    workspace,
+    workspace: workspaceView,
     hydrated,
     tick,
     nowMs,
@@ -524,6 +836,11 @@ export function ProWorkspaceProvider({ children }: { children: ReactNode }) {
     upsertWorker,
     deleteWorker,
     setWorkerStatus,
+    createWorkerStream,
+    fundTreasury,
+    withdrawTreasury,
+    investTreasury,
+    creating,
     fundPool,
     withdrawExcess,
     investIdle,

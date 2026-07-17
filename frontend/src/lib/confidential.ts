@@ -142,7 +142,24 @@ export type ProofBytes = {
   publicSignals: string[];
 };
 
-type CircuitName = "wrap" | "transfer" | "unwrap";
+type CircuitName =
+  | "wrap"
+  | "transfer"
+  | "unwrap"
+  | "lazydrip"
+  | "shielded"
+  | "deposit"
+  | "withdraw";
+
+/** Poseidon hash of field elements (matches sui::poseidon + the circuits). */
+export async function poseidon(inputs: bigint[]): Promise<bigint> {
+  return (await getPoseidon())(inputs);
+}
+
+/** Field element → 32-byte little-endian (the on-chain scalar encoding). */
+export function feToLeBytes(x: bigint): Uint8Array {
+  return leBytes(x);
+}
 
 /** Generate a Groth16 proof in-browser and serialize to Sui bytes. */
 export async function prove(
@@ -199,6 +216,64 @@ export function proveDrip(p: {
 /** Unwrap proof: reveal `value` and prove it opens commitment(value, blinding). */
 export function proveUnwrap(value: bigint, blinding: bigint) {
   return prove("unwrap", { value: s(value), blinding: s(blinding) });
+}
+
+/** Params commitment Poseidon(rate, start, cap, blinding) pinning the schedule. */
+export async function commitParams(
+  rate: bigint,
+  start: bigint,
+  cap: bigint,
+  blinding: bigint
+): Promise<Uint8Array> {
+  const poseidon = await getPoseidon();
+  return leBytes(poseidon([rate, start, cap, blinding]));
+}
+
+/**
+ * Lazy-stream settle proof: move a hidden `delta` remaining→earned, bounded by
+ * earned_new ≤ min(cap, rate·(nowSec − start)). Returns the ProofBytes; the new
+ * commitments are `publicSignals[1]` (remaining) and `[3]` (earned) — use
+ * `lazyNewCommitments`.
+ */
+export function proveLazyDrip(p: {
+  remainingOld: bigint;
+  rRemOld: bigint;
+  rRemNew: bigint;
+  earnedOld: bigint;
+  rEarnedOld: bigint;
+  rEarnedNew: bigint;
+  delta: bigint;
+  rate: bigint;
+  start: bigint;
+  cap: bigint;
+  rParams: bigint;
+  nowSec: bigint;
+}) {
+  return prove("lazydrip", {
+    vRemOld: s(p.remainingOld),
+    rRemOld: s(p.rRemOld),
+    rRemNew: s(p.rRemNew),
+    vEarnedOld: s(p.earnedOld),
+    rEarnedOld: s(p.rEarnedOld),
+    rEarnedNew: s(p.rEarnedNew),
+    delta: s(p.delta),
+    rate: s(p.rate),
+    start: s(p.start),
+    cap: s(p.cap),
+    rParams: s(p.rParams),
+    nowSec: s(p.nowSec),
+  });
+}
+
+/** Extract the new remaining/earned commitments from a lazydrip proof result. */
+export function lazyNewCommitments(pf: ProofBytes): {
+  newRemaining: Uint8Array;
+  newEarned: Uint8Array;
+} {
+  return {
+    newRemaining: leBytes(BigInt(pf.publicSignals[1])),
+    newEarned: leBytes(BigInt(pf.publicSignals[3])),
+  };
 }
 
 // === PTB builders (match streamline::stream confidential entries) ===
@@ -418,6 +493,90 @@ export function buildClaim(args: {
       tx.pure.u64(args.amount),
       vec(tx, args.unwrapProof),
       vec(tx, args.resetCommitment),
+    ],
+  });
+  tx.transferObjects([coin], tx.pure.address(args.recipient));
+  return tx;
+}
+
+// === Lazy confidential stream (streamline::lazy_stream) ===
+
+/** Open a lazy confidential stream (locks `capBase`, pins the vesting schedule). */
+export function buildCreateLazyStream(args: {
+  packageId: string;
+  coinType: string;
+  sender: string;
+  capBase: bigint;
+  freelancer: string;
+  remainingCommitment: Uint8Array;
+  wrapProof: Uint8Array;
+  earnedCommitment: Uint8Array;
+  paramsCommitment: Uint8Array;
+  encryptedSecrets: Uint8Array;
+}): Transaction {
+  const tx = new Transaction();
+  tx.setSenderIfNotSet(args.sender);
+  tx.moveCall({
+    target: `${args.packageId}::lazy_stream::create`,
+    typeArguments: [args.coinType],
+    arguments: [
+      coinWithBalance({ type: args.coinType, balance: args.capBase }),
+      tx.pure.address(args.freelancer),
+      vec(tx, args.remainingCommitment),
+      vec(tx, args.wrapProof),
+      vec(tx, args.earnedCommitment),
+      vec(tx, args.paramsCommitment),
+      vec(tx, args.encryptedSecrets),
+    ],
+  });
+  return tx;
+}
+
+/** Lazy settle: move the whole vested-so-far in one proof (no keeper, no drips).
+ * `nowSec` is the prover's claimed time (bound into the proof); the contract
+ * checks it's not in the future. */
+export function buildSettleLazy(args: {
+  packageId: string;
+  coinType: string;
+  streamId: string;
+  newRemaining: Uint8Array;
+  newEarned: Uint8Array;
+  proof: Uint8Array;
+  nowSec: bigint;
+}): Transaction {
+  const tx = new Transaction();
+  tx.moveCall({
+    target: `${args.packageId}::lazy_stream::settle_at`,
+    typeArguments: [args.coinType],
+    arguments: [
+      tx.object(args.streamId),
+      vec(tx, args.newRemaining),
+      vec(tx, args.newEarned),
+      vec(tx, args.proof),
+      tx.pure.u64(args.nowSec),
+      tx.object(CLOCK_ID),
+    ],
+  });
+  return tx;
+}
+
+/** Claim earned to cash (reveals only the claimed total). */
+export function buildClaimLazy(args: {
+  packageId: string;
+  coinType: string;
+  streamId: string;
+  amount: bigint;
+  unwrapProof: Uint8Array;
+  recipient: string;
+}): Transaction {
+  const tx = new Transaction();
+  const coin = tx.moveCall({
+    target: `${args.packageId}::lazy_stream::claim`,
+    typeArguments: [args.coinType],
+    arguments: [
+      tx.object(args.streamId),
+      tx.pure.u64(args.amount),
+      vec(tx, args.unwrapProof),
     ],
   });
   tx.transferObjects([coin], tx.pure.address(args.recipient));

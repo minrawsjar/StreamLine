@@ -394,7 +394,7 @@ export function PhoneMockup({
       className={`relative mx-auto shrink-0 transition-all duration-700 ${
         compact
           ? "w-[min(72vw,260px)]"
-          : "w-[min(88vw,300px)] sm:w-[320px] lg:w-[340px]"
+          : "w-[min(92vw,360px)] sm:w-[400px] lg:w-[440px]"
       }`}
     >
       <div className="sl-levitate relative">{shell}</div>

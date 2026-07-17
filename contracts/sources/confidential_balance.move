@@ -33,6 +33,14 @@ const TRANSFER_VK: vector<u8> =
     x"1d8e4233c3c66ab59c2b3c265a2886837b80219952150d8f2e8bf26fb6dce2aac4c97bbe7457d570a27e0306ebde64269e0a9fd5a9bb0cb070a2824c0b65e710daeb07e8f409c3bd2a195bca7638955741c4590f5d98465d1a6481a2896f6006edf692d95cbdde46ddda5ef7d422436779445c5e66006a42761e1f12efde0018c212f3aeb785e49712e7a9353349aaf1255dfb31b7bf60723a480d9293938e195767429f909fa9d9627afbb1166c6459625be9b20b0f4e7b5b81afcbfb187624313090e9b38c811b713adaf4da87a519f6c3628b0cbddbbb80567ecfa5faf6280500000000000000c0a9bbb59dd39ee783f7aa64cf28573442b5e08e4372e718046464dcd698501ca6342fbcd957ecf0b9f5995b423194a24f6e0fff2dad01e9dd83cc12db9e0e96e0479f3eff27e39639b45f5bffa23f37126e117423219779346515fd53980787fd4d3b9facc8d3162513617a23beeeb9c4e428dfe2e7f1422d5139b60e1f1e83ecebb66c32f3a4121e3355ea1e8b9ab8014300f6627c2b610563b16fdfd707b0";
 const UNWRAP_VK: vector<u8> =
     x"1d8e4233c3c66ab59c2b3c265a2886837b80219952150d8f2e8bf26fb6dce2aac4c97bbe7457d570a27e0306ebde64269e0a9fd5a9bb0cb070a2824c0b65e710daeb07e8f409c3bd2a195bca7638955741c4590f5d98465d1a6481a2896f6006edf692d95cbdde46ddda5ef7d422436779445c5e66006a42761e1f12efde0018c212f3aeb785e49712e7a9353349aaf1255dfb31b7bf60723a480d9293938e19381df03f0666a2752f41a9a55ec66c83273e202b44a2765451bb1827b9ecf10011444f8bd0847dc925827e020a73bb66dda252add7ae227000d56ae78704f8020300000000000000fa79096d22e37a607c8fb58319dbce0c2e34225163ea33dc71f6bf6e1ff26c99f91a01e098b7476894981a900d771285e8fc6b85106098a216d7204226ec0eb06260e372e904ed13d7793c40283242d8c382466e348c10c6f4992bfdb51674aa";
+const LAZYDRIP_VK: vector<u8> =
+    x"1d8e4233c3c66ab59c2b3c265a2886837b80219952150d8f2e8bf26fb6dce2aac4c97bbe7457d570a27e0306ebde64269e0a9fd5a9bb0cb070a2824c0b65e710daeb07e8f409c3bd2a195bca7638955741c4590f5d98465d1a6481a2896f6006edf692d95cbdde46ddda5ef7d422436779445c5e66006a42761e1f12efde0018c212f3aeb785e49712e7a9353349aaf1255dfb31b7bf60723a480d9293938e198f664f71e35f7799abcd25152c4624330524d04adc9f5fbe911228888c927e0448e479cba4948cd5515423bb5d102c8ddef8210d1a1d40dfed219d1dc6e1bb0d070000000000000039ee024b175d8cd4e23b04b35fc51316f51933846e7a0f4872e0f12c9de803124ef054d45ce19357736058ff65aa06cd8a8d048846526b19d6185596159beb924390887ac23377feddedb6fd060952613f51b02a9e1d4a553de8bcc0b34634223ac9df00afaca7f48741b7ed04fed6b7dceb2aae6ea5b90359242f4c0b31750f958aad09d3c3b221635c8b7a3f653dd3c4ab41be4db3d2edcb0b11dd7f2f3727d4d3b9144e67c1df565b8af272e56ad9a68ca3fcad37d2a7f8fc434d64f9f82b6e2ccd207ed34ebef4326da52ea7488cdda789172e01d04ae31d938ad1169c2c";
+const SHIELDED_VK: vector<u8> =
+    x"1d8e4233c3c66ab59c2b3c265a2886837b80219952150d8f2e8bf26fb6dce2aac4c97bbe7457d570a27e0306ebde64269e0a9fd5a9bb0cb070a2824c0b65e710daeb07e8f409c3bd2a195bca7638955741c4590f5d98465d1a6481a2896f6006edf692d95cbdde46ddda5ef7d422436779445c5e66006a42761e1f12efde0018c212f3aeb785e49712e7a9353349aaf1255dfb31b7bf60723a480d9293938e1900c544f5b298246a28d2468e476ae1d32aa07b756cb8a1674bb34f59bb81de20a6f70f9eb9888a8b4c62854ba6aa134143de9df1fef9707e5eb14e22792035960500000000000000d08fc11730aa4db78afb230b883361fe7b0bacf46c4cfcd88c327ce2c616d72d4700670fde3a1c61b990175b5ba6b0ee8d296fccdf73f91d63dbbe9d68a3160d0a39682f629cb96ec181d253db753666f8ae634d8d4fc53dd51e90b64b88eb1c4ff1118c81a39898a075a5bd175104236302aabb388d1336a8b1fa1322e4232273cef398dad01094ef1756407eca4f85493649947300a9fb18972cef67ddac99";
+const DEPOSIT_VK: vector<u8> =
+    x"1d8e4233c3c66ab59c2b3c265a2886837b80219952150d8f2e8bf26fb6dce2aac4c97bbe7457d570a27e0306ebde64269e0a9fd5a9bb0cb070a2824c0b65e710daeb07e8f409c3bd2a195bca7638955741c4590f5d98465d1a6481a2896f6006edf692d95cbdde46ddda5ef7d422436779445c5e66006a42761e1f12efde0018c212f3aeb785e49712e7a9353349aaf1255dfb31b7bf60723a480d9293938e1963a702cd10ce6fbda7719b1fb13ff1c022eecebd01bb9128ab3ef5881944ea2b83e30c3136d9ac2a3db8dcbbfc2af49f528b8cc128c77a0fef02c6383d39ac0d03000000000000009371faaef65ef8934aee0b7a8c99d2a7e56aec02a3c3f5b8cbb7e12b2709af29d9736948fdbc8f6542e71ea765ed092043691e3e494eec785cf7b9dd9e848005ab3ddbe90df4024b2db14dc2f79001e777d1bfde4a3db51478f9de9fd4164c08";
+const WITHDRAW_VK: vector<u8> =
+    x"1d8e4233c3c66ab59c2b3c265a2886837b80219952150d8f2e8bf26fb6dce2aac4c97bbe7457d570a27e0306ebde64269e0a9fd5a9bb0cb070a2824c0b65e710daeb07e8f409c3bd2a195bca7638955741c4590f5d98465d1a6481a2896f6006edf692d95cbdde46ddda5ef7d422436779445c5e66006a42761e1f12efde0018c212f3aeb785e49712e7a9353349aaf1255dfb31b7bf60723a480d9293938e196e725297dab02975c2874d5dcbcb307087d800f42ea6d8eb75a0eb1f6543301ad621d9174032eff9c2eb9c697e352bf97f7fa662abb2df7b232dfae9a4f4360a0500000000000000071b4d23db5e7f30c962a7d36e4ace44902fe7da60cac9be2a9f29ba9aee38910df43c05a1d8cffa9ac5f3c37b9dbbd459818ba73baeb3eda9bf1159c8d49ca938ef6a0fedb467b3deece02a033c2832d84fdacc41c278916e519ca1d662af252af39e914d7c8269658738a3fcc6726a9acf82f01ae0a82c553d3a2610edc2981c4f04c65d835a70299c9bf7710d05d83328244d0daac5d646772a56987334a8";
 
 // === Objects ===
 
@@ -117,6 +125,68 @@ public(package) fun verify_unwrap(commitment: vector<u8>, value: u64, proof: vec
     let mut inputs = commitment;
     inputs.append(u64_to_scalar(value));
     verify(UNWRAP_VK, inputs, proof);
+}
+
+/// lazydrip.circom — proves a hidden delta moved remaining→earned with the new
+/// earned total bounded by min(cap, rate·(now_sec − start)), where the schedule
+/// is pinned by `params_commitment`. Public signal order must match the circuit:
+/// [cRemOld, cRemNew, cEarnedOld, cEarnedNew, cParams, nowSec].
+public(package) fun verify_lazydrip(
+    old_remaining: vector<u8>,
+    new_remaining: vector<u8>,
+    old_earned: vector<u8>,
+    new_earned: vector<u8>,
+    params_commitment: vector<u8>,
+    now_sec: u64,
+    proof: vector<u8>,
+) {
+    let mut inputs = old_remaining;
+    inputs.append(new_remaining);
+    inputs.append(old_earned);
+    inputs.append(new_earned);
+    inputs.append(params_commitment);
+    inputs.append(u64_to_scalar(now_sec));
+    verify(LAZYDRIP_VK, inputs, proof);
+}
+
+/// shielded.circom — a UTXO spend: proves the input note was in the tree at
+/// `root`, its `nf` is correctly derived, and two output notes conserve value.
+/// Public signal order: [root, nf, cm1, cm2] (each a 32-byte LE field element).
+public(package) fun verify_shielded(
+    root: u256,
+    nf: u256,
+    cm1: u256,
+    cm2: u256,
+    proof: vector<u8>,
+) {
+    let mut inputs = sui::bcs::to_bytes(&root);
+    inputs.append(sui::bcs::to_bytes(&nf));
+    inputs.append(sui::bcs::to_bytes(&cm1));
+    inputs.append(sui::bcs::to_bytes(&cm2));
+    verify(SHIELDED_VK, inputs, proof);
+}
+
+/// deposit.circom — proves note `cm` opens to the PUBLIC deposited `value`.
+public(package) fun verify_deposit(cm: u256, value: u64, proof: vector<u8>) {
+    let mut inputs = sui::bcs::to_bytes(&cm);
+    inputs.append(u64_to_scalar(value));
+    verify(DEPOSIT_VK, inputs, proof);
+}
+
+/// withdraw.circom — spend a note, reveal a public `amount`, keep change note.
+/// Public signal order: [root, nf, amount, cm_change].
+public(package) fun verify_withdraw(
+    root: u256,
+    nf: u256,
+    amount: u64,
+    cm_change: u256,
+    proof: vector<u8>,
+) {
+    let mut inputs = sui::bcs::to_bytes(&root);
+    inputs.append(sui::bcs::to_bytes(&nf));
+    inputs.append(u64_to_scalar(amount));
+    inputs.append(sui::bcs::to_bytes(&cm_change));
+    verify(WITHDRAW_VK, inputs, proof);
 }
 
 /// 32-byte scalar length, for callers building commitments.
