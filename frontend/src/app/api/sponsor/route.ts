@@ -29,6 +29,12 @@ type SponsorBody = {
   /** base64 transaction *kind* bytes (built with onlyTransactionKind: true). */
   transactionKindBytes?: string;
   /**
+   * The StreamLine package the client built its move calls against. Passed so
+   * the server allow-lists that exact package — server-side env can otherwise
+   * resolve a different (stale) package than the browser used.
+   */
+  packageId?: string;
+  /**
    * Extra addresses this sponsored tx may send objects to — e.g. a wallet
    * transfer's chosen recipient. The sender is always allowed. Validated to
    * real Sui addresses and capped so a client can't widen the allow-list
@@ -52,7 +58,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "invalid_json" }, { status: 400 });
   }
 
-  const { network, sender, transactionKindBytes, allowedRecipients } = body;
+  const { network, sender, transactionKindBytes, allowedRecipients, packageId } = body;
   if (!network || !sender || !transactionKindBytes) {
     return NextResponse.json(
       { error: "missing_fields", required: ["network", "sender", "transactionKindBytes"] },
@@ -80,7 +86,7 @@ export async function POST(req: Request) {
       // Defence in depth: only sponsor this sender's StreamLine calls, sending
       // objects to the sender plus any explicitly-declared transfer recipients.
       allowedAddresses,
-      allowedMoveCallTargets: allowedMoveCallTargets(network),
+      allowedMoveCallTargets: allowedMoveCallTargets(network, packageId),
     }),
   });
 

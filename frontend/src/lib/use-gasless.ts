@@ -12,7 +12,7 @@ import {
 } from "@mysten/dapp-kit";
 import { useQuery } from "@tanstack/react-query";
 
-import type { NetworkName } from "./constants";
+import { PACKAGE_IDS, type NetworkName } from "./constants";
 
 /**
  * Gasless execution via Enoki sponsorship.
@@ -129,6 +129,9 @@ async function runSponsored(
       sender,
       transactionKindBytes: toBase64(kindBytes),
       allowedRecipients,
+      // Tell the server which package we targeted so its allow-list matches
+      // ours (server-side env can otherwise resolve a stale package).
+      packageId: PACKAGE_IDS[network],
     }),
   });
   if (!sponsorRes.ok) {

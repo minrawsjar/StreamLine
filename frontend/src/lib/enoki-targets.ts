@@ -43,8 +43,18 @@ const STREAM_FUNCTIONS = [
   "update_confidential_secrets",
 ] as const;
 
-export function allowedMoveCallTargets(network: NetworkName): string[] {
-  const pkg = PACKAGE_IDS[network];
+export function allowedMoveCallTargets(
+  network: NetworkName,
+  pkgOverride?: string
+): string[] {
+  // Use the package the client actually built the tx against. This route runs
+  // server-side, where `STREAMLINE_PACKAGE_ID_TESTNET` can resolve to a
+  // different (stale) package than the browser's `TESTNET_PACKAGE` default —
+  // which would allow-list the wrong package and reject every move call.
+  const pkg =
+    pkgOverride && /^0x[0-9a-fA-F]{64}$/.test(pkgOverride)
+      ? pkgOverride
+      : PACKAGE_IDS[network];
   const targets: string[] = [];
 
   if (pkg && pkg !== "0x0") {
