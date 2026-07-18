@@ -2,7 +2,6 @@
 
 import { useState, type ReactNode } from "react";
 
-import { StreamLineMark } from "@/components/landing/StreamLineMark";
 import { ConnectModal } from "@/components/wallet/ConnectModal";
 
 type Step = 0 | 1 | 2;
@@ -61,13 +60,31 @@ function ArrowLeftIcon({ className }: { className?: string }) {
   );
 }
 
-function BrandHeader() {
+function OnboardingFrame({
+  shell,
+  backdrop,
+  actions,
+  overlay,
+  children,
+}: {
+  shell: string;
+  backdrop: ReactNode;
+  actions: ReactNode;
+  /** Portaled UI that must fill the phone shell (e.g. connect sheet). */
+  overlay?: ReactNode;
+  children: ReactNode;
+}) {
   return (
-    <div className="flex shrink-0 items-center gap-2">
-      <StreamLineMark size="sm" variant="pro" />
-      <span className="text-[13px] font-semibold tracking-tight text-white">
-        streamline<span className="text-white/35">.pro</span>
-      </span>
+    <div
+      className={`relative overflow-hidden font-[family-name:var(--font-inter)] ${shell}`}
+      data-sl-cursor="on-dark"
+    >
+      {backdrop}
+      <div className="relative z-10 flex min-h-0 flex-1 flex-col px-1 pb-2 pt-2 sm:px-2 sm:pb-3 sm:pt-3">
+        <div className="flex min-h-0 flex-1 flex-col justify-end">{children}</div>
+        <div className="mt-7 shrink-0 sm:mt-8">{actions}</div>
+      </div>
+      {overlay}
     </div>
   );
 }
@@ -104,37 +121,6 @@ function ActionRow({
       >
         {label}
       </button>
-    </div>
-  );
-}
-
-/** Shared frame: logo top, content, actions near the bottom. */
-function OnboardingFrame({
-  shell,
-  backdrop,
-  actions,
-  overlay,
-  children,
-}: {
-  shell: string;
-  backdrop: ReactNode;
-  actions: ReactNode;
-  /** Portaled UI that must fill the phone shell (e.g. connect sheet). */
-  overlay?: ReactNode;
-  children: ReactNode;
-}) {
-  return (
-    <div
-      className={`relative overflow-hidden font-[family-name:var(--font-inter)] ${shell}`}
-      data-sl-cursor="on-dark"
-    >
-      {backdrop}
-      <div className="relative z-10 flex min-h-0 flex-1 flex-col px-5 pb-8 pt-8 sm:px-7 sm:pb-10 sm:pt-10">
-        <BrandHeader />
-        <div className="flex min-h-0 flex-1 flex-col justify-end">{children}</div>
-        <div className="mt-7 shrink-0 sm:mt-8">{actions}</div>
-      </div>
-      {overlay}
     </div>
   );
 }

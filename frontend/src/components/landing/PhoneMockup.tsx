@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useCurrentAccount } from "@mysten/dapp-kit";
 
 import { StreamLineMark } from "./StreamLineMark";
 import { PhoneAppShell } from "@/components/app/phone/PhoneAppShell";
+import { PhoneAppSplash } from "@/components/app/phone/PhoneAppSplash";
 import { ScanIconButton } from "@/components/app/phone/PhoneHeaderActions";
 import {
   PhoneDashboardView,
@@ -41,6 +42,22 @@ function PhoneWallpaper() {
           radial-gradient(circle at 20% 80%, rgba(0,0,0,0.05) 0%, transparent 40%)`,
       }}
     />
+  );
+}
+
+/** Full-screen light macro wash for user onboarding (edge-to-edge phone glass). */
+function UserOnboardingWallpaper() {
+  return (
+    <div className="pointer-events-none absolute inset-0" aria-hidden>
+      <div className="absolute inset-0 bg-[#f7f8f9]" />
+      <div
+        className="absolute inset-0 opacity-80"
+        style={{
+          backgroundImage:
+            "radial-gradient(ellipse 70% 45% at 50% 0%, rgba(61,129,227,0.12), transparent 60%), radial-gradient(ellipse 50% 40% at 20% 70%, rgba(61,129,227,0.06), transparent 55%)",
+        }}
+      />
+    </div>
   );
 }
 
@@ -294,8 +311,39 @@ export function PhoneMockup({
   const isPro =
     phoneApp === "pro" || (!inApp && (theme === "pro" || scene === "pro"));
   const useDarkGlass = isPro;
-  /** Edge-to-edge Pro onboarding inside the phone glass. */
+  /** Edge-to-edge onboarding inside the phone glass. */
   const proOnboarding = phoneApp === "pro" && !account;
+  const userOnboarding = phoneApp === "user" && !account;
+  const appOnboarding = proOnboarding || userOnboarding;
+
+  /** iOS-style icon splash when leaving the launcher into an app. */
+  const prevPhoneApp = useRef(phoneApp);
+  const [launchSplash, setLaunchSplash] = useState<"user" | "pro" | null>(null);
+  const [splashFading, setSplashFading] = useState(false);
+
+  useEffect(() => {
+    const prev = prevPhoneApp.current;
+    prevPhoneApp.current = phoneApp;
+
+    if (prev === "launcher" && (phoneApp === "user" || phoneApp === "pro")) {
+      setLaunchSplash(phoneApp);
+      setSplashFading(false);
+      const fadeAt = window.setTimeout(() => setSplashFading(true), 920);
+      const clearAt = window.setTimeout(() => {
+        setLaunchSplash(null);
+        setSplashFading(false);
+      }, 920 + 480);
+      return () => {
+        window.clearTimeout(fadeAt);
+        window.clearTimeout(clearAt);
+      };
+    }
+
+    if (phoneApp === "launcher" || phoneApp === null) {
+      setLaunchSplash(null);
+      setSplashFading(false);
+    }
+  }, [phoneApp]);
 
   const shell = (
     <>
@@ -308,7 +356,7 @@ export function PhoneMockup({
         <div
           className={`relative rounded-[3rem] p-[11px] transition-colors duration-700 ${
             useDarkGlass
-              ? "phone-chassis-dark liquid-glass"
+              ? "phone-chassis-dark liquid-glass liquid-glass-dark"
               : "phone-chassis-light liquid-glass liquid-glass-light"
           }`}
         >
@@ -337,23 +385,36 @@ export function PhoneMockup({
           className={`relative w-full overflow-hidden rounded-[2.4rem] transition-colors duration-700 ${
             proOnboarding
               ? "bg-[#050505]"
-              : useDarkGlass
-                ? "bg-[#111]"
-                : "bg-white"
+              : userOnboarding
+                ? "bg-[#f7f8f9]"
+                : useDarkGlass
+                  ? "bg-[#111]"
+                  : "bg-white"
           }`}
           style={{ aspectRatio: SCREEN_ASPECT }}
         >
-          {!proOnboarding && (useDarkGlass ? <ProWallpaper /> : <PhoneWallpaper />)}
+          {userOnboarding ? (
+            <UserOnboardingWallpaper />
+          ) : !appOnboarding ? (
+            useDarkGlass ? (
+              <ProWallpaper />
+            ) : (
+              <PhoneWallpaper />
+            )
+          ) : null}
+
+          {launchSplash ? (
+            <PhoneAppSplash app={launchSplash} fading={splashFading} />
+          ) : null}
 
           <div
+            data-sl-phone-stage
             className={`absolute inset-0 z-10 flex flex-col transition-all duration-[420ms] ease-out ${
-              proOnboarding
-                ? "min-h-0 overflow-hidden isolate"
-                : inApp
-                  ? "min-h-0 overflow-hidden px-4 pb-5 pt-12"
-                  : "px-6 pb-8"
+              appOnboarding || inApp
+                ? "min-h-0 overflow-hidden px-4 pb-5 pt-12"
+                : "px-6 pb-8"
             } ${
-              proOnboarding
+              appOnboarding
                 ? ""
                 : isLaunchScene
                   ? "justify-center pt-12"
@@ -363,8 +424,10 @@ export function PhoneMockup({
             } ${
               transitioning && !inApp
                 ? "scale-[0.97] opacity-0"
-                : "scale-100 opacity-100"
-            }`}
+                : launchSplash && !splashFading
+                  ? "opacity-0"
+                  : "opacity-100"
+            } ${launchSplash ? "duration-500" : ""}`}
           >
             {inApp && phoneApp && onPhoneAppChange ? (
               <PhoneAppShell

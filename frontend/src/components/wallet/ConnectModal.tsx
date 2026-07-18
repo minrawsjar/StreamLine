@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useWallets, useConnectWallet } from "@mysten/dapp-kit";
 import type { WalletWithRequiredFeatures } from "@mysten/wallet-standard";
@@ -13,8 +13,8 @@ type Props = {
   /** Dark Pro styling vs light landing modal. */
   variant?: "default" | "pro";
   /**
-   * Render inside the nearest positioned ancestor (phone screen / Pro shell)
-   * instead of portaling to document.body.
+   * Render inside the phone screen stage (full glass) when available,
+   * otherwise the nearest positioned ancestor.
    */
   contained?: boolean;
 };
@@ -34,6 +34,8 @@ export function ConnectModal({
   const { mutate: connect, isPending } = useConnectWallet();
   const [error, setError] = useState<string | null>(null);
   const [pendingName, setPendingName] = useState<string | null>(null);
+  const markerRef = useRef<HTMLSpanElement>(null);
+  const [phoneStage, setPhoneStage] = useState<HTMLElement | null>(null);
   const pro = variant === "pro";
 
   useEffect(() => {
@@ -42,6 +44,17 @@ export function ConnectModal({
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [open, onClose]);
+
+  useLayoutEffect(() => {
+    if (!open || !contained) {
+      setPhoneStage(null);
+      return;
+    }
+    const stage = markerRef.current?.closest(
+      "[data-sl-phone-stage]",
+    ) as HTMLElement | null;
+    setPhoneStage(stage);
+  }, [open, contained]);
 
   if (!open) return null;
 
@@ -73,9 +86,9 @@ export function ConnectModal({
     <div
       className={
         contained && pro
-          ? "absolute inset-0 z-40 flex items-center justify-center overflow-hidden px-4 font-[family-name:var(--font-inter)]"
+          ? "absolute inset-0 z-50 flex items-center justify-center overflow-hidden px-4 font-[family-name:var(--font-inter)]"
           : contained
-            ? "absolute inset-0 z-40 flex items-center justify-center overflow-hidden p-3 font-[family-name:var(--font-inter)]"
+            ? "absolute inset-0 z-50 flex items-center justify-center overflow-hidden p-3 font-[family-name:var(--font-inter)]"
             : "fixed inset-0 z-[300] flex items-center justify-center p-4"
       }
       data-sl-cursor={pro ? "on-dark" : "on-light"}
@@ -86,7 +99,9 @@ export function ConnectModal({
           pro
             ? // Solid dim only — backdrop-blur paints outside the phone glass
               "bg-[#050505]/88"
-            : "bg-[#1d1c44]/70 backdrop-blur-sm"
+            : contained
+              ? "bg-[#111]/20"
+              : "bg-[#1d1c44]/70 backdrop-blur-sm"
         }`}
         onClick={onClose}
       />
@@ -95,6 +110,8 @@ export function ConnectModal({
         className={`relative z-10 w-full overflow-hidden ${
           contained && pro
             ? "max-w-[280px] rounded-[1.35rem] border border-white/10 bg-[#141414] shadow-[0_20px_50px_rgba(0,0,0,0.55)]"
+            : contained
+              ? "max-w-[280px] rounded-[1.35rem] border border-black/8 bg-white shadow-[0_20px_50px_rgba(0,0,0,0.12)]"
             : pro
               ? "max-w-[340px] rounded-3xl border border-white/10 bg-[#121212] shadow-2xl"
               : "max-w-md border border-[#2b2a5e]/15 bg-[#f1efe9] shadow-2xl"
@@ -104,22 +121,30 @@ export function ConnectModal({
           className={`flex items-center justify-between px-4 py-3.5 ${
             pro
               ? "border-b border-white/10"
-              : "border-b border-[#2b2a5e]/15 bg-[#2b2a5e] px-5 py-4 text-white"
+              : contained
+                ? "border-b border-black/8"
+                : "border-b border-[#2b2a5e]/15 bg-[#2b2a5e] px-5 py-4 text-white"
           }`}
         >
           <span
             className={
               pro
                 ? "text-[13px] font-medium tracking-tight text-white"
-                : "text-[11px] uppercase tracking-[0.2em]"
+                : contained
+                  ? "text-[13px] font-semibold tracking-tight text-[#111]"
+                  : "text-[11px] uppercase tracking-[0.2em]"
             }
           >
-            {pro ? "Connect wallet" : "Connect to StreamLine"}
+            {pro || contained ? "Connect wallet" : "Connect to StreamLine"}
           </span>
           <button
             onClick={onClose}
             className={`leading-none transition-opacity hover:opacity-60 ${
-              pro ? "text-[22px] text-white/45" : "text-[18px]"
+              pro
+                ? "text-[22px] text-white/45"
+                : contained
+                  ? "text-[22px] text-[#111]/40"
+                  : "text-[18px]"
             }`}
             aria-label="Close"
           >
@@ -127,9 +152,13 @@ export function ConnectModal({
           </button>
         </div>
 
-        <div className={`flex flex-col gap-3 ${pro ? "p-3.5 pb-4" : "gap-5 p-5"}`}>
+        <div
+          className={`flex flex-col gap-3 ${
+            pro || contained ? "p-3.5 pb-4" : "gap-5 p-5"
+          }`}
+        >
           <div className="flex flex-col gap-2">
-            {!pro && (
+            {!pro && !contained && (
               <p className="text-[10px] uppercase tracking-[0.18em] text-[#2b2a5e]/50">
                 Sui wallets
               </p>
@@ -142,7 +171,9 @@ export function ConnectModal({
                 className={
                   pro
                     ? "rounded-2xl border border-dashed border-white/15 px-4 py-3.5 text-[12px] text-white/55 transition-colors hover:border-[#fbbf24]/45 hover:text-white/80"
-                    : "border border-dashed border-[#2b2a5e]/25 px-4 py-3 text-[12px] text-[#2b2a5e]/60 hover:border-[#5b54e6]"
+                    : contained
+                      ? "rounded-2xl border border-dashed border-black/12 px-4 py-3.5 text-[12px] text-[#555] transition-colors hover:border-[#3d81e3]/50 hover:text-[#111]"
+                      : "border border-dashed border-[#2b2a5e]/25 px-4 py-3 text-[12px] text-[#2b2a5e]/60 hover:border-[#5b54e6]"
                 }
               >
                 No Sui wallet detected — install Slush →
@@ -156,7 +187,9 @@ export function ConnectModal({
                   className={
                     pro
                       ? "flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.04] px-3.5 py-3 text-left text-[13px] text-white transition-colors hover:border-[#fbbf24]/40 hover:bg-white/[0.07] disabled:opacity-50"
-                      : "flex items-center gap-3 border border-[#2b2a5e]/20 bg-white px-4 py-3 text-left text-[13px] transition-colors hover:border-[#5b54e6] disabled:opacity-50"
+                      : contained
+                        ? "flex items-center gap-3 rounded-2xl border border-black/8 bg-[#f7f8f9] px-3.5 py-3 text-left text-[13px] text-[#111] transition-colors hover:border-[#3d81e3]/45 hover:bg-white disabled:opacity-50"
+                        : "flex items-center gap-3 border border-[#2b2a5e]/20 bg-white px-4 py-3 text-left text-[13px] transition-colors hover:border-[#5b54e6] disabled:opacity-50"
                   }
                 >
                   {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -165,7 +198,7 @@ export function ConnectModal({
                   {pendingName === w.name && (
                     <span
                       className={`ml-auto text-[11px] ${
-                        pro ? "text-white/40" : "text-[#2b2a5e]/50"
+                        pro ? "text-white/40" : "text-[#888]"
                       }`}
                     >
                       …
@@ -181,14 +214,16 @@ export function ConnectModal({
               className={
                 pro
                   ? "rounded-xl border border-[#c0533a]/35 bg-[#c0533a]/15 px-3 py-2 text-[12px] text-[#f0a090]"
-                  : "border border-[#c0533a]/40 bg-[#c0533a]/10 px-3 py-2 text-[12px] text-[#c0533a]"
+                  : contained
+                    ? "rounded-xl border border-[#c0533a]/30 bg-[#c0533a]/8 px-3 py-2 text-[12px] text-[#c0533a]"
+                    : "border border-[#c0533a]/40 bg-[#c0533a]/10 px-3 py-2 text-[12px] text-[#c0533a]"
               }
             >
               {error}
             </p>
           )}
 
-          {!pro && (
+          {!pro && !contained && (
             <p className="text-[11px] leading-relaxed text-[#2b2a5e]/50">
               Use a Sui wallet such as <strong>Slush</strong> or{" "}
               <strong>Phantom</strong> (with Sui enabled). Set your wallet to{" "}
@@ -200,7 +235,14 @@ export function ConnectModal({
     </div>
   );
 
-  if (contained) return overlay;
+  if (contained) {
+    return (
+      <>
+        <span ref={markerRef} className="hidden" aria-hidden />
+        {phoneStage ? createPortal(overlay, phoneStage) : overlay}
+      </>
+    );
+  }
 
   if (typeof document === "undefined") return null;
 

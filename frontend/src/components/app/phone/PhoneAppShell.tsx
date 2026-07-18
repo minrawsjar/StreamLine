@@ -44,15 +44,17 @@ export function PhoneAppShell({ route, onNavigate }: PhoneAppShellProps) {
   const isFulfill = route === "fulfill";
   const isRequest = route === "request";
   const isCreate = route === "create";
-  /** Full-bleed Pro onboarding — hide shell chrome until wallet is connected. */
+  /** Full-bleed onboarding — hide shell chrome until wallet is connected. */
   const proOnboarding = isPro && !account;
+  const userOnboarding = route === "user" && !account;
+  const appOnboarding = proOnboarding || userOnboarding;
   const inWorkspace =
     route !== "launcher" &&
     !isScan &&
     !isFulfill &&
     !isRequest &&
     !isCreate &&
-    !proOnboarding;
+    !appOnboarding;
   const [scanReturnRoute, setScanReturnRoute] = useState<PhoneAppRoute>("user");
   const [pendingRequest, setPendingRequestState] =
     useState<StreamRequestParams | null>(readStoredRequest);
@@ -84,7 +86,6 @@ export function PhoneAppShell({ route, onNavigate }: PhoneAppShellProps) {
 
   return (
     <>
-      {!proOnboarding && (
       <div className="flex shrink-0 items-center justify-between">
         {isScan ? (
           <button
@@ -134,7 +135,7 @@ export function PhoneAppShell({ route, onNavigate }: PhoneAppShellProps) {
               Create
             </span>
           </button>
-        ) : inWorkspace ? (
+        ) : inWorkspace || appOnboarding ? (
           <button
             type="button"
             onClick={() => onNavigate("launcher")}
@@ -158,24 +159,25 @@ export function PhoneAppShell({ route, onNavigate }: PhoneAppShellProps) {
             </span>
           </div>
         )}
-        <div className="flex shrink-0 items-center gap-1.5">
-          {!isPro && !isScan && !isFulfill && !isRequest && !isCreate && (
-            <ScanIconButton onClick={openScan} />
-          )}
-          <WalletButton
-            variant="profile"
-            showFaucetInMenu
-            faucetAmount={isPro ? 10000 : 1000}
-            profilePro={isPro}
-          />
-        </div>
+        {!appOnboarding && route !== "launcher" && (
+          <div className="flex shrink-0 items-center gap-1.5">
+            {!isPro && !isScan && !isFulfill && !isRequest && !isCreate && (
+              <ScanIconButton onClick={openScan} />
+            )}
+            <WalletButton
+              variant="profile"
+              showFaucetInMenu
+              faucetAmount={isPro ? 10000 : 1000}
+              profilePro={isPro}
+            />
+          </div>
+        )}
       </div>
-      )}
 
       <div
         className={`flex min-h-0 flex-1 flex-col ${
-          proOnboarding
-            ? "absolute inset-0 overflow-hidden isolate"
+          appOnboarding
+            ? "relative mt-1.5 overflow-hidden isolate"
             : isPro
               ? "relative mt-1.5 overflow-hidden"
               : "mt-2"

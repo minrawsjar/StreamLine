@@ -5,6 +5,7 @@ import { useCurrentAccount } from "@mysten/dapp-kit";
 
 import { PhoneHomeView } from "./PhoneHomeView";
 import { PhoneTransferModal } from "./PhoneTransferModal";
+import { UserOnboarding } from "./UserOnboarding";
 import type { PhoneAppRoute } from "./types";
 
 type PhoneUserShellProps = {
@@ -17,11 +18,7 @@ export function PhoneUserShell({ onNavigate }: PhoneUserShellProps) {
   const [transferOpen, setTransferOpen] = useState(false);
 
   if (!account) {
-    return (
-      <div className="flex min-h-0 flex-1 flex-col items-center justify-center px-2 text-center">
-        <p className="text-[10px] text-[#888]">Connect wallet above to continue</p>
-      </div>
-    );
+    return <UserOnboarding embedded />;
   }
 
   return (
