@@ -24,8 +24,9 @@ import type { NetworkName } from "@streamline/sdk";
  */
 export const ORIGINAL_PACKAGE_IDS = {
   mainnet: process.env.NEXT_PUBLIC_PACKAGE_ID_MAINNET ?? "0x0",
+  // Fresh publish → original == latest (no prior version to pin types to).
   testnet:
-    "0x9d6e7815d5e11424a68f827e26499078fead7648328f44fdbdeff6d34ed0b3a8",
+    "0x597f34fee3b246cbabdb8b8133c4b5e7aa5a15899e74df40acf61080b776a794",
   devnet: "0x0",
 } as const;
 
@@ -37,7 +38,7 @@ export const ORIGINAL_PACKAGE_IDS = {
 export const CONF_DEFINING_PACKAGE_IDS = {
   mainnet: process.env.NEXT_PUBLIC_PACKAGE_ID_MAINNET ?? "0x0",
   testnet:
-    "0x25e2dac28bdda5655040ceab5876794b8bdc3687178c1309974017c16dd76fdb",
+    "0x597f34fee3b246cbabdb8b8133c4b5e7aa5a15899e74df40acf61080b776a794",
   devnet: "0x0",
 } as const;
 
@@ -47,7 +48,7 @@ export const CONF_DEFINING_PACKAGE_IDS = {
  */
 export const YIELD_VAULT = {
   testnet:
-    "0x8ae9d8805682aabbd00ff0582d93b88f2f86482bcabed194a88a6ded99a88406",
+    "0xda2fb1d51d80799b0eb87d1d50dd3f73255696056690c5c04120ffe3a33f9e15",
   mainnet: process.env.NEXT_PUBLIC_YIELD_VAULT_MAINNET ?? "0x0",
   devnet: "0x0",
 } as const;
@@ -66,7 +67,7 @@ export const SHIELDED_POOL = {
  */
 export const LENDING_POOL = {
   testnet:
-    "0x0518d5d77a3069ebab9df5b46e60fed4589c16dc6e48cd694a02c9350f312ea2",
+    "0xc82cded2f138ef3ce19956cdfdc53c7ceb158e19c205f2eeb61e162db1ae3ec4",
   mainnet: process.env.NEXT_PUBLIC_LENDING_POOL_MAINNET ?? "0x0",
   devnet: "0x0",
 } as const;
@@ -76,7 +77,9 @@ export const LENDING_POOL = {
  * Publish once after upgrading the package with `giftcard::create_vault`.
  */
 export const GIFT_CARD_VAULT = {
-  testnet: process.env.NEXT_PUBLIC_GIFT_CARD_VAULT_TESTNET ?? "0x0",
+  testnet:
+    process.env.NEXT_PUBLIC_GIFT_CARD_VAULT_TESTNET ??
+    "0x6e995c8cf3d90660883e92f254d1d8fb4c9ed2b5cc8cdb243862a87accd9738f",
   mainnet: process.env.NEXT_PUBLIC_GIFT_CARD_VAULT_MAINNET ?? "0x0",
   devnet: "0x0",
 } as const;
@@ -89,13 +92,13 @@ export const GIFT_CARD_VAULT = {
  */
 export const YIELD_DEFINING_PACKAGE = {
   testnet:
-    "0xa7f9660959260133040f4e5aaea56fdd61ab37a58515a007e4f3ae852d906217",
+    "0x597f34fee3b246cbabdb8b8133c4b5e7aa5a15899e74df40acf61080b776a794",
   mainnet: "0x0",
   devnet: "0x0",
 } as const;
 export const LENDING_DEFINING_PACKAGE = {
   testnet:
-    "0x39280c40c6ce4b7fb9ac5f836709edd44e8c9d96b8ea1a6a74ef5d52eccb528c",
+    "0x597f34fee3b246cbabdb8b8133c4b5e7aa5a15899e74df40acf61080b776a794",
   mainnet: "0x0",
   devnet: "0x0",
 } as const;

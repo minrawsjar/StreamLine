@@ -6,8 +6,10 @@ import { StreamLineMark } from "./StreamLineMark";
 import { HERO_LAYOUT_MAX_CLASS } from "./heroLayout";
 import type { SceneTheme } from "./heroScenes";
 
+// Defaults to the in-app /docs route, so it works on any domain with no env var.
+// Override NEXT_PUBLIC_DOCS_URL only to point at an external docs site.
 const DOCS_URL =
-  process.env.NEXT_PUBLIC_DOCS_URL?.replace(/\/$/, "") || "http://localhost:3001";
+  process.env.NEXT_PUBLIC_DOCS_URL?.replace(/\/$/, "") || "/docs";
 
 type HeroNavProps = {
   theme?: SceneTheme;

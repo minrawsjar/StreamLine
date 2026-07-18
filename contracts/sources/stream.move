@@ -14,7 +14,7 @@ use sui::clock::Clock;
 use sui::coin::{Self, Coin};
 use sui::dynamic_field as df;
 use sui::event;
-use sui::option::{Self, Option};
+use std::option::{Self, Option};
 use streamline::confidential_balance;
 use streamline::treasury::{Self as treasury, Treasury};
 use streamline::yield_vault::{Self, YieldVault};

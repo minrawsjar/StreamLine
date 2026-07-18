@@ -10,7 +10,7 @@ function env(name: string): string | undefined {
 }
 
 const TESTNET_PACKAGE =
-  "0x9e9be0f65ce3c45092b25553f6eabc4520bd57bb2f29dacdeb770c3e8e2de3e1";
+  "0x597f34fee3b246cbabdb8b8133c4b5e7aa5a15899e74df40acf61080b776a794";
 
 export const PACKAGE_IDS = {
   mainnet:

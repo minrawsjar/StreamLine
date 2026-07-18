@@ -10,14 +10,15 @@
     "lint": "next lint"
   },
   "dependencies": {
-    "@streamline/sdk": "*",
     "@mysten/dapp-kit": "0.16.16",
     "@mysten/enoki": "0.13.0",
     "@mysten/seal": "^0.10.0",
     "@mysten/sui": "1.36.1",
+    "@streamline/sdk": "*",
     "@tanstack/react-query": "^5.59.0",
     "circomlibjs": "^0.1.7",
     "html5-qrcode": "^2.3.8",
+    "marked": "^14.1.4",
     "next": "^15.5.19",
     "qrcode.react": "^4.2.0",
     "react": "^19.0.0",
