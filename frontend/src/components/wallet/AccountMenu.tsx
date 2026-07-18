@@ -36,12 +36,6 @@ function profileBtnSecondary(dark: boolean) {
     : "w-full rounded-2xl border border-black/12 bg-white px-4 py-2.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-[#111] transition-colors hover:bg-[#fafafa]";
 }
 
-function profileBtnDanger(dark: boolean) {
-  return dark
-    ? "w-full rounded-2xl border border-[#e07060]/30 bg-[#e07060]/10 px-4 py-2.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-[#e07060] transition-colors hover:bg-[#e07060]/15"
-    : "w-full rounded-2xl border border-[#c0533a]/20 bg-[#c0533a]/[0.04] px-4 py-2.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-[#c0533a] transition-colors hover:bg-[#c0533a]/[0.08]";
-}
-
 /**
  * Connected-state control: shows the active address with a dropdown for copy,
  * explorer, account switching, and disconnect. Replaces the connect button
@@ -53,12 +47,15 @@ export function AccountMenu({
   faucetAmount = 1000,
   variant = "default",
   profilePro = false,
+  onExportActivity,
 }: {
   className?: string;
   showFaucet?: boolean;
   faucetAmount?: number;
   variant?: "default" | "profile";
   profilePro?: boolean;
+  /** Opens in-phone export flow (User app). */
+  onExportActivity?: () => void;
 }) {
   const account = useCurrentAccount();
   const { currentWallet } = useCurrentWallet();
@@ -159,7 +156,7 @@ export function AccountMenu({
                   <ProfileIcon />
                 )}
               </div>
-              <div className="min-w-0">
+              <div className="min-w-0 flex-1">
                 <p className="truncate text-[12px] font-semibold tracking-tight">
                   {currentWallet?.name ?? "Connected"}
                 </p>
@@ -171,40 +168,170 @@ export function AccountMenu({
                   {network}
                 </p>
               </div>
+              <button
+                type="button"
+                onClick={() => {
+                  disconnect();
+                  setOpen(false);
+                }}
+                className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border transition-colors ${
+                  dark
+                    ? "border-white/10 text-white/50 hover:border-[#f87171]/40 hover:bg-[#f87171]/10 hover:text-[#f87171]"
+                    : "border-black/8 text-[#999] hover:border-[#c0533a]/35 hover:bg-[#c0533a]/08 hover:text-[#c0533a]"
+                }`}
+                aria-label="Disconnect"
+                title="Disconnect"
+              >
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.75"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden
+                >
+                  <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                  <polyline points="16 17 21 12 16 7" />
+                  <line x1="21" y1="12" x2="9" y2="12" />
+                </svg>
+              </button>
             </div>
 
             <div
-              className={`mt-3 rounded-xl border px-3 py-2.5 ${
+              className={`mt-3 flex items-stretch gap-2 rounded-xl border px-3 py-2.5 ${
                 dark
                   ? "border-white/10 bg-white/[0.04]"
                   : "border-black/10 bg-[#fafafa]"
               }`}
             >
-              <p
-                className={`text-[8px] font-semibold uppercase tracking-[0.14em] ${
-                  dark ? "text-white/40" : "text-[#888]"
+              <div className="min-w-0 flex-1 text-left">
+                {handle ? (
+                  <>
+                    <p
+                      className={`truncate text-[12px] font-semibold tracking-tight ${
+                        dark ? "text-white" : "text-[#111]"
+                      }`}
+                    >
+                      {handle}
+                    </p>
+                    <p
+                      className={`mt-0.5 font-mono text-[9px] ${
+                        dark ? "text-white/40" : "text-[#999]"
+                      }`}
+                    >
+                      {shortAddress(account.address, 8, 6)}
+                    </p>
+                    {suinsReady && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setOpen(false);
+                          setClaimOpen(true);
+                        }}
+                        className={`mt-1.5 text-[8px] font-semibold uppercase tracking-[0.12em] ${
+                          dark
+                            ? "text-white/45 hover:text-white/70"
+                            : "text-[#888] hover:text-[#555]"
+                        }`}
+                      >
+                        Manage
+                      </button>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <p
+                      className={`font-mono text-[10px] leading-relaxed ${
+                        dark ? "text-white/75" : "text-[#333]"
+                      }`}
+                    >
+                      {shortAddress(account.address, 8, 6)}
+                    </p>
+                    {suinsReady ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setOpen(false);
+                          setClaimOpen(true);
+                        }}
+                        className={`mt-1.5 text-[10px] font-semibold tracking-tight ${
+                          dark
+                            ? "text-white hover:text-white/80"
+                            : "text-[#111] hover:text-[#444]"
+                        }`}
+                      >
+                        Claim @handle
+                      </button>
+                    ) : (
+                      <p
+                        className={`mt-1 text-[8px] font-semibold uppercase tracking-[0.12em] ${
+                          dark ? "text-white/35" : "text-[#aaa]"
+                        }`}
+                      >
+                        Address
+                      </p>
+                    )}
+                  </>
+                )}
+                {copied && (
+                  <p
+                    className={`mt-1 text-[9px] font-medium ${
+                      dark ? "text-[#4ade80]" : "text-[#1a5c38]"
+                    }`}
+                  >
+                    Address copied
+                  </p>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={() => void onCopy()}
+                className={`flex h-8 w-8 shrink-0 self-center items-center justify-center rounded-xl border transition-colors ${
+                  copied
+                    ? dark
+                      ? "border-[#4ade80]/40 bg-[#4ade80]/10 text-[#4ade80]"
+                      : "border-[#1a5c38]/30 bg-[#1a5c38]/08 text-[#1a5c38]"
+                    : dark
+                      ? "border-white/10 text-white/50 hover:bg-white/[0.08] hover:text-white"
+                      : "border-black/8 text-[#999] hover:bg-black/[0.04] hover:text-[#111]"
                 }`}
+                aria-label="Copy address"
+                title="Copy address"
               >
-                {handle ? "Handle" : "Address"}
-              </p>
-              <p
-                className={`mt-1 break-all text-[10px] leading-relaxed ${
-                  handle
-                    ? "font-semibold tracking-tight"
-                    : "font-mono"
-                } ${dark ? "text-white/75" : "text-[#333]"}`}
-              >
-                {handle ?? shortAddress(account.address, 8, 6)}
-              </p>
-              {handle && (
-                <p
-                  className={`mt-1 font-mono text-[9px] ${
-                    dark ? "text-white/35" : "text-[#999]"
-                  }`}
-                >
-                  {shortAddress(account.address, 8, 6)}
-                </p>
-              )}
+                {copied ? (
+                  <svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.75"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden
+                  >
+                    <polyline points="20 6 9 17 4 12" />
+                  </svg>
+                ) : (
+                  <svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.75"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden
+                  >
+                    <rect x="9" y="9" width="13" height="13" rx="2" />
+                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                  </svg>
+                )}
+              </button>
             </div>
           </div>
 
@@ -213,35 +340,28 @@ export function AccountMenu({
               dark ? "border-white/8" : "border-black/6"
             }`}
           >
-            {suinsReady && (
+            {!profilePro && onExportActivity && (
               <button
                 type="button"
                 onClick={() => {
                   setOpen(false);
-                  setClaimOpen(true);
+                  onExportActivity();
                 }}
                 className={profileBtnPrimary(dark)}
               >
-                {handle ? "Manage handle" : "Claim @handle"}
+                Export activity
               </button>
             )}
-            <button type="button" onClick={onCopy} className={suinsReady ? profileBtnSecondary(dark) : profileBtnPrimary(dark)}>
-              {copied ? "Copied ✓" : "Copy address"}
-            </button>
-            <a
-              href={explorerUrl(network as NetworkName, "account", account.address)}
-              target="_blank"
-              rel="noreferrer"
-              className={`text-center ${profileBtnSecondary(dark)}`}
-            >
-              View on explorer
-            </a>
 
             {showFaucet && (
               <FaucetButton
                 amount={faucetAmount}
                 label={`Mint ${faucetAmount.toLocaleString()} USDC`}
-                className={profileBtnSecondary(dark)}
+                className={
+                  !profilePro && onExportActivity
+                    ? profileBtnSecondary(dark)
+                    : profileBtnPrimary(dark)
+                }
               />
             )}
 
@@ -275,17 +395,6 @@ export function AccountMenu({
                   ))}
               </div>
             )}
-
-            <button
-              type="button"
-              onClick={() => {
-                disconnect();
-                setOpen(false);
-              }}
-              className={`mt-1 ${profileBtnDanger(dark)}`}
-            >
-              Disconnect
-            </button>
           </div>
         </div>
       )}

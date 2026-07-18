@@ -93,9 +93,48 @@ const DASHBOARD_BASE_EARNED = 142.5;
 const DASHBOARD_EARN_PER_SEC = 0.5;
 
 const HERO_DASHBOARD_ACTIVITY: PhoneActivityItem[] = [
-  { time: "2m ago", text: "Drip received", amount: "+$0.50" },
-  { time: "1h ago", text: "Milestone 3 approved", amount: null },
-  { time: "Yesterday", text: "Split to yield wallet", amount: "$42.00" },
+  {
+    id: "hero-1",
+    kind: "stream_dripped",
+    title: "Drip received",
+    time: "2m ago",
+    timestampMs: Date.now() - 120_000,
+    amount: "+$0.50",
+    amountBase: 500_000,
+    subjectId: null,
+    counterparty: null,
+    txDigest: null,
+    module: "stream",
+    metaJson: null,
+  },
+  {
+    id: "hero-2",
+    kind: "milestone_approved",
+    title: "Milestone 3 approved",
+    time: "1h ago",
+    timestampMs: Date.now() - 3_600_000,
+    amount: null,
+    amountBase: null,
+    subjectId: null,
+    counterparty: null,
+    txDigest: null,
+    module: "stream",
+    metaJson: null,
+  },
+  {
+    id: "hero-3",
+    kind: "stream_funded",
+    title: "Split to yield wallet",
+    time: "Yesterday",
+    timestampMs: Date.now() - 86_400_000,
+    amount: "$42.00",
+    amountBase: 42_000_000,
+    subjectId: null,
+    counterparty: null,
+    txDigest: null,
+    module: "stream",
+    metaJson: null,
+  },
 ];
 
 function DashboardScreen() {
