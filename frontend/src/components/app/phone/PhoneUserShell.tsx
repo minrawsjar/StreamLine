@@ -32,6 +32,7 @@ export function PhoneUserShell({ onNavigate }: PhoneUserShellProps) {
         onCreate={() => onNavigate("create")}
         onRequest={() => onNavigate("request")}
         onTransfer={() => setTransferOpen(true)}
+        onGift={() => onNavigate("gift")}
       />
       <PhoneTransferModal
         open={transferOpen}

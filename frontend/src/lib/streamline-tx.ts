@@ -385,3 +385,120 @@ export function buildTreasuryDivestWithdraw(
   tx.transferObjects([coin], a.sender);
   return tx;
 }
+
+// === ZK gift cards (amount hidden until claim) ===
+
+export type CreateGiftCardArgs = {
+  packageId: string;
+  usdcType: string;
+  vaultId: string;
+  sender: string;
+  amountBase: bigint;
+  /** Poseidon(amount, blinding) as 32 LE bytes */
+  commitment: number[] | Uint8Array;
+  wrapProof: number[] | Uint8Array;
+  /** blake2b256(secret) */
+  claimHash: number[] | Uint8Array;
+  note?: string;
+  /** 0 = never; else absolute ms since epoch */
+  expiresMs?: number;
+};
+
+/** Lock USDC into the gift-card vault behind a wrap proof. */
+export function buildCreateGiftCard(a: CreateGiftCardArgs): Transaction {
+  const tx = new Transaction();
+  tx.setSenderIfNotSet(a.sender);
+  tx.moveCall({
+    target: `${a.packageId}::giftcard::create`,
+    typeArguments: [a.usdcType],
+    arguments: [
+      tx.object(a.vaultId),
+      coinWithBalance({ type: a.usdcType, balance: a.amountBase }),
+      tx.pure.vector("u8", Array.from(a.commitment)),
+      tx.pure.vector("u8", Array.from(a.wrapProof)),
+      tx.pure.vector("u8", Array.from(a.claimHash)),
+      tx.pure.string(a.note ?? ""),
+      tx.pure.u64(BigInt(a.expiresMs ?? 0)),
+    ],
+  });
+  return tx;
+}
+
+export function buildClaimGiftCard(a: {
+  packageId: string;
+  usdcType: string;
+  vaultId: string;
+  sender: string;
+  cardId: string;
+  secretBytes: Uint8Array | number[];
+  value: bigint;
+  unwrapProof: number[] | Uint8Array;
+}): Transaction {
+  const tx = new Transaction();
+  tx.setSenderIfNotSet(a.sender);
+  const coin = tx.moveCall({
+    target: `${a.packageId}::giftcard::claim`,
+    typeArguments: [a.usdcType],
+    arguments: [
+      tx.object(a.vaultId),
+      tx.object(a.cardId),
+      tx.pure.vector("u8", Array.from(a.secretBytes)),
+      tx.pure.u64(a.value),
+      tx.pure.vector("u8", Array.from(a.unwrapProof)),
+      tx.object(CLOCK),
+    ],
+  });
+  tx.transferObjects([coin], a.sender);
+  return tx;
+}
+
+export function buildCancelGiftCard(a: {
+  packageId: string;
+  usdcType: string;
+  vaultId: string;
+  sender: string;
+  cardId: string;
+  value: bigint;
+  unwrapProof: number[] | Uint8Array;
+}): Transaction {
+  const tx = new Transaction();
+  tx.setSenderIfNotSet(a.sender);
+  const coin = tx.moveCall({
+    target: `${a.packageId}::giftcard::cancel`,
+    typeArguments: [a.usdcType],
+    arguments: [
+      tx.object(a.vaultId),
+      tx.object(a.cardId),
+      tx.pure.u64(a.value),
+      tx.pure.vector("u8", Array.from(a.unwrapProof)),
+    ],
+  });
+  tx.transferObjects([coin], a.sender);
+  return tx;
+}
+
+/** Find a created `GiftCard` object id from transaction effects. */
+export function findCreatedGiftCardId(
+  objectChanges:
+    | ReadonlyArray<{
+        type: string;
+        objectType?: string;
+        objectId?: string;
+      }>
+    | null
+    | undefined
+): string | undefined {
+  if (!objectChanges) return undefined;
+  for (const c of objectChanges) {
+    if (
+      c.type === "created" &&
+      c.objectId &&
+      typeof c.objectType === "string" &&
+      // Exact type — avoid matching GiftCardVault
+      /::giftcard::GiftCard($|<)/.test(c.objectType)
+    ) {
+      return c.objectId;
+    }
+  }
+  return undefined;
+}

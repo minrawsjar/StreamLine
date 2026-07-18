@@ -16,6 +16,19 @@ export const PHONE_QUICK_ACTIONS = [
     ),
   },
   {
+    id: "gift",
+    label: "Gift",
+    icon: (
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+        <rect x="3" y="8" width="18" height="13" rx="2" />
+        <path d="M12 8v13" />
+        <path d="M3 12h18" />
+        <path d="M12 8c-1.5-3-4-4-4-4s1 2.5 4 4Z" />
+        <path d="M12 8c1.5-3 4-4 4-4s-1 2.5-4 4Z" />
+      </svg>
+    ),
+  },
+  {
     id: "create",
     label: "Create",
     icon: (

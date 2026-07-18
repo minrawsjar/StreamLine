@@ -16,6 +16,7 @@ import { PhoneScanView } from "./PhoneScanView";
 import { PhoneFulfillRequestView } from "./PhoneFulfillRequestView";
 import { PhoneRequestStreamView } from "./PhoneRequestStreamView";
 import { PhoneCreateStreamView } from "./PhoneCreateStreamView";
+import { PhoneSendGiftCardView } from "./PhoneSendGiftCardView";
 import type { PhoneAppRoute } from "./types";
 
 type PhoneAppShellProps = {
@@ -46,6 +47,7 @@ export function PhoneAppShell({ route, onNavigate }: PhoneAppShellProps) {
   const isFulfill = route === "fulfill";
   const isRequest = route === "request";
   const isCreate = route === "create";
+  const isGift = route === "gift";
   /** Full-bleed onboarding — hide shell chrome until wallet + name step done. */
   const proOnboarding = isPro && (!account || needsStep);
   const userOnboarding = route === "user" && (!account || needsStep);
@@ -56,6 +58,7 @@ export function PhoneAppShell({ route, onNavigate }: PhoneAppShellProps) {
     !isFulfill &&
     !isRequest &&
     !isCreate &&
+    !isGift &&
     !appOnboarding;
   const [scanReturnRoute, setScanReturnRoute] = useState<PhoneAppRoute>("user");
   const [pendingRequest, setPendingRequestState] =
@@ -137,6 +140,18 @@ export function PhoneAppShell({ route, onNavigate }: PhoneAppShellProps) {
               Create
             </span>
           </button>
+        ) : isGift ? (
+          <button
+            type="button"
+            onClick={() => onNavigate("user")}
+            className="flex min-w-0 cursor-pointer items-center gap-2 text-left"
+            aria-label="Back"
+          >
+            <StreamLineMark size="sm" variant="default" />
+            <span className="truncate text-sm font-bold tracking-tight text-[#111]">
+              Gift
+            </span>
+          </button>
         ) : inWorkspace || appOnboarding ? (
           <button
             type="button"
@@ -163,7 +178,7 @@ export function PhoneAppShell({ route, onNavigate }: PhoneAppShellProps) {
         )}
         {!appOnboarding && route !== "launcher" && (
           <div className="flex shrink-0 items-center gap-1.5">
-            {!isPro && !isScan && !isFulfill && !isRequest && !isCreate && (
+            {!isPro && !isScan && !isFulfill && !isRequest && !isCreate && !isGift && (
               <ScanIconButton onClick={openScan} />
             )}
             <WalletButton
@@ -208,6 +223,9 @@ export function PhoneAppShell({ route, onNavigate }: PhoneAppShellProps) {
         )}
         {route === "create" && (
           <PhoneCreateStreamView onClose={() => onNavigate("user")} />
+        )}
+        {route === "gift" && (
+          <PhoneSendGiftCardView onClose={() => onNavigate("user")} />
         )}
         {route === "fulfill" && !pendingRequest && (
           <div className="flex flex-1 flex-col items-center justify-center gap-3 px-6 text-center">

@@ -72,6 +72,16 @@ export const LENDING_POOL = {
 } as const;
 
 /**
+ * Shared GiftCardVault for USDC — aggregate reserve for ZK gift cards.
+ * Publish once after upgrading the package with `giftcard::create_vault`.
+ */
+export const GIFT_CARD_VAULT = {
+  testnet: process.env.NEXT_PUBLIC_GIFT_CARD_VAULT_TESTNET ?? "0x0",
+  mainnet: process.env.NEXT_PUBLIC_GIFT_CARD_VAULT_MAINNET ?? "0x0",
+  devnet: "0x0",
+} as const;
+
+/**
  * Packages that *introduced* the DeFi receipt structs. A struct's type address
  * is pinned to the version that defined it (not the latest), so owned-object
  * filters for receipts must use these, not the current package id.

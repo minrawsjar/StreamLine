@@ -11,7 +11,7 @@
  */
 import { Transaction, coinWithBalance } from "@mysten/sui/transactions";
 
-const FIELD =
+export const FIELD =
   21888242871839275222246405745257275088696311157297823662689037894645226208583n;
 
 const CIRCUITS_BASE = "/circuits";

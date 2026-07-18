@@ -56,6 +56,11 @@ export function allowedMoveCallTargets(network: NetworkName): string[] {
     targets.push(`${pkg}::lazy_stream::settle`);
     targets.push(`${pkg}::lazy_stream::settle_at`);
     targets.push(`${pkg}::lazy_stream::claim`);
+    // ZK gift cards (amount hidden until claim).
+    targets.push(`${pkg}::giftcard::create_vault`);
+    targets.push(`${pkg}::giftcard::create`);
+    targets.push(`${pkg}::giftcard::claim`);
+    targets.push(`${pkg}::giftcard::cancel`);
     // Shielded pool (gasless deposit/spend/withdraw + note publish).
     targets.push(`${pkg}::shielded_pool::deposit`);
     targets.push(`${pkg}::shielded_pool::spend`);
