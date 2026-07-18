@@ -43,7 +43,11 @@ export function ScrollHero() {
 
       {/* Desktop: fixed 3-column grid — text slots always same size */}
       <div
-        className={`relative z-10 mx-auto hidden w-full ${HERO_LAYOUT_MAX_CLASS} flex-1 -translate-y-4 items-center px-8 lg:grid lg:grid-cols-[1fr_auto_1fr] lg:-translate-y-9 xl:-translate-y-10 ${
+        className={`relative z-10 mx-auto hidden w-full ${HERO_LAYOUT_MAX_CLASS} flex-1 items-center px-8 lg:grid lg:grid-cols-[1fr_auto_1fr] ${
+          inApp
+            ? ""
+            : "-translate-y-4 lg:-translate-y-9 xl:-translate-y-10"
+        } ${
           isIntroTiles ? "lg:gap-8 xl:gap-12" : "lg:gap-16 xl:gap-24"
         }`}
       >
@@ -150,7 +154,11 @@ export function ScrollHero() {
       </div>
 
       {/* Mobile */}
-      <div className="relative z-10 flex flex-1 -translate-y-3 flex-col items-center justify-center px-[5%] lg:hidden">
+      <div
+        className={`relative z-10 flex flex-1 flex-col items-center justify-center px-[5%] lg:hidden ${
+          inApp ? "" : "-translate-y-3"
+        }`}
+      >
         <PhoneMockup
           scene={scene.phone}
           sceneProgress={sceneProgress}

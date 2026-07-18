@@ -155,7 +155,6 @@ type PhoneHomeViewProps = {
   onCreate?: () => void;
   onRequest?: () => void;
   onTransfer?: () => void;
-  onGift?: () => void;
 };
 
 type HomeDetailsView =
@@ -171,7 +170,6 @@ export function PhoneHomeView({
   onCreate,
   onRequest,
   onTransfer,
-  onGift,
 }: PhoneHomeViewProps) {
   const account = useCurrentAccount();
   const usdcType = useNetworkVariable("usdcType");
@@ -479,7 +477,6 @@ export function PhoneHomeView({
     if (id === "create") onCreate?.();
     if (id === "request") onRequest?.();
     if (id === "transfer") onTransfer?.();
-    if (id === "gift") onGift?.();
   };
 
   const onRaiseCompletion = (streamId: string) => {

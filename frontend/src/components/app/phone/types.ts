@@ -5,5 +5,4 @@ export type PhoneAppRoute =
   | "scan"
   | "fulfill"
   | "request"
-  | "create"
-  | "gift";
+  | "create";

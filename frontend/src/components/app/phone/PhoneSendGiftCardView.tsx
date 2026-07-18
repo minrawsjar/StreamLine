@@ -21,7 +21,10 @@ import { PhoneField, phoneInputClass } from "./PhoneFormParts";
 import { phoneFlowFooter, phoneGlassCard } from "./phoneStyles";
 
 type PhoneSendGiftCardViewProps = {
+  /** Close the whole transfer flow (Done after share). */
   onClose: () => void;
+  /** Back to Transfer menu; defaults to onClose. */
+  onBack?: () => void;
 };
 
 const btnPrimary =
@@ -29,7 +32,11 @@ const btnPrimary =
 const btnSecondary =
   "w-full rounded-2xl border border-black/12 bg-white/80 px-4 py-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-[#111]";
 
-export function PhoneSendGiftCardView({ onClose }: PhoneSendGiftCardViewProps) {
+export function PhoneSendGiftCardView({
+  onClose,
+  onBack,
+}: PhoneSendGiftCardViewProps) {
+  const goBack = onBack ?? onClose;
   const account = useCurrentAccount();
   const client = useSuiClient();
   const packageId = useNetworkVariable("packageId");
@@ -169,10 +176,10 @@ export function PhoneSendGiftCardView({ onClose }: PhoneSendGiftCardViewProps) {
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="min-h-0 flex-1 overflow-y-auto px-1 pb-4 pt-1">
         <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-black/40">
-          Gift
+          Transfer
         </p>
         <h2 className="mt-1 text-lg font-bold tracking-tight text-[#111]">
-          ZK gift card
+          Gift card
         </h2>
         <p className="mt-1 text-[12px] leading-snug text-[#666]">
           Lock USDC now. The amount stays hidden on-chain until the recipient
@@ -219,8 +226,8 @@ export function PhoneSendGiftCardView({ onClose }: PhoneSendGiftCardViewProps) {
         >
           {proving || isPending ? "Working…" : "Lock & get link"}
         </button>
-        <button type="button" className={btnSecondary} onClick={onClose}>
-          Cancel
+        <button type="button" className={btnSecondary} onClick={goBack}>
+          Back
         </button>
       </div>
     </div>

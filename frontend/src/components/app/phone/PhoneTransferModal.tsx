@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useCurrentAccount, useSuiClient } from "@mysten/dapp-kit";
 import { Transaction } from "@mysten/sui/transactions";
 
@@ -16,8 +16,9 @@ import {
   OnramperModal,
   onramperConfigured,
 } from "@/components/wallet/OnramperWidget";
+import { PhoneSendGiftCardView } from "./PhoneSendGiftCardView";
 
-type TransferMode = "wallet" | "crosschain" | "bank";
+type TransferMode = "wallet" | "giftcard" | "crosschain" | "bank";
 type TransferStep = "menu" | TransferMode;
 type TransferCoin = "USDC" | "SUI";
 
@@ -43,6 +44,20 @@ const MODES: {
       </svg>
     ),
     subtitle: "Send to another wallet instantly",
+    enabled: true,
+  },
+  {
+    id: "giftcard",
+    label: "Gift card",
+    icon: (
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+        <rect x="3" y="8" width="18" height="11" rx="2" />
+        <path d="M12 8v11" />
+        <path d="M3 12h18" />
+        <path d="M12 8c-.8-1.2-2.2-1.2-2.6-.4S10.2 9.5 12 8c.8-1.2 2.2-1.2 2.6-.4S13.8 9.5 12 8z" />
+      </svg>
+    ),
+    subtitle: "Link with hidden amount — claim later",
     enabled: true,
   },
   {
@@ -89,7 +104,32 @@ export function PhoneTransferModal({ open, onClose }: PhoneTransferModalProps) {
   const [status, setStatus] = useState<string | null>(null);
   const [sellOpen, setSellOpen] = useState(false);
 
+  useEffect(() => {
+    if (open) {
+      setStep("menu");
+      setStatus(null);
+      setRecipient("");
+      setAmount("");
+    }
+  }, [open]);
+
   if (!open) return null;
+
+  if (step === "giftcard") {
+    return (
+      <div
+        className={phoneFlowOverlay}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Gift card"
+      >
+        <PhoneSendGiftCardView
+          onBack={() => setStep("menu")}
+          onClose={onClose}
+        />
+      </div>
+    );
+  }
 
   const withdrawDisabled =
     !recipient.trim() ||

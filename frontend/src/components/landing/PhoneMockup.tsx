@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useCurrentAccount } from "@mysten/dapp-kit";
 
 import { StreamLineMark } from "./StreamLineMark";
@@ -329,34 +329,40 @@ export function PhoneMockup({
   const userOnboarding = phoneApp === "user" && (!account || needsStep);
   const appOnboarding = proOnboarding || userOnboarding;
 
-  /** iOS-style icon splash when leaving the launcher into an app. */
-  const prevPhoneApp = useRef(phoneApp);
+  /**
+   * iOS-style icon splash when leaving the launcher into an app.
+   * Detect the transition during render (not in an effect) so the splash
+   * covers the first paint — an effect would flash onboarding for a frame.
+   */
+  const [trackedApp, setTrackedApp] = useState(phoneApp);
   const [launchSplash, setLaunchSplash] = useState<"user" | "pro" | null>(null);
   const [splashFading, setSplashFading] = useState(false);
 
-  useEffect(() => {
-    const prev = prevPhoneApp.current;
-    prevPhoneApp.current = phoneApp;
-
+  if (phoneApp !== trackedApp) {
+    const prev = trackedApp;
+    setTrackedApp(phoneApp);
     if (prev === "launcher" && (phoneApp === "user" || phoneApp === "pro")) {
       setLaunchSplash(phoneApp);
       setSplashFading(false);
-      const fadeAt = window.setTimeout(() => setSplashFading(true), 920);
-      const clearAt = window.setTimeout(() => {
-        setLaunchSplash(null);
-        setSplashFading(false);
-      }, 920 + 480);
-      return () => {
-        window.clearTimeout(fadeAt);
-        window.clearTimeout(clearAt);
-      };
-    }
-
-    if (phoneApp === "launcher" || phoneApp === null) {
+    } else if (phoneApp === "launcher" || phoneApp === null) {
       setLaunchSplash(null);
       setSplashFading(false);
     }
-  }, [phoneApp]);
+  }
+
+  useEffect(() => {
+    if (launchSplash === null) return;
+
+    const fadeAt = window.setTimeout(() => setSplashFading(true), 920);
+    const clearAt = window.setTimeout(() => {
+      setLaunchSplash(null);
+      setSplashFading(false);
+    }, 920 + 480);
+    return () => {
+      window.clearTimeout(fadeAt);
+      window.clearTimeout(clearAt);
+    };
+  }, [launchSplash]);
 
   const shell = (
     <>
@@ -438,9 +444,9 @@ export function PhoneMockup({
               transitioning && !inApp
                 ? "scale-[0.97] opacity-0"
                 : launchSplash && !splashFading
-                  ? "opacity-0"
+                  ? "opacity-0 duration-0"
                   : "opacity-100"
-            } ${launchSplash ? "duration-500" : ""}`}
+            } ${launchSplash && splashFading ? "duration-500" : ""}`}
           >
             {inApp && phoneApp && onPhoneAppChange ? (
               <PhoneAppShell
@@ -486,11 +492,11 @@ export function PhoneMockup({
       className={`relative mx-auto shrink-0 transition-all duration-700 ${
         compact
           ? inApp
-            ? "w-[min(78vw,300px)]"
-            : "w-[min(72vw,260px)]"
+            ? "w-[min(78vw,300px,calc((100dvh-7.5rem)*9/19.5))]"
+            : "w-[min(72vw,260px,calc((100dvh-11rem)*9/19.5))]"
           : inApp
-            ? "w-[min(92vw,360px)] sm:w-[400px] lg:w-[440px]"
-            : "w-[min(88vw,300px)] sm:w-[320px] lg:w-[340px]"
+            ? "w-[min(92vw,360px,calc((100dvh-7.5rem)*9/19.5))] sm:w-[min(400px,calc((100dvh-7.5rem)*9/19.5))] lg:w-[min(440px,calc((100dvh-7.5rem)*9/19.5))]"
+            : "w-[min(88vw,300px,calc((100dvh-9rem)*9/19.5))] sm:w-[min(320px,calc((100dvh-9rem)*9/19.5))] lg:w-[min(340px,calc((100dvh-9rem)*9/19.5))]"
       }`}
     >
       <div className="sl-levitate relative">{shell}</div>
