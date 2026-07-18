@@ -118,6 +118,21 @@ export function OverviewScreen() {
         />
       </div>
 
+      <SoftLink
+        href="/app/pro/reports"
+        className="flex items-center justify-between rounded-2xl border border-white/[0.08] bg-white/[0.03] px-4 py-3 transition-colors hover:bg-white/[0.05]"
+      >
+        <div>
+          <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-white/35">
+            Compliance
+          </p>
+          <p className="mt-0.5 text-[13px] text-white/80">
+            Reports, audit timeline, auditor disclosure
+          </p>
+        </div>
+        <span className="text-[12px] text-white/40">Open →</span>
+      </SoftLink>
+
       <div className="grid gap-4 lg:grid-cols-[1.4fr_1fr]">
         <ProCard padding="lg">
           <div className="flex items-center justify-between gap-3">

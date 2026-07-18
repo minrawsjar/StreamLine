@@ -274,8 +274,17 @@ pub async fn get_drips(pool: &PgPool, stream_id: &str) -> Result<Vec<DripRecord>
 }
 
 pub async fn get_cursor(pool: &PgPool) -> Result<Option<(String, String)>> {
+    get_cursor_n(pool, 1).await
+}
+
+pub async fn set_cursor(pool: &PgPool, tx_digest: &str, event_seq: &str) -> Result<()> {
+    set_cursor_n(pool, 1, tx_digest, event_seq).await
+}
+
+pub async fn get_cursor_n(pool: &PgPool, id: i32) -> Result<Option<(String, String)>> {
     let row: Option<(Option<String>, Option<String>)> =
-        sqlx::query_as("SELECT tx_digest, event_seq FROM poll_cursor WHERE id=1")
+        sqlx::query_as("SELECT tx_digest, event_seq FROM poll_cursor WHERE id=$1")
+            .bind(id)
             .fetch_optional(pool)
             .await?;
     Ok(row.and_then(|(d, s)| match (d, s) {
@@ -284,15 +293,144 @@ pub async fn get_cursor(pool: &PgPool) -> Result<Option<(String, String)>> {
     }))
 }
 
-pub async fn set_cursor(pool: &PgPool, tx_digest: &str, event_seq: &str) -> Result<()> {
+pub async fn set_cursor_n(
+    pool: &PgPool,
+    id: i32,
+    tx_digest: &str,
+    event_seq: &str,
+) -> Result<()> {
     sqlx::query(
         r#"INSERT INTO poll_cursor (id, tx_digest, event_seq)
-           VALUES (1,$1,$2)
-           ON CONFLICT (id) DO UPDATE SET tx_digest=$1, event_seq=$2"#,
+           VALUES ($1,$2,$3)
+           ON CONFLICT (id) DO UPDATE SET tx_digest=$2, event_seq=$3"#,
     )
+    .bind(id)
     .bind(tx_digest)
     .bind(event_seq)
     .execute(pool)
     .await?;
     Ok(())
+}
+
+#[derive(Debug, Clone, Serialize, FromRow)]
+pub struct AuditEventRecord {
+    pub id: i64,
+    pub kind: String,
+    pub module: String,
+    pub subject_id: String,
+    pub sender: String,
+    pub counterparty: String,
+    pub amount: i64,
+    pub amount_b: i64,
+    pub meta_json: String,
+    pub timestamp_ms: i64,
+    pub tx_digest: String,
+}
+
+pub async fn insert_audit_event(
+    pool: &PgPool,
+    kind: &str,
+    module: &str,
+    subject_id: &str,
+    sender: &str,
+    counterparty: &str,
+    amount: i64,
+    amount_b: i64,
+    meta_json: &str,
+    timestamp_ms: i64,
+    tx_digest: &str,
+) -> Result<()> {
+    sqlx::query(
+        r#"INSERT INTO audit_events
+            (kind, module, subject_id, sender, counterparty, amount, amount_b, meta_json, timestamp_ms, tx_digest)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+           ON CONFLICT (tx_digest, kind, subject_id) DO NOTHING"#,
+    )
+    .bind(kind)
+    .bind(module)
+    .bind(subject_id)
+    .bind(sender)
+    .bind(counterparty)
+    .bind(amount)
+    .bind(amount_b)
+    .bind(meta_json)
+    .bind(timestamp_ms)
+    .bind(tx_digest)
+    .execute(pool)
+    .await?;
+    Ok(())
+}
+
+pub async fn list_audit_events(
+    pool: &PgPool,
+    party: Option<&str>,
+    subject_id: Option<&str>,
+    from_ms: Option<i64>,
+    to_ms: Option<i64>,
+    limit: i64,
+) -> Result<Vec<AuditEventRecord>> {
+    let rows = sqlx::query_as::<_, AuditEventRecord>(
+        r#"SELECT * FROM audit_events
+           WHERE ($1::text IS NULL OR sender=$1 OR counterparty=$1)
+             AND ($2::text IS NULL OR subject_id=$2)
+             AND ($3::bigint IS NULL OR timestamp_ms >= $3)
+             AND ($4::bigint IS NULL OR timestamp_ms <= $4)
+           ORDER BY timestamp_ms DESC
+           LIMIT $5"#,
+    )
+    .bind(party)
+    .bind(subject_id)
+    .bind(from_ms)
+    .bind(to_ms)
+    .bind(limit.clamp(1, 2000))
+    .fetch_all(pool)
+    .await?;
+    Ok(rows)
+}
+
+/// Payroll statement rows: drip totals per stream for a sender in a window.
+#[derive(Debug, Clone, Serialize, FromRow)]
+pub struct PayrollRow {
+    pub stream_id: String,
+    pub freelancer: String,
+    pub coin_type: String,
+    pub total_locked: i64,
+    pub total_dripped: i64,
+    pub drip_count: i64,
+    pub first_drip_ms: Option<i64>,
+    pub last_drip_ms: Option<i64>,
+    pub digests: String,
+}
+
+pub async fn payroll_statement(
+    pool: &PgPool,
+    sender: &str,
+    from_ms: Option<i64>,
+    to_ms: Option<i64>,
+) -> Result<Vec<PayrollRow>> {
+    let rows = sqlx::query_as::<_, PayrollRow>(
+        r#"SELECT
+             s.id AS stream_id,
+             s.freelancer,
+             s.coin_type,
+             s.total AS total_locked,
+             COALESCE(SUM(d.amount), 0)::bigint AS total_dripped,
+             COUNT(d.id)::bigint AS drip_count,
+             MIN(d.timestamp_ms) AS first_drip_ms,
+             MAX(d.timestamp_ms) AS last_drip_ms,
+             COALESCE(string_agg(DISTINCT d.tx_digest, ','), '') AS digests
+           FROM streams s
+           LEFT JOIN drip_history d ON d.stream_id = s.id
+             AND ($2::bigint IS NULL OR d.timestamp_ms >= $2)
+             AND ($3::bigint IS NULL OR d.timestamp_ms <= $3)
+           WHERE s.sender = $1
+           GROUP BY s.id, s.freelancer, s.coin_type, s.total
+           ORDER BY total_dripped DESC"#,
+    )
+    .bind(sender)
+    .bind(from_ms)
+    .bind(to_ms)
+    .fetch_all(pool)
+    .await?;
+    Ok(rows)
 }

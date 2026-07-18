@@ -45,6 +45,8 @@ export {
   IndexerClient,
   type StreamRecord,
   type DripRecord,
+  type AuditEventRecord,
+  type PayrollRow,
 } from "./indexer.js";
 
 export {

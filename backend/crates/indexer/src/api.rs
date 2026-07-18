@@ -24,6 +24,8 @@ pub fn router(state: AppState) -> Router {
         .route("/streams", get(list_streams))
         .route("/stream/{id}", get(get_stream))
         .route("/stream/{id}/drips", get(get_drips))
+        .route("/audit", get(list_audit))
+        .route("/payroll", get(payroll))
         .route("/ws", get(ws_upgrade))
         .layer(cors)
         .with_state(state)
@@ -61,6 +63,39 @@ async fn get_drips(
     Path(id): Path<String>,
 ) -> impl IntoResponse {
     match db::get_drips(&st.pool, &id).await {
+        Ok(rows) => Json(rows).into_response(),
+        Err(e) => internal(e),
+    }
+}
+
+async fn list_audit(
+    State(st): State<AppState>,
+    Query(q): Query<HashMap<String, String>>,
+) -> impl IntoResponse {
+    let party = q.get("party").or_else(|| q.get("sender")).map(String::as_str);
+    let subject_id = q.get("subject").or_else(|| q.get("stream")).map(String::as_str);
+    let from_ms = q.get("from_ms").and_then(|s| s.parse().ok());
+    let to_ms = q.get("to_ms").and_then(|s| s.parse().ok());
+    let limit = q
+        .get("limit")
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(200);
+    match db::list_audit_events(&st.pool, party, subject_id, from_ms, to_ms, limit).await {
+        Ok(rows) => Json(rows).into_response(),
+        Err(e) => internal(e),
+    }
+}
+
+async fn payroll(
+    State(st): State<AppState>,
+    Query(q): Query<HashMap<String, String>>,
+) -> impl IntoResponse {
+    let Some(sender) = q.get("sender").map(String::as_str) else {
+        return (StatusCode::BAD_REQUEST, "sender required").into_response();
+    };
+    let from_ms = q.get("from_ms").and_then(|s| s.parse().ok());
+    let to_ms = q.get("to_ms").and_then(|s| s.parse().ok());
+    match db::payroll_statement(&st.pool, sender, from_ms, to_ms).await {
         Ok(rows) => Json(rows).into_response(),
         Err(e) => internal(e),
     }

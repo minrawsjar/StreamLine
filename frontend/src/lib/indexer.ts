@@ -6,6 +6,8 @@ import {
   IndexerClient,
   type StreamRecord,
   type DripRecord,
+  type AuditEventRecord,
+  type PayrollRow,
 } from "@streamline/sdk";
 
 /**
@@ -13,7 +15,7 @@ import {
  * for live drip / state updates. REST helpers come from `@streamline/sdk`.
  */
 
-export type { StreamRecord, DripRecord };
+export type { StreamRecord, DripRecord, AuditEventRecord, PayrollRow };
 
 export type LiveUpdate =
   | { type: "drip"; stream_id: string; amount: number; timestamp_ms: number }
@@ -64,6 +66,39 @@ export function useStreamDrips(id: string | undefined) {
     queryFn: () => fetchStreamDrips(id!),
     enabled: !!id,
     refetchInterval: 20_000,
+  });
+}
+
+export function useAuditEvents(params: {
+  party?: string;
+  subject?: string;
+  fromMs?: number;
+  toMs?: number;
+  limit?: number;
+}) {
+  return useQuery({
+    queryKey: ["audit", params],
+    queryFn: () => indexer.audit(params),
+    enabled: !!(params.party || params.subject),
+    refetchInterval: 20_000,
+  });
+}
+
+export function usePayrollStatement(params: {
+  sender?: string;
+  fromMs?: number;
+  toMs?: number;
+}) {
+  return useQuery({
+    queryKey: ["payroll", params],
+    queryFn: () =>
+      indexer.payroll({
+        sender: params.sender!,
+        fromMs: params.fromMs,
+        toMs: params.toMs,
+      }),
+    enabled: !!params.sender,
+    refetchInterval: 30_000,
   });
 }
 

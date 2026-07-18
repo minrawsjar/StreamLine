@@ -17,6 +17,7 @@ const NAV = [
   { href: "/app/pro/streams", label: "Streams", match: "prefix" as const },
   { href: "/app/pro/people", label: "People", match: "prefix" as const },
   { href: "/app/pro/treasury", label: "Treasury", match: "prefix" as const },
+  { href: "/app/pro/reports", label: "Reports", match: "prefix" as const },
 ];
 
 function navActive(pathname: string | null, href: string, match: "exact" | "prefix") {

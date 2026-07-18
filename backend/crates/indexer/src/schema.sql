@@ -32,7 +32,29 @@ CREATE TABLE IF NOT EXISTS drip_history (
 
 CREATE INDEX IF NOT EXISTS idx_drip_stream ON drip_history (stream_id);
 
--- Single-row table persisting the event poller cursor so it resumes.
+-- Unified compliance / audit timeline (streams + disputes + gift cards).
+CREATE TABLE IF NOT EXISTS audit_events (
+    id            BIGSERIAL PRIMARY KEY,
+    kind          TEXT NOT NULL,
+    module        TEXT NOT NULL DEFAULT 'stream',
+    subject_id    TEXT NOT NULL DEFAULT '',
+    sender        TEXT NOT NULL DEFAULT '',
+    counterparty  TEXT NOT NULL DEFAULT '',
+    amount        BIGINT NOT NULL DEFAULT 0,
+    amount_b      BIGINT NOT NULL DEFAULT 0,
+    meta_json     TEXT NOT NULL DEFAULT '{}',
+    timestamp_ms  BIGINT NOT NULL DEFAULT 0,
+    tx_digest     TEXT NOT NULL DEFAULT '',
+    UNIQUE (tx_digest, kind, subject_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_audit_sender ON audit_events (sender);
+CREATE INDEX IF NOT EXISTS idx_audit_counterparty ON audit_events (counterparty);
+CREATE INDEX IF NOT EXISTS idx_audit_subject ON audit_events (subject_id);
+CREATE INDEX IF NOT EXISTS idx_audit_time ON audit_events (timestamp_ms DESC);
+CREATE INDEX IF NOT EXISTS idx_audit_kind ON audit_events (kind);
+
+-- Per-module poll cursors (id=1 stream, id=2 giftcard).
 CREATE TABLE IF NOT EXISTS poll_cursor (
     id         INT PRIMARY KEY DEFAULT 1,
     tx_digest  TEXT,

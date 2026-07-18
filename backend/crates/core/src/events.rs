@@ -10,6 +10,13 @@ pub const EV_MILESTONE_RAISED: &str = "MilestoneRaised";
 pub const EV_MILESTONE_APPROVED: &str = "MilestoneApproved";
 pub const EV_DRIPPED: &str = "StreamDripped";
 pub const EV_PAUSED: &str = "StreamPaused";
+pub const EV_RESOLUTION_PROPOSED: &str = "ResolutionProposed";
+pub const EV_DISPUTE_RESOLVED: &str = "DisputeResolved";
+
+/// Gift-card module (`streamline::giftcard`).
+pub const EV_GIFT_CREATED: &str = "GiftCardCreated";
+pub const EV_GIFT_CLAIMED: &str = "GiftCardClaimed";
+pub const EV_GIFT_CANCELLED: &str = "GiftCardCancelled";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StreamCreated {
@@ -46,6 +53,22 @@ pub struct StreamPaused {
     pub stream_id: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ResolutionProposed {
+    pub stream_id: String,
+    pub proposer: String,
+    pub resume: bool,
+    pub freelancer_bps: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DisputeResolved {
+    pub stream_id: String,
+    pub resumed: bool,
+    pub freelancer_amount: u64,
+    pub sender_amount: u64,
+}
+
 /// A decoded StreamLine event tagged by kind, carrying the originating tx digest.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
@@ -55,6 +78,8 @@ pub enum StreamEvent {
     MilestoneApproved(MilestoneApproved),
     Dripped(StreamDripped),
     Paused(StreamPaused),
+    ResolutionProposed(ResolutionProposed),
+    DisputeResolved(DisputeResolved),
 }
 
 impl StreamEvent {
@@ -66,6 +91,8 @@ impl StreamEvent {
             StreamEvent::MilestoneApproved(e) => &e.stream_id,
             StreamEvent::Dripped(e) => &e.stream_id,
             StreamEvent::Paused(e) => &e.stream_id,
+            StreamEvent::ResolutionProposed(e) => &e.stream_id,
+            StreamEvent::DisputeResolved(e) => &e.stream_id,
         }
     }
 }

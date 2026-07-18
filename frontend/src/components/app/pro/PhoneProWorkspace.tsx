@@ -16,8 +16,9 @@ import {
 } from "./types";
 import { ProActionModals } from "./modals/ProActionModals";
 import { StatusPill } from "./ui";
+import { ReportsScreen } from "./screens/ReportsScreen";
 
-type PhoneTab = "overview" | "streams" | "people" | "capital";
+type PhoneTab = "overview" | "streams" | "people" | "capital" | "reports";
 
 export function PhoneProWorkspace() {
   const { setModal } = useProWorkspace();
@@ -27,7 +28,7 @@ export function PhoneProWorkspace() {
 
   const handlePlus = () => {
     // Context-aware create: only Overview stays multimodal.
-    if (tab === "overview") {
+    if (tab === "overview" || tab === "reports") {
       setComposeOpen(true);
       return;
     }
@@ -52,11 +53,13 @@ export function PhoneProWorkspace() {
             onToggle={(id) =>
               setExpanded((prev) => ({ ...prev, [id]: !prev[id] }))
             }
+            onOpenReports={() => setTab("reports")}
           />
         )}
         {tab === "streams" && <StreamsTab />}
         {tab === "people" && <PeopleTab />}
         {tab === "capital" && <CapitalTab />}
+        {tab === "reports" && <ReportsTab />}
       </div>
 
       <ProPhoneDock tab={tab} onTab={setTab} onCompose={handlePlus} />
@@ -358,9 +361,11 @@ function IconCapital() {
 function OverviewTab({
   expanded,
   onToggle,
+  onOpenReports,
 }: {
   expanded: Record<string, boolean>;
   onToggle: (id: string) => void;
+  onOpenReports?: () => void;
 }) {
   const { workspace, totals, setModal } = useProWorkspace();
   const ungrouped = workspace.workers.filter((w) => !w.groupId);
@@ -471,20 +476,20 @@ function OverviewTab({
         </div>
         <button
           type="button"
-          aria-label="Notifications"
+          aria-label="Reports"
           className="sl-pro-icon-btn"
-          onClick={() => setModal("fund")}
+          onClick={() => onOpenReports?.()}
         >
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden>
             <path
-              d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"
+              d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"
               stroke="currentColor"
               strokeWidth="1.7"
               strokeLinecap="round"
               strokeLinejoin="round"
             />
             <path
-              d="M13.73 21a2 2 0 0 1-3.46 0"
+              d="M14 2v6h6M8 13h8M8 17h5"
               stroke="currentColor"
               strokeWidth="1.7"
               strokeLinecap="round"
@@ -1121,6 +1126,10 @@ function PeopleTab() {
       </div>
     </div>
   );
+}
+
+function ReportsTab() {
+  return <ReportsScreen />;
 }
 
 function CapitalTab() {

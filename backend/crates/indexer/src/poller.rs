@@ -4,7 +4,7 @@
 
 use std::time::Duration;
 
-use serde_json::Value;
+use serde_json::{json, Value};
 use streamline_core::events::*;
 use streamline_core::sui::{EventId, SuiClient, SuiEvent};
 
@@ -16,6 +16,15 @@ fn u64_field(v: &Value, key: &str) -> u64 {
         Some(Value::String(s)) => s.parse().unwrap_or(0),
         Some(Value::Number(n)) => n.as_u64().or_else(|| n.as_f64().map(|f| f as u64)).unwrap_or(0),
         _ => 0,
+    }
+}
+
+fn bool_field(v: &Value, key: &str) -> bool {
+    match v.get(key) {
+        Some(Value::Bool(b)) => *b,
+        Some(Value::String(s)) => s == "true" || s == "1",
+        Some(Value::Number(n)) => n.as_u64().unwrap_or(0) != 0,
+        _ => false,
     }
 }
 
@@ -37,14 +46,30 @@ fn str_field(v: &Value, key: &str) -> String {
         .to_string()
 }
 
+/// Id field may be a string or `{ "id": "0x…" }` BCS shape.
+fn id_field(v: &Value, key: &str) -> String {
+    match v.get(key) {
+        Some(Value::String(s)) => s.clone(),
+        Some(Value::Object(o)) => o
+            .get("id")
+            .and_then(Value::as_str)
+            .unwrap_or_default()
+            .to_string(),
+        _ => String::new(),
+    }
+}
+
 pub async fn run(state: AppState) {
     let interval = Duration::from_millis(state.config.poll_interval_ms);
     let client = SuiClient::new(&state.config.sui_rpc_url);
 
     loop {
         if state.config.has_package() {
-            if let Err(e) = poll_once(&state, &client).await {
-                tracing::warn!("poll error: {e:#}");
+            if let Err(e) = poll_module(&state, &client, &state.config.module, 1).await {
+                tracing::warn!("poll stream error: {e:#}");
+            }
+            if let Err(e) = poll_module(&state, &client, "giftcard", 2).await {
+                tracing::warn!("poll giftcard error: {e:#}");
             }
             if let Err(e) = backfill_missing(&state, &client).await {
                 tracing::warn!("backfill sweep error: {e:#}");
@@ -55,7 +80,6 @@ pub async fn run(state: AppState) {
 }
 
 /// Sweep streams that are missing coin type / timing and fill them from chain.
-/// Idempotent and self-limiting: once every row has metadata it does nothing.
 async fn backfill_missing(state: &AppState, client: &SuiClient) -> anyhow::Result<()> {
     for id in db::streams_missing_meta(&state.pool).await? {
         if let Err(e) = backfill_meta(state, client, &id).await {
@@ -70,19 +94,21 @@ async fn backfill_missing(state: &AppState, client: &SuiClient) -> anyhow::Resul
     Ok(())
 }
 
-async fn poll_once(state: &AppState, client: &SuiClient) -> anyhow::Result<()> {
-    let cursor = db::get_cursor(&state.pool).await?.map(|(d, s)| EventId {
-        tx_digest: d,
-        event_seq: s,
-    });
+async fn poll_module(
+    state: &AppState,
+    client: &SuiClient,
+    module: &str,
+    cursor_id: i32,
+) -> anyhow::Result<()> {
+    let cursor = db::get_cursor_n(&state.pool, cursor_id)
+        .await?
+        .map(|(d, s)| EventId {
+            tx_digest: d,
+            event_seq: s,
+        });
 
     let page = client
-        .query_events(
-            &state.config.package_id,
-            &state.config.module,
-            cursor.as_ref(),
-            50,
-        )
+        .query_events(&state.config.package_id, module, cursor.as_ref(), 50)
         .await?;
 
     for ev in &page.data {
@@ -92,9 +118,38 @@ async fn poll_once(state: &AppState, client: &SuiClient) -> anyhow::Result<()> {
     }
 
     if let Some(c) = page.next_cursor {
-        db::set_cursor(&state.pool, &c.tx_digest, &c.event_seq).await?;
+        db::set_cursor_n(&state.pool, cursor_id, &c.tx_digest, &c.event_seq).await?;
     }
     Ok(())
+}
+
+async fn audit(
+    state: &AppState,
+    kind: &str,
+    module: &str,
+    subject_id: &str,
+    sender: &str,
+    counterparty: &str,
+    amount: i64,
+    amount_b: i64,
+    meta: Value,
+    timestamp_ms: i64,
+    tx_digest: &str,
+) -> anyhow::Result<()> {
+    db::insert_audit_event(
+        &state.pool,
+        kind,
+        module,
+        subject_id,
+        sender,
+        counterparty,
+        amount,
+        amount_b,
+        &meta.to_string(),
+        timestamp_ms,
+        tx_digest,
+    )
+    .await
 }
 
 async fn process_event(
@@ -108,30 +163,61 @@ async fn process_event(
         .as_deref()
         .and_then(|s| s.parse::<i64>().ok())
         .unwrap_or(0);
+    let digest = &ev.id.tx_digest;
 
     match ev.short_type() {
         EV_CREATED => {
             let e = StreamCreated {
-                stream_id: str_field(j, "stream_id"),
+                stream_id: id_field(j, "stream_id"),
                 sender: str_field(j, "sender"),
                 freelancer: str_field(j, "freelancer"),
                 total: u64_field(j, "total"),
                 n_milestones: u64_field(j, "n_milestones"),
             };
             db::upsert_created(&state.pool, &e, now).await?;
-            // The event omits the coin type + timing; read them off the object so
-            // the keeper can settle and the UI can show live accrual.
+            audit(
+                state,
+                "stream_created",
+                "stream",
+                &e.stream_id,
+                &e.sender,
+                &e.freelancer,
+                e.total as i64,
+                0,
+                json!({ "n_milestones": e.n_milestones }),
+                now,
+                digest,
+            )
+            .await?;
             if let Err(err) = backfill_meta(state, client, &e.stream_id).await {
                 tracing::warn!("backfill meta for {} failed: {err:#}", e.stream_id);
             }
         }
         EV_MILESTONE_RAISED => {
             let e = MilestoneRaised {
-                stream_id: str_field(j, "stream_id"),
+                stream_id: id_field(j, "stream_id"),
                 milestone_index: u64_field(j, "milestone_index"),
                 review_deadline_ms: u64_field(j, "review_deadline_ms"),
             };
             db::set_pending(&state.pool, &e).await?;
+            let (sender, freelancer) = parties(state, &e.stream_id).await;
+            audit(
+                state,
+                "milestone_raised",
+                "stream",
+                &e.stream_id,
+                &sender,
+                &freelancer,
+                0,
+                0,
+                json!({
+                    "milestone_index": e.milestone_index,
+                    "review_deadline_ms": e.review_deadline_ms
+                }),
+                now,
+                digest,
+            )
+            .await?;
             state.publish(LiveUpdate::State {
                 stream_id: e.stream_id,
                 state: "pending_review".into(),
@@ -139,10 +225,25 @@ async fn process_event(
         }
         EV_MILESTONE_APPROVED => {
             let e = MilestoneApproved {
-                stream_id: str_field(j, "stream_id"),
+                stream_id: id_field(j, "stream_id"),
                 milestone_index: u64_field(j, "milestone_index"),
             };
             db::set_dripping(&state.pool, &e).await?;
+            let (sender, freelancer) = parties(state, &e.stream_id).await;
+            audit(
+                state,
+                "milestone_approved",
+                "stream",
+                &e.stream_id,
+                &sender,
+                &freelancer,
+                0,
+                0,
+                json!({ "milestone_index": e.milestone_index }),
+                now,
+                digest,
+            )
+            .await?;
             state.publish(LiveUpdate::State {
                 stream_id: e.stream_id,
                 state: "dripping".into(),
@@ -150,13 +251,26 @@ async fn process_event(
         }
         EV_DRIPPED => {
             let e = StreamDripped {
-                stream_id: str_field(j, "stream_id"),
+                stream_id: id_field(j, "stream_id"),
                 amount: u64_field(j, "amount"),
                 timestamp_ms: u64_field(j, "timestamp_ms").max(now as u64),
             };
-            db::apply_drip(&state.pool, &e, &ev.id.tx_digest).await?;
-            // Milestone completion (→ locked + bump index) happens inside `drip`
-            // with no separate event — re-read the object to stay in sync.
+            db::apply_drip(&state.pool, &e, digest).await?;
+            let (sender, freelancer) = parties(state, &e.stream_id).await;
+            audit(
+                state,
+                "stream_dripped",
+                "stream",
+                &e.stream_id,
+                &sender,
+                &freelancer,
+                e.amount as i64,
+                0,
+                json!({}),
+                e.timestamp_ms as i64,
+                digest,
+            )
+            .await?;
             if let Err(err) = sync_stream_state(state, client, &e.stream_id).await {
                 tracing::warn!("state sync after drip {}: {err:#}", e.stream_id);
             }
@@ -167,20 +281,146 @@ async fn process_event(
             });
         }
         EV_PAUSED => {
-            let id = str_field(j, "stream_id");
+            let id = id_field(j, "stream_id");
             db::set_paused(&state.pool, &id).await?;
+            let (sender, freelancer) = parties(state, &id).await;
+            audit(
+                state,
+                "dispute_raised",
+                "stream",
+                &id,
+                &sender,
+                &freelancer,
+                0,
+                0,
+                json!({}),
+                now,
+                digest,
+            )
+            .await?;
             state.publish(LiveUpdate::State {
                 stream_id: id,
                 state: "paused".into(),
             });
+        }
+        EV_RESOLUTION_PROPOSED => {
+            let stream_id = id_field(j, "stream_id");
+            let proposer = str_field(j, "proposer");
+            let resume = bool_field(j, "resume");
+            let freelancer_bps = u64_field(j, "freelancer_bps");
+            let (sender, freelancer) = parties(state, &stream_id).await;
+            audit(
+                state,
+                "resolution_proposed",
+                "stream",
+                &stream_id,
+                &sender,
+                &freelancer,
+                0,
+                0,
+                json!({
+                    "proposer": proposer,
+                    "resume": resume,
+                    "freelancer_bps": freelancer_bps
+                }),
+                now,
+                digest,
+            )
+            .await?;
+        }
+        EV_DISPUTE_RESOLVED => {
+            let stream_id = id_field(j, "stream_id");
+            let resumed = bool_field(j, "resumed");
+            let freelancer_amount = u64_field(j, "freelancer_amount");
+            let sender_amount = u64_field(j, "sender_amount");
+            let (sender, freelancer) = parties(state, &stream_id).await;
+            audit(
+                state,
+                "dispute_resolved",
+                "stream",
+                &stream_id,
+                &sender,
+                &freelancer,
+                freelancer_amount as i64,
+                sender_amount as i64,
+                json!({ "resumed": resumed }),
+                now,
+                digest,
+            )
+            .await?;
+            if let Err(err) = sync_stream_state(state, client, &stream_id).await {
+                tracing::warn!("state sync after dispute resolve {stream_id}: {err:#}");
+            }
+        }
+        EV_GIFT_CREATED => {
+            let card_id = id_field(j, "card_id");
+            let sender = str_field(j, "sender");
+            let expires_ms = u64_field(j, "expires_ms");
+            audit(
+                state,
+                "giftcard_created",
+                "giftcard",
+                &card_id,
+                &sender,
+                "",
+                0,
+                0,
+                json!({ "expires_ms": expires_ms }),
+                now,
+                digest,
+            )
+            .await?;
+        }
+        EV_GIFT_CLAIMED => {
+            let card_id = id_field(j, "card_id");
+            let claimer = str_field(j, "claimer");
+            let amount = u64_field(j, "amount");
+            audit(
+                state,
+                "giftcard_claimed",
+                "giftcard",
+                &card_id,
+                "",
+                &claimer,
+                amount as i64,
+                0,
+                json!({}),
+                now,
+                digest,
+            )
+            .await?;
+        }
+        EV_GIFT_CANCELLED => {
+            let card_id = id_field(j, "card_id");
+            let sender = str_field(j, "sender");
+            let amount = u64_field(j, "amount");
+            audit(
+                state,
+                "giftcard_cancelled",
+                "giftcard",
+                &card_id,
+                &sender,
+                "",
+                amount as i64,
+                0,
+                json!({}),
+                now,
+                digest,
+            )
+            .await?;
         }
         other => tracing::debug!("ignoring event {other}"),
     }
     Ok(())
 }
 
-/// Read the Stream object and persist the fields the creation event omits:
-/// the coin type (the `T` in `Stream<T>`) plus the duration / drip interval.
+async fn parties(state: &AppState, stream_id: &str) -> (String, String) {
+    match db::get_stream(&state.pool, stream_id).await {
+        Ok(Some(s)) => (s.sender, s.freelancer),
+        _ => (String::new(), String::new()),
+    }
+}
+
 async fn backfill_meta(
     state: &AppState,
     client: &SuiClient,
@@ -196,13 +436,17 @@ async fn backfill_meta(
     let duration_ms = u64_field(fields, "duration_ms") as i64;
     let drip_interval_ms = u64_field(fields, "drip_interval_ms") as i64;
 
-    db::set_stream_meta(&state.pool, stream_id, &coin_type, duration_ms, drip_interval_ms)
-        .await?;
+    db::set_stream_meta(
+        &state.pool,
+        stream_id,
+        &coin_type,
+        duration_ms,
+        drip_interval_ms,
+    )
+    .await?;
     Ok(())
 }
 
-/// Read `state` + `current_milestone` from chain and persist. Needed because
-/// milestone completion happens inside `drip` without its own event.
 async fn sync_stream_state(
     state: &AppState,
     client: &SuiClient,
@@ -236,7 +480,6 @@ async fn sync_stream_state(
     Ok(())
 }
 
-/// Extract `T` from `0x..::stream::Stream<T>` (the innermost generic argument).
 fn type_param(type_str: &str) -> Option<String> {
     let start = type_str.find('<')?;
     let end = type_str.rfind('>')?;
