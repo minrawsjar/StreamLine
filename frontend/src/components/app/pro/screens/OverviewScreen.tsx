@@ -81,7 +81,7 @@ export function OverviewScreen() {
             }`}
             onClick={() => setModal("invest")}
           >
-            Allocate
+            Rebalance
           </button>
         </div>
       </div>
@@ -117,7 +117,7 @@ export function OverviewScreen() {
             <div className="flex items-center gap-2">
               <ProChip>Live</ProChip>
               <ProIconButton
-                label="Allocate capital"
+                label="Rebalance capital"
                 onClick={() => setModal("invest")}
               >
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden>

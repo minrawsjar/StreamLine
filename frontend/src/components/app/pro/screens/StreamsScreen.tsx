@@ -53,7 +53,7 @@ export function StreamsScreen() {
             className="sl-glass-btn-dark !px-4 !py-2 !text-[11px]"
             onClick={() => setModal("invest")}
           >
-            Allocate
+            Rebalance
           </button>
           <button
             type="button"

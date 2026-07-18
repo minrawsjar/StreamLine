@@ -26,7 +26,8 @@ export function ProActionModals() {
   if (modal === "fund") return <FundModal onClose={() => setModal(null)} />;
   if (modal === "withdraw")
     return <WithdrawModal onClose={() => setModal(null)} />;
-  if (modal === "invest") return <InvestModal onClose={() => setModal(null)} />;
+  if (modal === "invest")
+    return <RebalanceModal onClose={() => setModal(null)} />;
   if (modal === "worker")
     return <WorkerModal onClose={() => setModal(null)} />;
   if (modal === "group") return <GroupModal onClose={() => setModal(null)} />;
@@ -64,6 +65,15 @@ function FundModal({ onClose }: { onClose: () => void }) {
             onChange={(e) => setAmount(e.target.value)}
           />
         </ProField>
+        <input
+          type="range"
+          min={0}
+          max={100_000}
+          step={500}
+          value={Math.min(100_000, Math.max(0, Math.floor(Number(amount) || 0)))}
+          onChange={(e) => setAmount(e.target.value)}
+          className="w-full accent-[#22c55e]"
+        />
         <p className="text-[12px] text-white/40">
           Coverage floor {fmtUsd(totals.floor)} · {pending} pending substream
           {pending === 1 ? "" : "s"} will activate.
@@ -119,6 +129,15 @@ function WithdrawModal({ onClose }: { onClose: () => void }) {
             onChange={(e) => setAmount(e.target.value)}
           />
         </ProField>
+        <input
+          type="range"
+          min={0}
+          max={Math.max(1, Math.floor(max))}
+          step={1}
+          value={Math.min(Math.floor(Number(amount) || 0), Math.floor(max))}
+          onChange={(e) => setAmount(e.target.value)}
+          className="w-full accent-[#22c55e]"
+        />
         <p className="text-[12px] text-white/40">
           Available above floor: {fmtUsd(max)}
           {willDivest && max > 0 && (
@@ -160,139 +179,236 @@ function WithdrawModal({ onClose }: { onClose: () => void }) {
   );
 }
 
-function InvestModal({ onClose }: { onClose: () => void }) {
-  const { investIdle, investTreasury, rebalance, totals, workspace, creating } =
+function RebalanceModal({ onClose }: { onClose: () => void }) {
+  const { investTreasury, rebalance, totals, workspace, creating } =
     useProWorkspace();
-  const [mode, setMode] = useState<"invest" | "rebalance">("invest");
+  const [from, setFrom] = useState<ProPoolBucket>("idle");
+  const [to, setTo] = useState<ProPoolBucket>("yield_vault");
+  const [amount, setAmount] = useState(0);
+  const [providersOpen, setProvidersOpen] = useState(true);
+  const [provider, setProvider] = useState<string>("native");
   const [err, setErr] = useState<string | null>(null);
-  const [amount, setAmount] = useState(
-    String(Math.floor(totals.investable) || 0)
-  );
-  const [bucket, setBucket] = useState<ProPoolBucket>("yield_vault");
-  const [from, setFrom] = useState<ProPoolBucket>("yield_vault");
-  const [to, setTo] = useState<ProPoolBucket>("idle");
+
+  const fromBal = workspace.pool.allocation[from];
+  const maxMove = useMemo(() => {
+    if (from === "idle") return Math.max(0, totals.investable);
+    return Math.max(0, fromBal);
+  }, [from, fromBal, totals.investable]);
+
+  const clamped = Math.min(amount, maxMove);
+
+  const buckets: { id: ProPoolBucket; label: string }[] = [
+    { id: "idle", label: "Liquid" },
+    { id: "yield_vault", label: "Yield" },
+    { id: "reserve", label: "Reserve" },
+  ];
+
+  const providers = [
+    {
+      id: "native",
+      name: "StreamLine vault",
+      detail: "Native adapter · ~8% APR testnet",
+      available: true,
+    },
+    {
+      id: "scallop",
+      name: "Scallop",
+      detail: "Lending · mainnet adapter soon",
+      available: false,
+    },
+    {
+      id: "navi",
+      name: "Navi",
+      detail: "Lending · mainnet adapter soon",
+      available: false,
+    },
+    {
+      id: "suilend",
+      name: "Suilend",
+      detail: "Lending · mainnet adapter soon",
+      available: false,
+    },
+  ] as const;
 
   return (
     <ProModal
-      title="Allocate idle capital"
-      subtitle="Keep the coverage floor liquid. Route the rest into StreamLine’s yield vault or a reserve bucket."
+      title="Rebalance"
+      subtitle="Move float between liquid, yield, and reserve. Keep the coverage floor liquid for payroll."
       onClose={onClose}
     >
-      <div className="mb-4 flex gap-1 rounded-full border border-white/10 bg-white/[0.03] p-1">
-        {(
-          [
-            ["invest", "Invest"],
-            ["rebalance", "Rebalance"],
-          ] as const
-        ).map(([id, label]) => (
-          <button
-            key={id}
-            type="button"
-            onClick={() => setMode(id)}
-            className={`flex-1 rounded-full px-3 py-1.5 text-[11px] ${
-              mode === id
-                ? "bg-white text-[#0a0a0a]"
-                : "text-white/50 hover:text-white"
-            }`}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
-
       <div className="space-y-4">
-        {mode === "invest" ? (
-          <>
-            <ProField label="Destination">
-              <select
-                className={proSelectClass}
-                value={bucket}
-                onChange={(e) => setBucket(e.target.value as ProPoolBucket)}
+        <div>
+          <p className="text-[9px] font-medium uppercase tracking-[0.12em] text-white/35">
+            From
+          </p>
+          <div className="mt-1.5 grid grid-cols-3 gap-1.5">
+            {buckets.map((b) => (
+              <button
+                key={b.id}
+                type="button"
+                onClick={() => {
+                  setFrom(b.id);
+                  setAmount(0);
+                  if (to === b.id) {
+                    setTo(b.id === "idle" ? "yield_vault" : "idle");
+                  }
+                }}
+                className={`rounded-xl px-2 py-2.5 text-[11px] font-semibold transition-colors ${
+                  from === b.id
+                    ? "bg-white text-[#0a0a0a]"
+                    : "border border-white/10 bg-white/[0.04] text-white/55"
+                }`}
               >
-                <option value="yield_vault">Yield vault</option>
-                <option value="reserve">Reserve</option>
-              </select>
-            </ProField>
-            <ProField label="Amount (USDC)">
-              <input
-                className={proInputClass}
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-              />
-            </ProField>
-            <p className="text-[12px] text-white/40">
-              Investable now: {fmtUsd(totals.investable)} (floor{" "}
-              {fmtUsd(totals.floor)})
+                {b.label}
+                <span className="mt-0.5 block text-[9px] font-normal tabular opacity-70">
+                  {fmtUsd(workspace.pool.allocation[b.id], 0)}
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div>
+          <p className="text-[9px] font-medium uppercase tracking-[0.12em] text-white/35">
+            To
+          </p>
+          <div className="mt-1.5 grid grid-cols-3 gap-1.5">
+            {buckets.map((b) => (
+              <button
+                key={b.id}
+                type="button"
+                disabled={b.id === from}
+                onClick={() => setTo(b.id)}
+                className={`rounded-xl px-2 py-2.5 text-[11px] font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-25 ${
+                  to === b.id
+                    ? "bg-white text-[#0a0a0a]"
+                    : "border border-white/10 bg-white/[0.04] text-white/55"
+                }`}
+              >
+                {b.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div>
+          <div className="flex items-center justify-between">
+            <p className="text-[9px] font-medium uppercase tracking-[0.12em] text-white/35">
+              Amount
             </p>
-          </>
-        ) : (
-          <>
-            <div className="grid grid-cols-2 gap-3">
-              <ProField label="From">
-                <select
-                  className={proSelectClass}
-                  value={from}
-                  onChange={(e) => setFrom(e.target.value as ProPoolBucket)}
-                >
-                  <option value="idle">Liquid</option>
-                  <option value="yield_vault">Yield vault</option>
-                  <option value="reserve">Reserve</option>
-                </select>
-              </ProField>
-              <ProField label="To">
-                <select
-                  className={proSelectClass}
-                  value={to}
-                  onChange={(e) => setTo(e.target.value as ProPoolBucket)}
-                >
-                  <option value="idle">Liquid</option>
-                  <option value="yield_vault">Yield vault</option>
-                  <option value="reserve">Reserve</option>
-                </select>
-              </ProField>
-            </div>
-            <ProField label="Amount (USDC)">
-              <input
-                className={proInputClass}
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-              />
-            </ProField>
-            <p className="text-[12px] text-white/40">
-              {from}: {fmtUsd(workspace.pool.allocation[from])}
+            <p className="text-[12px] font-semibold tabular text-white">
+              {fmtUsd(clamped, clamped % 1 ? 2 : 0)}
             </p>
-          </>
-        )}
+          </div>
+          <input
+            type="range"
+            min={0}
+            max={Math.max(1, Math.floor(maxMove))}
+            step={1}
+            value={Math.floor(clamped)}
+            onChange={(e) => setAmount(Number(e.target.value))}
+            className="mt-2 w-full accent-[#22c55e]"
+          />
+          <div className="mt-1 flex justify-between text-[10px] text-white/30">
+            <span>0</span>
+            <span>Max {fmtUsd(maxMove, 0)}</span>
+          </div>
+        </div>
+
+        {to === "yield_vault" ? (
+          <div className="overflow-hidden rounded-xl border border-white/10 bg-white/[0.03]">
+            <button
+              type="button"
+              onClick={() => setProvidersOpen((o) => !o)}
+              className="flex w-full items-center justify-between px-3 py-2.5 text-left"
+            >
+              <span className="text-[11px] font-medium text-white/70">
+                Yield providers
+              </span>
+              <span className="text-[11px] text-white/35">
+                {providersOpen ? "▴" : "▾"}
+              </span>
+            </button>
+            {providersOpen ? (
+              <div className="space-y-1 border-t border-white/[0.06] px-2 py-2">
+                {providers.map((p) => (
+                  <button
+                    key={p.id}
+                    type="button"
+                    disabled={!p.available}
+                    onClick={() => setProvider(p.id)}
+                    className={`flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left transition-colors disabled:opacity-40 ${
+                      provider === p.id && p.available
+                        ? "bg-white/[0.08]"
+                        : "hover:bg-white/[0.04]"
+                    }`}
+                  >
+                    <span
+                      className={`h-2 w-2 shrink-0 rounded-full ${
+                        p.available
+                          ? provider === p.id
+                            ? "bg-[#22c55e]"
+                            : "bg-white/25"
+                          : "bg-white/15"
+                      }`}
+                    />
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-[12px] font-medium text-white">
+                        {p.name}
+                        {!p.available ? (
+                          <span className="ml-1.5 text-[9px] font-normal uppercase tracking-wider text-white/30">
+                            Soon
+                          </span>
+                        ) : null}
+                      </span>
+                      <span className="block text-[10px] text-white/40">
+                        {p.detail}
+                      </span>
+                    </span>
+                  </button>
+                ))}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+
+        <p className="text-[11px] text-white/40">
+          Floor {fmtUsd(totals.floor)} stays preferred for payroll liquidity.
+        </p>
 
         {err && <p className="text-[12px] text-[#e0866a]">{err}</p>}
         <div className="flex justify-end gap-2">
-          <button type="button" className="sl-glass-btn-dark !px-4 !py-2 !text-[11px]" onClick={onClose}>
+          <button
+            type="button"
+            className="sl-glass-btn-dark !px-4 !py-2 !text-[11px]"
+            onClick={onClose}
+          >
             Cancel
           </button>
           <button
             type="button"
             className="sl-glass-btn-dark sl-glass-btn-dark-primary !px-4 !py-2 !text-[11px]"
-            disabled={creating}
+            disabled={creating || clamped <= 0 || from === to}
             onClick={async () => {
-              const n = Number(amount);
-              if (!Number.isFinite(n) || n <= 0) return;
+              if (clamped <= 0 || from === to) return;
               setErr(null);
-              // Only "invest → yield vault" has on-chain backing; reserve moves
-              // and rebalance stay local policy over the real balances.
-              if (mode === "invest" && bucket === "yield_vault") {
+              if (
+                from === "idle" &&
+                to === "yield_vault" &&
+                provider === "native"
+              ) {
                 try {
-                  if (await investTreasury(n)) onClose();
+                  if (await investTreasury(clamped)) onClose();
                 } catch (e) {
                   setErr(e instanceof Error ? e.message : String(e));
                 }
                 return;
               }
-              if (mode === "invest") investIdle(n, bucket);
-              else rebalance(from, to, n);
+              rebalance(from, to, clamped);
               onClose();
             }}
           >
-            {creating ? "Confirming…" : "Confirm"}
+            {creating ? "Confirming…" : "Rebalance"}
           </button>
         </div>
       </div>

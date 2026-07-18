@@ -28,59 +28,15 @@ export function TreasuryScreen() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <ProEyebrow>Treasury</ProEyebrow>
-          <h1 className="mt-2 text-[clamp(26px,3.5vw,36px)] font-semibold tracking-tight text-white">
-            Idle capital & yield
-          </h1>
-          <p className="mt-1 max-w-xl text-[13px] text-white/45">
-            Fund the pool, on/off-ramp fiat, withdraw to the org wallet, or
-            allocate idle float. Coverage floor stays reserved for drip
-            liquidity.
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            className="sl-glass-btn-dark sl-glass-btn-dark-primary !px-4 !py-2 !text-[11px]"
-            onClick={() => setModal("fund")}
-          >
-            Fund pool
-          </button>
-          {canRamp ? (
-            <>
-              <button
-                type="button"
-                className="sl-glass-btn-dark !px-4 !py-2 !text-[11px]"
-                onClick={() => setRampMode("buy")}
-              >
-                Add funds
-              </button>
-              <button
-                type="button"
-                className="sl-glass-btn-dark !px-4 !py-2 !text-[11px]"
-                onClick={() => setRampMode("sell")}
-              >
-                Cash out
-              </button>
-            </>
-          ) : null}
-          <button
-            type="button"
-            className="sl-glass-btn-dark !px-4 !py-2 !text-[11px]"
-            onClick={() => setModal("withdraw")}
-          >
-            Withdraw
-          </button>
-          <button
-            type="button"
-            className="sl-glass-btn-dark !px-4 !py-2 !text-[11px]"
-            onClick={() => setModal("invest")}
-          >
-            Allocate
-          </button>
-        </div>
+      <div>
+        <ProEyebrow>Treasury</ProEyebrow>
+        <h1 className="mt-2 text-[clamp(26px,3.5vw,36px)] font-semibold tracking-tight text-white">
+          Idle capital & yield
+        </h1>
+        <p className="mt-1 max-w-xl text-[13px] text-white/45">
+          Fund the pool, withdraw to the org wallet, or rebalance idle float
+          into yield. Coverage floor stays reserved for drip liquidity.
+        </p>
       </div>
 
       <OnramperModal
@@ -112,6 +68,53 @@ export function TreasuryScreen() {
           hint={`Floor ${fmtUsd(totals.floor, 0)}`}
         />
       </div>
+
+      <ProCard padding="sm">
+        <div className="grid grid-cols-3 gap-2">
+          <button
+            type="button"
+            className="sl-glass-btn-dark sl-glass-btn-dark-primary flex !w-full flex-col items-center gap-1 !px-2 !py-3 !text-[11px]"
+            onClick={() => setModal("fund")}
+          >
+            <FundIcon />
+            Fund
+          </button>
+          <button
+            type="button"
+            className="sl-glass-btn-dark flex !w-full flex-col items-center gap-1 !px-2 !py-3 !text-[11px]"
+            onClick={() => setModal("withdraw")}
+          >
+            <WithdrawIcon />
+            Withdraw
+          </button>
+          <button
+            type="button"
+            className="sl-glass-btn-dark flex !w-full flex-col items-center gap-1 !px-2 !py-3 !text-[11px]"
+            onClick={() => setModal("invest")}
+          >
+            <RebalanceIcon />
+            Rebalance
+          </button>
+        </div>
+        {canRamp ? (
+          <div className="mt-2 grid grid-cols-2 gap-2 border-t border-white/[0.06] pt-2">
+            <button
+              type="button"
+              className="sl-glass-btn-dark !w-full !px-3 !py-2.5 !text-[11px]"
+              onClick={() => setRampMode("buy")}
+            >
+              Add funds
+            </button>
+            <button
+              type="button"
+              className="sl-glass-btn-dark !w-full !px-3 !py-2.5 !text-[11px]"
+              onClick={() => setRampMode("sell")}
+            >
+              Cash out
+            </button>
+          </div>
+        ) : null}
+      </ProCard>
 
       <div className="grid gap-4 lg:grid-cols-[1.3fr_1fr]">
         <ProCard>
@@ -200,5 +203,46 @@ export function TreasuryScreen() {
         </div>
       </ProCard>
     </div>
+  );
+}
+
+function FundIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden>
+      <path
+        d="M12 5v14M5 12h14"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+function WithdrawIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden>
+      <path
+        d="M12 5v10M8 11l4 4 4-4M5 19h14"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function RebalanceIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden>
+      <path
+        d="M4 7h12M16 7l-2.5-2.5M16 7l-2.5 2.5M20 17H8M8 17l2.5-2.5M8 17l2.5 2.5"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
   );
 }

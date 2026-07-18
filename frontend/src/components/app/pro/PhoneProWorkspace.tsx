@@ -468,7 +468,7 @@ function OverviewTab({
           </div>
           <button
             type="button"
-            aria-label="Allocate"
+            aria-label="Rebalance"
             onClick={() => setModal("invest")}
             className="flex h-8 w-8 items-center justify-center rounded-full bg-[#22c55e] text-white shadow-[0_6px_18px_rgba(34,197,94,0.35)] transition-transform active:scale-95"
           >
@@ -1022,50 +1022,53 @@ function TreasuryTab() {
         </p>
 
         <WalletBalanceRow />
+      </section>
 
-        <div className="mt-4 flex flex-col gap-2">
+      <section className="sl-pro-card sl-pro-card--flush p-3.5">
+        <div className="grid grid-cols-3 gap-1.5">
           <button
             type="button"
             onClick={() => setModal("fund")}
-            className="flex w-full items-center justify-center rounded-2xl bg-[#22c55e] px-4 py-3.5 text-[13px] font-semibold tracking-tight text-white shadow-[0_8px_24px_rgba(34,197,94,0.35)] transition-transform active:scale-[0.98]"
+            className="flex flex-col items-center gap-1 rounded-2xl bg-[#22c55e] px-2 py-3 text-[11px] font-semibold tracking-tight text-white shadow-[0_8px_24px_rgba(34,197,94,0.28)] transition-transform active:scale-[0.98]"
           >
+            <PhoneFundIcon />
             Fund
           </button>
-          <div className="grid grid-cols-2 gap-2">
+          <button
+            type="button"
+            onClick={() => setModal("withdraw")}
+            className="flex flex-col items-center gap-1 rounded-2xl border border-white/12 bg-white/[0.06] px-2 py-3 text-[11px] font-semibold tracking-tight text-white transition-colors active:bg-white/[0.1]"
+          >
+            <PhoneWithdrawIcon />
+            Withdraw
+          </button>
+          <button
+            type="button"
+            onClick={() => setModal("invest")}
+            className="flex flex-col items-center gap-1 rounded-2xl border border-white/12 bg-white/[0.06] px-2 py-3 text-[11px] font-semibold tracking-tight text-white transition-colors active:bg-white/[0.1]"
+          >
+            <PhoneRebalanceIcon />
+            Rebalance
+          </button>
+        </div>
+        {canRamp ? (
+          <div className="mt-2 grid grid-cols-2 gap-1.5 border-t border-white/[0.06] pt-2">
             <button
               type="button"
-              onClick={() => setModal("withdraw")}
-              className="rounded-2xl border border-white/12 bg-white/[0.06] px-3 py-3.5 text-[13px] font-semibold tracking-tight text-white transition-colors active:bg-white/[0.1]"
+              onClick={() => setRampMode("buy")}
+              className="rounded-xl border border-white/[0.08] bg-transparent px-2 py-2 text-[10px] font-medium text-white/50 transition-colors active:text-white/80"
             >
-              Withdraw
+              Add funds
             </button>
             <button
               type="button"
-              onClick={() => setModal("invest")}
-              className="rounded-2xl border border-white/12 bg-white/[0.06] px-3 py-3.5 text-[13px] font-semibold tracking-tight text-white transition-colors active:bg-white/[0.1]"
+              onClick={() => setRampMode("sell")}
+              className="rounded-xl border border-white/[0.08] bg-transparent px-2 py-2 text-[10px] font-medium text-white/50 transition-colors active:text-white/80"
             >
-              Allocate
+              Cash out
             </button>
           </div>
-          {canRamp ? (
-            <div className="grid grid-cols-2 gap-2 pt-0.5">
-              <button
-                type="button"
-                onClick={() => setRampMode("buy")}
-                className="rounded-xl border border-white/[0.08] bg-transparent px-2 py-2 text-[10px] font-medium text-white/50 transition-colors active:text-white/80"
-              >
-                Add funds
-              </button>
-              <button
-                type="button"
-                onClick={() => setRampMode("sell")}
-                className="rounded-xl border border-white/[0.08] bg-transparent px-2 py-2 text-[10px] font-medium text-white/50 transition-colors active:text-white/80"
-              >
-                Cash out
-              </button>
-            </div>
-          ) : null}
-        </div>
+        ) : null}
       </section>
 
       <OnramperModal
@@ -1074,6 +1077,47 @@ function TreasuryTab() {
         onClose={() => setRampMode(null)}
       />
     </div>
+  );
+}
+
+function PhoneFundIcon() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden>
+      <path
+        d="M12 5v14M5 12h14"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+function PhoneWithdrawIcon() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden>
+      <path
+        d="M12 5v10M8 11l4 4 4-4M5 19h14"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function PhoneRebalanceIcon() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden>
+      <path
+        d="M4 7h12M16 7l-2.5-2.5M16 7l-2.5 2.5M20 17H8M8 17l2.5-2.5M8 17l2.5 2.5"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
   );
 }
 
