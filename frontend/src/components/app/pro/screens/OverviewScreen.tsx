@@ -12,7 +12,15 @@ import {
   groupCommitted,
   workerClaimable,
 } from "../types";
-import { CompositionBar, ProCard, ProEyebrow, ProStat, StatusPill } from "../ui";
+import {
+  CompositionBar,
+  ProCard,
+  ProChip,
+  ProEyebrow,
+  ProIconButton,
+  ProStat,
+  StatusPill,
+} from "../ui";
 
 function SoftLink({
   href,
@@ -111,30 +119,51 @@ export function OverviewScreen() {
       </div>
 
       <div className="grid gap-4 lg:grid-cols-[1.4fr_1fr]">
-        <ProCard>
+        <ProCard padding="lg">
           <div className="flex items-center justify-between gap-3">
             <ProEyebrow>Pool composition</ProEyebrow>
-            <SoftLink
-              href="/app/pro/treasury"
-              className="text-[11px] text-white/40 hover:text-white"
-            >
-              Treasury →
-            </SoftLink>
+            <div className="flex items-center gap-2">
+              <ProChip>Live</ProChip>
+              <ProIconButton
+                label="Allocate capital"
+                onClick={() => setModal("invest")}
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden>
+                  <path
+                    d="M12 19V5M12 5l-5 5M12 5l5 5"
+                    stroke="currentColor"
+                    strokeWidth="2.2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              </ProIconButton>
+            </div>
           </div>
-          <p className="mt-3 text-[28px] font-semibold tabular tracking-tight text-white">
+          <p
+            className={`mt-4 font-semibold tabular tracking-tight text-white ${
+              embedded ? "text-[1.65rem]" : "text-[2rem]"
+            }`}
+          >
             {fmtUsd(alloc.idle + alloc.yield_vault + alloc.reserve)}
           </p>
-          <p className="mt-1 text-[12px] text-white/40">
-            Streamed to date {fmtUsd(workspace.pool.streamed)}
-          </p>
-          <div className="mt-5">
+          <div className="mt-2 flex flex-wrap items-baseline gap-x-3 gap-y-1">
+            <p className="text-[13px] font-medium tabular text-[#1d9e75]">
+              +{fmtUsd(totals.yieldEarned)}
+            </p>
+            <p className="text-[12px] text-white/40">
+              yield accrued · streamed {fmtUsd(workspace.pool.streamed)}
+            </p>
+          </div>
+          <div className="mt-6">
             <CompositionBar
               segments={[
                 {
                   key: "idle",
                   label: bucketLabel("idle"),
                   value: alloc.idle,
-                  color: "bg-white/70",
+                  color: "bg-white/75",
+                  stripe: true,
                 },
                 {
                   key: "yield",
@@ -146,7 +175,8 @@ export function OverviewScreen() {
                   key: "reserve",
                   label: bucketLabel("reserve"),
                   value: alloc.reserve,
-                  color: "bg-[#5b54e6]",
+                  color: "bg-white/35",
+                  stripe: true,
                 },
               ]}
             />
@@ -154,8 +184,11 @@ export function OverviewScreen() {
         </ProCard>
 
         <ProCard>
-          <ProEyebrow>Stream groups</ProEyebrow>
-          <div className="mt-4 space-y-3">
+          <div className="flex items-center justify-between gap-3">
+            <ProEyebrow>Stream groups</ProEyebrow>
+            <ProChip>{workspace.groups.length} groups</ProChip>
+          </div>
+          <div className="mt-4 space-y-2.5">
             {workspace.groups.length === 0 ? (
               <p className="text-[13px] text-white/40">No groups yet.</p>
             ) : (
@@ -166,7 +199,7 @@ export function OverviewScreen() {
                 return (
                   <div
                     key={g.id}
-                    className="flex items-center justify-between gap-3 border-b border-white/5 pb-3 last:border-0 last:pb-0"
+                    className="flex items-center justify-between gap-3 rounded-2xl bg-white/[0.03] px-3.5 py-3"
                   >
                     <div>
                       <p className="text-[13px] font-medium text-white">
@@ -204,11 +237,11 @@ export function OverviewScreen() {
               Funding →
             </SoftLink>
           </div>
-          <div className="mt-4 space-y-3">
+          <div className="mt-4 space-y-2.5">
             {topWorkers.map((w) => (
               <div
                 key={w.id}
-                className="flex items-center justify-between gap-3"
+                className="flex items-center justify-between gap-3 rounded-2xl bg-white/[0.03] px-3.5 py-3"
               >
                 <div className="min-w-0">
                   <p className="truncate text-[13px] font-medium text-white">
@@ -232,14 +265,14 @@ export function OverviewScreen() {
 
         <ProCard>
           <ProEyebrow>Recent activity</ProEyebrow>
-          <div className="mt-4 space-y-3">
+      <div className="mt-4 space-y-2.5">
             {recent.length === 0 ? (
               <p className="text-[13px] text-white/40">No activity yet.</p>
             ) : (
               recent.map((a) => (
                 <div
                   key={a.id}
-                  className="flex items-start justify-between gap-3 border-b border-white/5 pb-3 last:border-0 last:pb-0"
+                  className="flex items-start justify-between gap-3 rounded-2xl bg-white/[0.03] px-3.5 py-3"
                 >
                   <div>
                     <p className="text-[13px] text-white/85">{a.label}</p>

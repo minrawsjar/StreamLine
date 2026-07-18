@@ -6,6 +6,7 @@ import { useCurrentAccount } from "@mysten/dapp-kit";
 import { WalletButton } from "@/components/wallet/WalletButton";
 import { StreamLineMark } from "@/components/landing/StreamLineMark";
 import type { StreamRequestParams } from "@/lib/request-link";
+import { useNeedsHandleOnboarding } from "@/lib/use-handle-onboarding";
 import { ScanIconButton } from "./PhoneHeaderActions";
 import { ProTitleWithDemo } from "@/components/app/pro/ProHeaderExtras";
 import { PhoneLauncher } from "./PhoneLauncher";
@@ -39,14 +40,15 @@ function readStoredRequest(): StreamRequestParams | null {
 
 export function PhoneAppShell({ route, onNavigate }: PhoneAppShellProps) {
   const account = useCurrentAccount();
+  const { needsStep } = useNeedsHandleOnboarding();
   const isPro = route === "pro";
   const isScan = route === "scan";
   const isFulfill = route === "fulfill";
   const isRequest = route === "request";
   const isCreate = route === "create";
-  /** Full-bleed onboarding — hide shell chrome until wallet is connected. */
-  const proOnboarding = isPro && !account;
-  const userOnboarding = route === "user" && !account;
+  /** Full-bleed onboarding — hide shell chrome until wallet + name step done. */
+  const proOnboarding = isPro && (!account || needsStep);
+  const userOnboarding = route === "user" && (!account || needsStep);
   const appOnboarding = proOnboarding || userOnboarding;
   const inWorkspace =
     route !== "launcher" &&

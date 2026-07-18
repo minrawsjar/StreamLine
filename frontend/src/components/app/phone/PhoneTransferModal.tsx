@@ -7,6 +7,11 @@ import { Transaction } from "@mysten/sui/transactions";
 import { useNetworkVariable } from "@/lib/networks";
 import { useGaslessExecute } from "@/lib/use-gasless";
 import { phoneFlowOverlay } from "./phoneStyles";
+import {
+  looksLikeRecipient,
+  resolveRecipientOrThrow,
+} from "@/lib/use-resolve-recipient";
+import { isHexAddress, suinsBrand } from "@/lib/handle";
 
 type TransferMode = "wallet" | "crosschain" | "bank";
 type TransferStep = "menu" | TransferMode;
@@ -82,16 +87,27 @@ export function PhoneTransferModal({ open, onClose }: PhoneTransferModalProps) {
   if (!open) return null;
 
   const withdrawDisabled =
-    !recipient.trim() || !amount.trim() || !/^0x[0-9a-fA-F]{64}$/.test(recipient.trim()) || isPending;
+    !recipient.trim() ||
+    !amount.trim() ||
+    !looksLikeRecipient(recipient) ||
+    isPending;
 
   const onWithdraw = async () => {
     if (!account) {
       setStatus("Connect a wallet first.");
       return;
     }
-    const to = recipient.trim();
-    if (!/^0x[0-9a-fA-F]{64}$/.test(to)) {
-      setStatus("Recipient must be a full Sui address (0x + 64 hex).");
+    let to = recipient.trim();
+    try {
+      if (!isHexAddress(to)) {
+        setStatus("Resolving recipient…");
+        const resolved = await resolveRecipientOrThrow(client, recipient);
+        to = resolved.address;
+        setRecipient(resolved.address);
+        setStatus(`Resolved ${resolved.displayName}`);
+      }
+    } catch (e) {
+      setStatus(e instanceof Error ? e.message : String(e));
       return;
     }
     const parsedAmount = Number(amount);
@@ -206,12 +222,14 @@ export function PhoneTransferModal({ open, onClose }: PhoneTransferModalProps) {
                 Send USDC or SUI directly to another wallet.
               </p>
             </div>
-            <Field label="Recipient wallet">
+            <Field label="Recipient">
               <input
                 value={recipient}
                 onChange={(e) => setRecipient(e.target.value)}
-                placeholder="0x..."
-                className="w-full rounded-xl border border-black/15 bg-white px-3 py-2 text-[12px] font-mono outline-none focus:border-[#5b54e6]"
+                placeholder={`@${suinsBrand()} or 0x…`}
+                spellCheck={false}
+                autoComplete="off"
+                className="w-full rounded-xl border border-black/15 bg-white px-3 py-2 text-[12px] outline-none focus:border-[#5b54e6]"
               />
             </Field>
 

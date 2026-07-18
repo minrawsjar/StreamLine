@@ -6,6 +6,7 @@ import { useCurrentAccount } from "@mysten/dapp-kit";
 import { PhoneHomeView } from "./PhoneHomeView";
 import { PhoneTransferModal } from "./PhoneTransferModal";
 import { UserOnboarding } from "./UserOnboarding";
+import { useNeedsHandleOnboarding } from "@/lib/use-handle-onboarding";
 import type { PhoneAppRoute } from "./types";
 
 type PhoneUserShellProps = {
@@ -14,10 +15,11 @@ type PhoneUserShellProps = {
 
 export function PhoneUserShell({ onNavigate }: PhoneUserShellProps) {
   const account = useCurrentAccount();
+  const { needsStep } = useNeedsHandleOnboarding();
   const [showAllStreams, setShowAllStreams] = useState(false);
   const [transferOpen, setTransferOpen] = useState(false);
 
-  if (!account) {
+  if (!account || needsStep) {
     return <UserOnboarding embedded />;
   }
 

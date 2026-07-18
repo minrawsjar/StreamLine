@@ -40,6 +40,11 @@ import {
   phonePctInputClass,
 } from "./phone/PhoneFormParts";
 import { queueStreamLabel, rememberStreamLabel } from "@/lib/stream-labels";
+import {
+  looksLikeRecipient,
+  resolveRecipientOrThrow,
+} from "@/lib/use-resolve-recipient";
+import { isHexAddress, suinsBrand } from "@/lib/handle";
 
 type SplitRow = { label: string; address: string; pct: number; yield: boolean };
 
@@ -109,12 +114,9 @@ export function StreamCreator({
     if (effectiveMilestones.length === 0) e.push("Add at least one milestone.");
     if (amount / Math.max(effectiveMilestones.length, 1) < 0.01)
       e.push("Each milestone must be ≥ 0.01 USDC.");
-    // A Sui address is 0x + exactly 64 hex. A 40-hex Ethereum-style address
-    // looks valid but Sui zero-pads it to an address nobody controls, so the
-    // stream never reaches the recipient. Require the full form.
-    if (!/^0x[0-9a-fA-F]{64}$/.test(freelancer.trim()))
+    if (!looksLikeRecipient(freelancer))
       e.push(
-        "Recipient must be a full Sui address (0x + 64 hex). An Ethereum-style 40-character address won't work."
+        `Recipient must be a @${suinsBrand()} handle or a full Sui address (0x + 64 hex).`
       );
     if (!isPrivate) {
       if (durationValue <= 0) e.push("Duration must be greater than 0.");
@@ -126,14 +128,13 @@ export function StreamCreator({
 
   const canCreate = errors.length === 0 && !!account;
   const recipientInvalid =
-    isPrivate && !/^0x[0-9a-fA-F]{1,64}$/.test(freelancer.trim());
-
+    isPrivate && !looksLikeRecipient(freelancer);
   const updateMilestone = (i: number, v: string) =>
     setMilestones((m) => m.map((x, j) => (j === i ? v : x)));
   const updateSplit = (i: number, patch: Partial<SplitRow>) =>
     setSplits((s) => s.map((r, j) => (j === i ? { ...r, ...patch } : r)));
 
-  const onCreate = () => {
+  const onCreate = async () => {
     if (!canCreate) return;
     if (!deployed) {
       setStatus(
@@ -141,8 +142,21 @@ export function StreamCreator({
       );
       return;
     }
+    let recipientAddr = freelancer.trim();
+    try {
+      if (!isHexAddress(recipientAddr)) {
+        setStatus("Resolving recipient…");
+        const resolved = await resolveRecipientOrThrow(client, freelancer);
+        recipientAddr = resolved.address;
+        setFreelancer(resolved.address);
+        setStatus(`Resolved ${resolved.displayName}`);
+      }
+    } catch (e) {
+      setStatus(e instanceof Error ? e.message : String(e));
+      return;
+    }
     if (isPrivate) {
-      void onCreatePrivate();
+      void onCreatePrivate(recipientAddr);
       return;
     }
     const totalBase = toBaseUnits(amount);
@@ -155,8 +169,8 @@ export function StreamCreator({
     const tx = buildCreateStreamV2({
       packageId,
       usdcType,
-      sender: account.address,
-      freelancer,
+      sender: account!.address,
+      freelancer: recipientAddr,
       milestoneNames: effectiveMilestones,
       milestoneAmountsBase: splitMilestoneAmounts(totalBase, effectiveMilestones.length),
       totalBase,
@@ -166,7 +180,7 @@ export function StreamCreator({
     setStatus("Awaiting wallet signature…");
     execute(tx, {
       onSuccess: (r) => {
-        queueStreamLabel(streamName, freelancer, Number(totalBase));
+        queueStreamLabel(streamName, recipientAddr, Number(totalBase));
         setStatus(`Stream created — locked ${formatUsd(amount)}. Digest ${r.digest}`);
       },
       onError: (e) => setStatus(e.message),
@@ -177,9 +191,9 @@ export function StreamCreator({
    * Private path: commit to the amount, prove the wrap in-browser, Seal-encrypt
    * the blindings to both wallets, and lock the funds — one signature.
    */
-  const onCreatePrivate = async () => {
+  const onCreatePrivate = async (resolvedRecipient?: string) => {
     if (!account) return;
-    const recipient = freelancer.trim();
+    const recipient = (resolvedRecipient ?? freelancer).trim();
     setProving(true);
     try {
       setStatus("Generating commitments + proof in your browser…");
@@ -264,10 +278,12 @@ export function StreamCreator({
           <input
             value={freelancer}
             onChange={(e) => setFreelancer(e.target.value)}
-            placeholder="0x…"
-            className={`${phoneInputClass} font-mono text-[11px] ${
+            placeholder={`@${suinsBrand()} or 0x…`}
+            className={`${phoneInputClass} text-[11px] ${
               recipientInvalid ? "border-[#c0533a]" : ""
             }`}
+            spellCheck={false}
+            autoComplete="off"
           />
         </PhoneField>
 
@@ -510,11 +526,13 @@ export function StreamCreator({
             </button>
           </div>
         )}
-        <Field label="Recipient (freelancer address)">
+        <Field label="Recipient (handle or address)">
           <input
             value={freelancer}
             onChange={(e) => setFreelancer(e.target.value)}
-            placeholder="0x…"
+            placeholder={`@${suinsBrand()} or 0x…`}
+            spellCheck={false}
+            autoComplete="off"
             className={`w-full border bg-white px-3 py-2.5 font-mono text-[13px] outline-none focus:border-[#5b54e6] ${
               recipientInvalid
                 ? "border-[#c0533a] bg-[#c0533a]/[0.03]"

@@ -84,7 +84,8 @@ export function TreasuryScreen() {
                   key: "idle",
                   label: bucketLabel("idle"),
                   value: alloc.idle,
-                  color: "bg-white/70",
+                  color: "bg-white/75",
+                  stripe: true,
                 },
                 {
                   key: "yield",
@@ -96,7 +97,8 @@ export function TreasuryScreen() {
                   key: "reserve",
                   label: bucketLabel("reserve"),
                   value: alloc.reserve,
-                  color: "bg-[#5b54e6]",
+                  color: "bg-white/35",
+                  stripe: true,
                 },
               ]}
             />

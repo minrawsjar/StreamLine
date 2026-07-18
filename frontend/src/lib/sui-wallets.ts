@@ -37,3 +37,17 @@ export function filterConnectableSuiWallets(
 ): WalletWithRequiredFeatures[] {
   return wallets.filter(isConnectableSuiWallet);
 }
+
+/** Social / zkLogin wallets first, then extension wallets. */
+export function sortWalletsForConnect(
+  wallets: WalletWithRequiredFeatures[]
+): WalletWithRequiredFeatures[] {
+  const rank = (name: string) => {
+    const n = name.toLowerCase();
+    if (n.includes("google")) return 0;
+    if (n.includes("apple")) return 1;
+    if (n.includes("facebook") || n.includes("twitch")) return 2;
+    return 10;
+  };
+  return [...wallets].sort((a, b) => rank(a.name) - rank(b.name));
+}

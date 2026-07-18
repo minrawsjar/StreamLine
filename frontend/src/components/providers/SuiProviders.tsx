@@ -6,6 +6,7 @@ import { SuiClientProvider, WalletProvider } from "@mysten/dapp-kit";
 
 import { networkConfig, DEFAULT_NETWORK } from "@/lib/networks";
 import { isConnectableSuiWallet } from "@/lib/sui-wallets";
+import { HandleProvider } from "@/lib/use-handle";
 import { RegisterEnokiWallets } from "./RegisterEnokiWallets";
 
 /**
@@ -23,10 +24,15 @@ export function SuiProviders({ children }: { children: ReactNode }) {
         <WalletProvider
           autoConnect
           walletFilter={isConnectableSuiWallet}
-          preferredWallets={["Slush", "Sui Wallet", "Suiet"]}
+          preferredWallets={[
+            "Sign in with Google",
+            "Slush",
+            "Sui Wallet",
+            "Suiet",
+          ]}
           slushWallet={{ name: "StreamLine" }}
         >
-          {children}
+          <HandleProvider>{children}</HandleProvider>
         </WalletProvider>
       </SuiClientProvider>
     </QueryClientProvider>

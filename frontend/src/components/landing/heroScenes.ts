@@ -6,6 +6,7 @@ export type PhoneScene =
   | "finance"
   | "privacy"
   | "pro"
+  | "names"
   | "launch";
 
 export type SceneTheme = "light" | "pro";
@@ -153,6 +154,26 @@ export const HERO_SCENES: HeroScene[] = [
       bullets: [
 
       ],
+    },
+  },
+  {
+    id: "names",
+    phone: "names",
+    theme: "light",
+    left: {
+      label: "built for people",
+      headline: "The name you can",
+      accent: "Remember",
+      body: "Pay and get paid without pasting a 64-character address — human-readable, on-chain.",
+      bullets: [],
+      headlineLarge: true,
+    },
+    right: {
+      label: "…and for the machines",
+      headline: "SDK & API",
+      accent: "machines can use",
+      body: "Program streams from code, agents, and backends on the same rails — one identity layer for humans and machines.",
+      bullets: [],
     },
   },
   {

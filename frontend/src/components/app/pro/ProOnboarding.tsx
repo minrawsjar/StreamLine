@@ -1,10 +1,15 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
+import { useCurrentAccount } from "@mysten/dapp-kit";
 
 import { ConnectModal } from "@/components/wallet/ConnectModal";
+import { OnboardingConnectActions } from "@/components/wallet/OnboardingConnectActions";
+import { OnboardingChooseName } from "@/components/app/OnboardingChooseName";
+import { useNeedsHandleOnboarding } from "@/lib/use-handle-onboarding";
+import { useStickyAccount } from "@/lib/use-sticky-account";
 
-type Step = 0 | 1 | 2;
+type Step = 0 | 1 | 2 | 3;
 
 const HEADLINE = {
   embedded: "text-[clamp(40px,12.5vw,52px)]",
@@ -18,7 +23,7 @@ const HEADLINE_HERO = {
 
 const WAVE_BARS = 20;
 
-type WaveVariant = "single" | "multi" | "scale";
+type WaveVariant = "single" | "multi" | "scale" | "ripple";
 
 function WaveBackdrop({ variant = "single" }: { variant?: WaveVariant }) {
   const gridMod =
@@ -26,7 +31,9 @@ function WaveBackdrop({ variant = "single" }: { variant?: WaveVariant }) {
       ? "sl-pro-wave-grid--multi"
       : variant === "scale"
         ? "sl-pro-wave-grid--scale"
-        : "";
+        : variant === "ripple"
+          ? "sl-pro-wave-grid--ripple"
+          : "";
 
   return (
     <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden>
@@ -82,7 +89,7 @@ function OnboardingFrame({
       {backdrop}
       <div className="relative z-10 flex min-h-0 flex-1 flex-col px-1 pb-2 pt-2 sm:px-2 sm:pb-3 sm:pt-3">
         <div className="flex min-h-0 flex-1 flex-col justify-end">{children}</div>
-        <div className="mt-7 shrink-0 sm:mt-8">{actions}</div>
+        {actions ? <div className="mt-7 shrink-0 sm:mt-8">{actions}</div> : null}
       </div>
       {overlay}
     </div>
@@ -143,9 +150,22 @@ function headlineClass(embedded: boolean) {
 }
 
 export function ProOnboarding({ embedded = false }: ProOnboardingProps) {
+  const liveAccount = useCurrentAccount();
+  const account = useStickyAccount();
+  const { needsStep, showNameStep, checking, complete } =
+    useNeedsHandleOnboarding();
   const [step, setStep] = useState<Step>(0);
   const [connectOpen, setConnectOpen] = useState(false);
   const shell = onboardingShell(embedded);
+
+  // Login (2) → Name (3) once the wallet is connected. Never show login twice.
+  useEffect(() => {
+    if (step === 2 && liveAccount) setStep(3);
+  }, [step, liveAccount]);
+
+  useEffect(() => {
+    if (step === 3 && !account && !liveAccount) setStep(2);
+  }, [step, account, liveAccount]);
 
   if (step === 0) {
     return (
@@ -188,7 +208,7 @@ export function ProOnboarding({ embedded = false }: ProOnboardingProps) {
         actions={
           <ActionRow
             label="Continue"
-            onContinue={() => setStep(2)}
+            onContinue={() => setStep(liveAccount ? 3 : 2)}
             onBack={() => setStep(0)}
           />
         }
@@ -210,6 +230,42 @@ export function ProOnboarding({ embedded = false }: ProOnboardingProps) {
     );
   }
 
+  if (step === 3) {
+    // Skip / existing handle — parent shell is exiting onboarding; don't flash a wait state.
+    if (!needsStep && liveAccount) {
+      return null;
+    }
+    return (
+      <OnboardingFrame
+        shell={shell}
+        backdrop={<WaveBackdrop variant="ripple" />}
+        actions={null}
+      >
+        {showNameStep && liveAccount ? (
+          <OnboardingChooseName
+            variant="pro"
+            embedded={embedded}
+            onComplete={complete}
+            BackCircle={BackCircle}
+          />
+        ) : (
+          <div className="text-left">
+            <h1 className={`${headlineClass(embedded)} max-w-[12ch]`}>
+              One moment…
+            </h1>
+            <p
+              className={`mt-4 max-w-sm leading-relaxed text-white/55 ${
+                embedded ? "text-[13px]" : "text-[15px]"
+              }`}
+            >
+              Finishing sign-in and checking your StreamLine name.
+            </p>
+          </div>
+        )}
+      </OnboardingFrame>
+    );
+  }
+
   return (
     <OnboardingFrame
       shell={shell}
@@ -223,16 +279,10 @@ export function ProOnboarding({ embedded = false }: ProOnboardingProps) {
         />
       }
       actions={
-        <div className="flex items-center gap-3">
-          <BackCircle onClick={() => setStep(1)} />
-          <button
-            type="button"
-            onClick={() => setConnectOpen(true)}
-            className="flex h-12 flex-1 items-center justify-center rounded-full bg-white px-4 text-[14px] font-semibold text-[#0a0a0a] transition-opacity hover:opacity-95 active:scale-[0.99]"
-          >
-            Continue with Slush
-          </button>
-        </div>
+        <OnboardingConnectActions
+          variant="pro"
+          onOpenWalletModal={() => setConnectOpen(true)}
+        />
       }
     >
       <div className="text-left">
@@ -244,7 +294,7 @@ export function ProOnboarding({ embedded = false }: ProOnboardingProps) {
             embedded ? "text-[13px]" : "text-[15px]"
           }`}
         >
-          Connect with Slush to sign in and manage streams, people, and treasury.
+          Sign in with Google to manage streams, people, and treasury.
         </p>
       </div>
     </OnboardingFrame>

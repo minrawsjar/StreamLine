@@ -5,7 +5,8 @@ import { createPortal } from "react-dom";
 import { useWallets, useConnectWallet } from "@mysten/dapp-kit";
 import type { WalletWithRequiredFeatures } from "@mysten/wallet-standard";
 
-import { filterConnectableSuiWallets } from "@/lib/sui-wallets";
+import { filterConnectableSuiWallets, sortWalletsForConnect } from "@/lib/sui-wallets";
+import { phoneToast } from "@/lib/phone-toast";
 
 type Props = {
   open: boolean;
@@ -32,7 +33,6 @@ export function ConnectModal({
 }: Props) {
   const wallets = useWallets();
   const { mutate: connect, isPending } = useConnectWallet();
-  const [error, setError] = useState<string | null>(null);
   const [pendingName, setPendingName] = useState<string | null>(null);
   const markerRef = useRef<HTMLSpanElement>(null);
   const [phoneStage, setPhoneStage] = useState<HTMLElement | null>(null);
@@ -58,12 +58,11 @@ export function ConnectModal({
 
   if (!open) return null;
 
-  const standardWallets = filterConnectableSuiWallets(
-    wallets as WalletWithRequiredFeatures[]
+  const standardWallets = sortWalletsForConnect(
+    filterConnectableSuiWallets(wallets as WalletWithRequiredFeatures[])
   );
 
   const onConnect = (wallet: WalletWithRequiredFeatures) => {
-    setError(null);
     setPendingName(wallet.name);
     connect(
       { wallet },
@@ -71,7 +70,7 @@ export function ConnectModal({
         onSuccess: () => onClose(),
         onError: (e) => {
           const message = e.message ?? "Failed to connect";
-          setError(
+          phoneToast.error(
             /phantom/i.test(wallet.name)
               ? "Couldn't connect Phantom. Enable Sui in Phantom and set the network to Testnet."
               : message
@@ -135,7 +134,7 @@ export function ConnectModal({
                   : "text-[11px] uppercase tracking-[0.2em]"
             }
           >
-            {pro || contained ? "Connect wallet" : "Connect to StreamLine"}
+            {pro || contained ? "Sign in" : "Connect to StreamLine"}
           </span>
           <button
             onClick={onClose}
@@ -160,7 +159,7 @@ export function ConnectModal({
           <div className="flex flex-col gap-2">
             {!pro && !contained && (
               <p className="text-[10px] uppercase tracking-[0.18em] text-[#2b2a5e]/50">
-                Sui wallets
+                Google or a Sui wallet
               </p>
             )}
             {standardWallets.length === 0 ? (
@@ -176,7 +175,7 @@ export function ConnectModal({
                       : "border border-dashed border-[#2b2a5e]/25 px-4 py-3 text-[12px] text-[#2b2a5e]/60 hover:border-[#5b54e6]"
                 }
               >
-                No Sui wallet detected — install Slush →
+                No wallets detected — install Slush, or set Google zkLogin env →
               </a>
             ) : (
               standardWallets.map((w) => (
@@ -209,25 +208,11 @@ export function ConnectModal({
             )}
           </div>
 
-          {error && (
-            <p
-              className={
-                pro
-                  ? "rounded-xl border border-[#c0533a]/35 bg-[#c0533a]/15 px-3 py-2 text-[12px] text-[#f0a090]"
-                  : contained
-                    ? "rounded-xl border border-[#c0533a]/30 bg-[#c0533a]/8 px-3 py-2 text-[12px] text-[#c0533a]"
-                    : "border border-[#c0533a]/40 bg-[#c0533a]/10 px-3 py-2 text-[12px] text-[#c0533a]"
-              }
-            >
-              {error}
-            </p>
-          )}
-
           {!pro && !contained && (
             <p className="text-[11px] leading-relaxed text-[#2b2a5e]/50">
-              Use a Sui wallet such as <strong>Slush</strong> or{" "}
-              <strong>Phantom</strong> (with Sui enabled). Set your wallet to{" "}
-              <strong>Testnet</strong>.
+              Prefer <strong>Sign in with Google</strong> (zkLogin). Extension
+              wallets like <strong>Slush</strong> or <strong>Phantom</strong>{" "}
+              also work — set them to <strong>Testnet</strong>.
             </p>
           )}
         </div>

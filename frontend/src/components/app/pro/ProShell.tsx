@@ -10,6 +10,7 @@ import { PhoneProWorkspace } from "./PhoneProWorkspace";
 import { ProActionModals } from "./modals/ProActionModals";
 import { ProOnboarding } from "./ProOnboarding";
 import { ProWorkspaceProvider } from "./ProWorkspaceContext";
+import { useNeedsHandleOnboarding } from "@/lib/use-handle-onboarding";
 
 const NAV = [
   { href: "/app/pro", label: "Overview", match: "exact" as const },
@@ -87,7 +88,8 @@ function DesktopShell({ children }: { children: ReactNode }) {
 /** Desktop route wrapper — provider + sidebar around Next.js pages. */
 export function ProShell({ children }: { children: ReactNode }) {
   const account = useCurrentAccount();
-  if (!account) return <ProOnboarding />;
+  const { needsStep } = useNeedsHandleOnboarding();
+  if (!account || needsStep) return <ProOnboarding />;
   return (
     <ProWorkspaceProvider>
       <DesktopShell>{children}</DesktopShell>
@@ -99,7 +101,8 @@ export function ProShell({ children }: { children: ReactNode }) {
 export function ProPhoneAppRoot() {
   const embedded = usePhoneEmbedded();
   const account = useCurrentAccount();
-  if (!account) return <ProOnboarding embedded={!!embedded} />;
+  const { needsStep } = useNeedsHandleOnboarding();
+  if (!account || needsStep) return <ProOnboarding embedded={!!embedded} />;
   return (
     <ProWorkspaceProvider>
       <PhoneProWorkspace />

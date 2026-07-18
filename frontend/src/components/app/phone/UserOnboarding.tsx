@@ -1,11 +1,16 @@
 "use client";
 
-import { useState, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
+import { useCurrentAccount } from "@mysten/dapp-kit";
 
 import { ConnectModal } from "@/components/wallet/ConnectModal";
+import { OnboardingConnectActions } from "@/components/wallet/OnboardingConnectActions";
 import { usePhoneEmbedded } from "@/components/app/phone/PhoneEmbeddedContext";
+import { OnboardingChooseName } from "@/components/app/OnboardingChooseName";
+import { useNeedsHandleOnboarding } from "@/lib/use-handle-onboarding";
+import { useStickyAccount } from "@/lib/use-sticky-account";
 
-type Step = 0 | 1 | 2;
+type Step = 0 | 1 | 2 | 3;
 
 const HEADLINE = {
   embedded: "text-[clamp(40px,12.5vw,52px)]",
@@ -79,10 +84,13 @@ function FlowBackdrop() {
   );
 }
 
-/** Wormhole zoom — fewer rays, clear gaps between pieces. */
+/** Wormhole zoom — used on connect step. */
 const WARP_RAYS = 14;
 const WARP_PIECES = 4;
 const WARP_ACCENT_RAY = 3;
+
+const NAME_LINES = 8;
+const NAME_ACCENT = 3;
 
 function ZoomBackdrop() {
   return (
@@ -109,6 +117,24 @@ function ZoomBackdrop() {
             />
           )),
         )}
+      </div>
+    </div>
+  );
+}
+
+/** Choose-name step — horizontal signature lines. */
+function NameLinesBackdrop() {
+  return (
+    <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden>
+      <div className="sl-user-name-lines">
+        {Array.from({ length: NAME_LINES }, (_, i) => (
+          <div
+            key={i}
+            className={`sl-user-name-line${
+              i === NAME_ACCENT ? " sl-user-name-line--accent" : ""
+            }`}
+          />
+        ))}
       </div>
     </div>
   );
@@ -205,7 +231,7 @@ function OnboardingFrame({
       {backdrop}
       <div className="relative z-10 flex min-h-0 flex-1 flex-col px-1 pb-2 pt-2 sm:px-2 sm:pb-3 sm:pt-3">
         <div className="flex min-h-0 flex-1 flex-col justify-end">{children}</div>
-        <div className="mt-7 shrink-0 sm:mt-8">{actions}</div>
+        {actions ? <div className="mt-7 shrink-0 sm:mt-8">{actions}</div> : null}
       </div>
       {overlay}
     </div>
@@ -227,9 +253,22 @@ function headlineClass(embedded: boolean) {
 export function UserOnboarding({ embedded = false }: { embedded?: boolean }) {
   const phoneEmbedded = usePhoneEmbedded();
   const isEmbedded = embedded || phoneEmbedded;
+  const liveAccount = useCurrentAccount();
+  const account = useStickyAccount();
+  const { needsStep, showNameStep, checking, complete } =
+    useNeedsHandleOnboarding();
   const [step, setStep] = useState<Step>(0);
   const [connectOpen, setConnectOpen] = useState(false);
   const shell = onboardingShell(isEmbedded);
+
+  // Login (2) → Name (3) once the wallet is connected. Never show login twice.
+  useEffect(() => {
+    if (step === 2 && liveAccount) setStep(3);
+  }, [step, liveAccount]);
+
+  useEffect(() => {
+    if (step === 3 && !account && !liveAccount) setStep(2);
+  }, [step, account, liveAccount]);
 
   if (step === 0) {
     return (
@@ -263,7 +302,7 @@ export function UserOnboarding({ embedded = false }: { embedded?: boolean }) {
         actions={
           <ActionRow
             label="Continue"
-            onContinue={() => setStep(2)}
+            onContinue={() => setStep(liveAccount ? 3 : 2)}
             onBack={() => setStep(0)}
           />
         }
@@ -285,6 +324,44 @@ export function UserOnboarding({ embedded = false }: { embedded?: boolean }) {
     );
   }
 
+  // Step 3 — choose name (only after login).
+  if (step === 3) {
+    // Skip / existing handle — parent shell is exiting onboarding; don't flash a wait state.
+    if (!needsStep && liveAccount) {
+      return null;
+    }
+    return (
+      <OnboardingFrame
+        shell={shell}
+        backdrop={<NameLinesBackdrop />}
+        actions={null}
+      >
+        {showNameStep && liveAccount ? (
+          <OnboardingChooseName
+            variant="user"
+            embedded={isEmbedded}
+            onComplete={complete}
+            BackCircle={BackCircle}
+          />
+        ) : (
+          <div className="text-left">
+            <h1 className={`${headlineClass(isEmbedded)} max-w-[12ch]`}>
+              One moment…
+            </h1>
+            <p
+              className={`mt-4 max-w-sm leading-relaxed text-[#555] ${
+                isEmbedded ? "text-[13px]" : "text-[15px]"
+              }`}
+            >
+              Finishing sign-in and checking your StreamLine name.
+            </p>
+          </div>
+        )}
+      </OnboardingFrame>
+    );
+  }
+
+  // Step 2 — login only (no name UI here).
   return (
     <OnboardingFrame
       shell={shell}
@@ -298,16 +375,10 @@ export function UserOnboarding({ embedded = false }: { embedded?: boolean }) {
         />
       }
       actions={
-        <div className="flex items-center gap-3">
-          <BackCircle onClick={() => setStep(1)} />
-          <button
-            type="button"
-            onClick={() => setConnectOpen(true)}
-            className="flex h-12 flex-1 items-center justify-center rounded-full bg-[#111] px-4 text-[14px] font-semibold text-white transition-opacity hover:opacity-90 active:scale-[0.99]"
-          >
-            Continue with Slush
-          </button>
-        </div>
+        <OnboardingConnectActions
+          variant="user"
+          onOpenWalletModal={() => setConnectOpen(true)}
+        />
       }
     >
       <div className="text-left">
@@ -319,7 +390,7 @@ export function UserOnboarding({ embedded = false }: { embedded?: boolean }) {
             isEmbedded ? "text-[13px]" : "text-[15px]"
           }`}
         >
-          Connect with Slush to start receiving streams and manage your balance.
+          Sign in with Google to get a wallet — no seed phrase, free to start.
         </p>
       </div>
     </OnboardingFrame>

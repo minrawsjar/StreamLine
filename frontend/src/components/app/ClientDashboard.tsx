@@ -32,6 +32,7 @@ import {
   type BarDatum,
 } from "./dashboard-ui";
 import { usePhoneEmbedded } from "./phone/PhoneEmbeddedContext";
+import { AddressLabel } from "@/components/wallet/AddressLabel";
 
 /**
  * Map of stream id → owned StreamCap object id, so the client can approve.
@@ -282,7 +283,7 @@ export function ClientDashboard() {
                           milestone {nextMilestoneNo(s)}/{s.n_milestones}
                         </span>
                         <span className="font-mono text-[11px] text-[#2b2a5e]/50">
-                          → {short(s.freelancer)}
+                          → <AddressLabel address={s.freelancer} head={4} tail={4} />
                         </span>
                       </div>
                       <div className="flex max-w-md items-center gap-3">

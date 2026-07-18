@@ -1,8 +1,11 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useSuiClient } from "@mysten/dapp-kit";
 
 import { shortAddress } from "@/lib/format";
+import { isHexAddress, suinsBrand } from "@/lib/handle";
+import { resolveRecipientOrThrow } from "@/lib/use-resolve-recipient";
 import { useProWorkspace } from "../ProWorkspaceContext";
 import {
   fmtUsd,
@@ -305,9 +308,10 @@ function WorkerModal({
   onClose: () => void;
 }) {
   const { workspace, upsertWorker, deleteWorker } = useProWorkspace();
+  const client = useSuiClient();
   const existing = workspace.workers.find((w) => w.id === workerId);
   const [alias, setAlias] = useState(existing?.alias ?? "");
-  const [wallet, setWallet] = useState(existing?.walletAddress ?? "0x");
+  const [wallet, setWallet] = useState(existing?.walletAddress ?? "");
   const [groupId, setGroupId] = useState(existing?.groupId ?? "");
   const [monthly, setMonthly] = useState(String(existing?.monthlyUsd ?? 5000));
   const [cadence, setCadence] = useState<ProCadence>(
@@ -316,6 +320,8 @@ function WorkerModal({
   const [status, setStatus] = useState<ProWorkerStatus>(
     existing?.status ?? "pending"
   );
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   return (
     <ProModal
@@ -342,8 +348,15 @@ function WorkerModal({
             ))}
           </select>
         </ProField>
-        <ProField label="Wallet">
-          <input className={proInputClass} value={wallet} onChange={(e) => setWallet(e.target.value)} />
+        <ProField label={`Wallet (@${suinsBrand()} or 0x)`}>
+          <input
+            className={proInputClass}
+            value={wallet}
+            onChange={(e) => setWallet(e.target.value)}
+            placeholder={`@${suinsBrand()} or 0x…`}
+            spellCheck={false}
+            autoComplete="off"
+          />
         </ProField>
         <ProField label="Monthly USDC">
           <input className={proInputClass} value={monthly} onChange={(e) => setMonthly(e.target.value)} />
@@ -371,6 +384,9 @@ function WorkerModal({
           </select>
         </ProField>
       </div>
+      {error && (
+        <p className="mt-3 text-[11px] text-[#c0533a]">{error}</p>
+      )}
       <div className="mt-5 flex items-center justify-between gap-2">
         {existing ? (
           <button
@@ -393,22 +409,41 @@ function WorkerModal({
           <button
             type="button"
             className="sl-glass-btn-dark sl-glass-btn-dark-primary !px-4 !py-2 !text-[11px]"
+            disabled={saving}
             onClick={() => {
-              const n = Number(monthly);
-              if (!alias.trim() || !Number.isFinite(n) || n <= 0) return;
-              upsertWorker({
-                id: existing?.id,
-                alias: alias.trim(),
-                walletAddress: wallet.trim(),
-                groupId: groupId || null,
-                monthlyUsd: n,
-                cadence,
-                status,
-              });
-              onClose();
+              void (async () => {
+                const n = Number(monthly);
+                if (!alias.trim() || !Number.isFinite(n) || n <= 0) return;
+                setSaving(true);
+                setError(null);
+                try {
+                  let walletAddress = wallet.trim();
+                  if (!isHexAddress(walletAddress)) {
+                    const resolved = await resolveRecipientOrThrow(
+                      client,
+                      wallet
+                    );
+                    walletAddress = resolved.address;
+                  }
+                  upsertWorker({
+                    id: existing?.id,
+                    alias: alias.trim(),
+                    walletAddress,
+                    groupId: groupId || null,
+                    monthlyUsd: n,
+                    cadence,
+                    status,
+                  });
+                  onClose();
+                } catch (e) {
+                  setError(e instanceof Error ? e.message : String(e));
+                } finally {
+                  setSaving(false);
+                }
+              })();
             }}
           >
-            Save
+            {saving ? "Saving…" : "Save"}
           </button>
         </div>
       </div>

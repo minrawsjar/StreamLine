@@ -84,10 +84,11 @@ On testnet, the **faucet** (`FaucetButton`) mints test USDC from the shared `Tre
 | `NEXT_PUBLIC_PACKAGE_ID_TESTNET` | baked-in testnet package | Override the StreamLine package. |
 | `NEXT_PUBLIC_USDC_TYPE_TESTNET` | test USDC type | Override the streamed coin type. |
 | `NEXT_PUBLIC_INDEXER_URL` / `_WS_URL` | local indexer | REST + WebSocket endpoints. |
-| `ENOKI_PRIVATE_API_KEY` | _unset_ | **Server-only** sponsor key; enables gasless when present. |
-| `NEXT_PUBLIC_ENOKI_API_KEY` | _unset_ | Public Enoki key for zkLogin wallet registration. |
+| `ENOKI_PRIVATE_API_KEY` | _unset_ | **Server-only** sponsor key; enables gasless when present. Also used for SuiNS claim fallback (needs `SUBNAMES`). |
+| `NEXT_PUBLIC_ENOKI_API_KEY` | _unset_ | Public Enoki key for zkLogin wallet registration + subname claim (needs `SUBNAMES`). |
+| `NEXT_PUBLIC_SUINS_DOMAIN` | `streamline.sui` | Parent SuiNS domain for `@streamline` handles. Register on [suins.io](https://suins.io), link + publish in the [Enoki Portal](https://portal.enoki.mystenlabs.com) Subnames section. |
 
-> `ENOKI_PRIVATE_API_KEY` must never be exposed to the client — it's read only inside `app/api/sponsor/*` route handlers.
+> `ENOKI_PRIVATE_API_KEY` must never be exposed to the client — it's read only inside `app/api/sponsor/*` and `app/api/handle/*` route handlers.
 
 ## The Bayer-dither hero
 

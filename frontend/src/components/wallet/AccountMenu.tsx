@@ -16,7 +16,9 @@ import {
   copyToClipboard,
 } from "@/lib/format";
 import type { NetworkName } from "@/lib/networks";
+import { useMyHandle } from "@/lib/use-handle";
 import { FaucetButton } from "./FaucetButton";
+import { ClaimHandleModal } from "./ClaimHandleModal";
 import {
   ProfileIcon,
   profileIconButtonClass,
@@ -64,8 +66,10 @@ export function AccountMenu({
   const { mutate: switchAccount } = useSwitchAccount();
   const { mutate: disconnect } = useDisconnectWallet();
   const { network } = useSuiClientContext();
+  const { handle, configured: suinsReady } = useMyHandle();
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [claimOpen, setClaimOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -116,7 +120,7 @@ export function AccountMenu({
               <img src={currentWallet.icon} alt="" className="h-[1.1em] w-[1.1em] shrink-0" />
             )}
             <span className="tabular truncate">
-              {account.label ?? shortAddress(account.address)}
+              {handle ?? account.label ?? shortAddress(account.address)}
             </span>
             <span className="text-[0.8em] opacity-60">▼</span>
           </>
@@ -181,15 +185,26 @@ export function AccountMenu({
                   dark ? "text-white/40" : "text-[#888]"
                 }`}
               >
-                Address
+                {handle ? "Handle" : "Address"}
               </p>
               <p
-                className={`mt-1 break-all font-mono text-[10px] leading-relaxed ${
-                  dark ? "text-white/75" : "text-[#333]"
-                }`}
+                className={`mt-1 break-all text-[10px] leading-relaxed ${
+                  handle
+                    ? "font-semibold tracking-tight"
+                    : "font-mono"
+                } ${dark ? "text-white/75" : "text-[#333]"}`}
               >
-                {shortAddress(account.address, 8, 6)}
+                {handle ?? shortAddress(account.address, 8, 6)}
               </p>
+              {handle && (
+                <p
+                  className={`mt-1 font-mono text-[9px] ${
+                    dark ? "text-white/35" : "text-[#999]"
+                  }`}
+                >
+                  {shortAddress(account.address, 8, 6)}
+                </p>
+              )}
             </div>
           </div>
 
@@ -198,7 +213,19 @@ export function AccountMenu({
               dark ? "border-white/8" : "border-black/6"
             }`}
           >
-            <button type="button" onClick={onCopy} className={profileBtnPrimary(dark)}>
+            {suinsReady && (
+              <button
+                type="button"
+                onClick={() => {
+                  setOpen(false);
+                  setClaimOpen(true);
+                }}
+                className={profileBtnPrimary(dark)}
+              >
+                {handle ? "Manage handle" : "Claim @handle"}
+              </button>
+            )}
+            <button type="button" onClick={onCopy} className={suinsReady ? profileBtnSecondary(dark) : profileBtnPrimary(dark)}>
               {copied ? "Copied ✓" : "Copy address"}
             </button>
             <a
@@ -269,12 +296,28 @@ export function AccountMenu({
             <p className="text-[10px] uppercase tracking-[0.16em] text-[#2b2a5e]/50">
               {currentWallet?.name ?? "Wallet"} · {network}
             </p>
+            {handle && (
+              <p className="mt-1 text-[13px] font-semibold tracking-tight">
+                {handle}
+              </p>
+            )}
             <p className="mt-1 break-all font-mono text-[12px]">
               {shortAddress(account.address, 10, 6)}
             </p>
           </div>
 
           <div className="flex flex-col py-1 text-[12px]">
+            {suinsReady && (
+              <button
+                onClick={() => {
+                  setOpen(false);
+                  setClaimOpen(true);
+                }}
+                className="px-4 py-2 text-left hover:bg-[#2b2a5e]/[0.05]"
+              >
+                {handle ? "Manage handle" : "Claim @handle"}
+              </button>
+            )}
             <button
               onClick={onCopy}
               className="px-4 py-2 text-left hover:bg-[#2b2a5e]/[0.05]"
@@ -336,6 +379,12 @@ export function AccountMenu({
           </div>
         </div>
       )}
+
+      <ClaimHandleModal
+        open={claimOpen}
+        onClose={() => setClaimOpen(false)}
+        dark={dark}
+      />
     </div>
   );
 }

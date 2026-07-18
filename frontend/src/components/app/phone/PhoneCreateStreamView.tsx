@@ -37,6 +37,11 @@ import {
 } from "./PhoneFormParts";
 import { PhoneContactPicker } from "./PhoneContactPicker";
 import { btnPrimary, btnSecondary, PhoneFlowShell } from "./PhoneFlowShell";
+import {
+  looksLikeRecipient,
+  resolveRecipientOrThrow,
+} from "@/lib/use-resolve-recipient";
+import { suinsBrand } from "@/lib/handle";
 
 type PhoneCreateStreamViewProps = {
   onClose: () => void;
@@ -49,9 +54,6 @@ const STEP_TITLES: Record<CreateStep, string> = {
   2: "Stream details",
   3: "Stream settings",
 };
-
-const ADDRESS_RE = /^0x[0-9a-fA-F]{64}$/;
-
 export function PhoneCreateStreamView({ onClose }: PhoneCreateStreamViewProps) {
   const account = useCurrentAccount();
   const client = useSuiClient();
@@ -94,11 +96,8 @@ export function PhoneCreateStreamView({ onClose }: PhoneCreateStreamViewProps) {
 
   const validateStep = (current: CreateStep): string | null => {
     if (current === 1) {
-      if (!ADDRESS_RE.test(freelancer.trim())) {
-        return "Pick a contact or enter a full Sui address (0x + 64 hex).";
-      }
-      if (freelancer.trim() === account?.address) {
-        return "Recipient must be different from your wallet.";
+      if (!looksLikeRecipient(freelancer)) {
+        return `Pick a contact, enter @${suinsBrand()} handle, or a full Sui address.`;
       }
     }
     if (current === 2) {
@@ -110,11 +109,33 @@ export function PhoneCreateStreamView({ onClose }: PhoneCreateStreamViewProps) {
     return null;
   };
 
-  const goNext = () => {
+  const goNext = async () => {
     const err = validateStep(step);
     if (err) {
       setStepError(err);
       return;
+    }
+    if (step === 1) {
+      try {
+        setStepError(null);
+        setStatus("Resolving recipient…");
+        const resolved = await resolveRecipientOrThrow(client, freelancer);
+        if (resolved.address === account?.address) {
+          setStepError("Recipient must be different from your wallet.");
+          setStatus(null);
+          return;
+        }
+        setFreelancer(resolved.address);
+        setStatus(
+          resolved.handle
+            ? `Resolved ${resolved.displayName}`
+            : null
+        );
+      } catch (e) {
+        setStepError(e instanceof Error ? e.message : String(e));
+        setStatus(null);
+        return;
+      }
     }
     setStepError(null);
     if (step < 3) setStep((s) => (s + 1) as CreateStep);
@@ -302,12 +323,14 @@ export function PhoneCreateStreamView({ onClose }: PhoneCreateStreamViewProps) {
     >
       {step === 1 && (
         <>
-          <PhoneField label="Recipient address">
+          <PhoneField label="Recipient">
             <input
               value={freelancer}
               onChange={(e) => setFreelancer(e.target.value)}
-              placeholder="0x…"
-              className={`${phoneInputClass} font-mono text-[11px]`}
+              placeholder={`@${suinsBrand()} or 0x…`}
+              className={`${phoneInputClass} text-[11px]`}
+              spellCheck={false}
+              autoComplete="off"
             />
           </PhoneField>
           <PhoneContactPicker

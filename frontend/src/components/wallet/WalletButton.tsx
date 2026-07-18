@@ -26,7 +26,7 @@ export function WalletButton({
   faucetAmount?: number;
   variant?: "default" | "profile";
   profilePro?: boolean;
-  /** Override the disconnected CTA label (e.g. "Continue with Slush"). */
+  /** Override the disconnected CTA label (e.g. "Continue with Google"). */
   label?: string;
   /** Connect modal look — Pro uses dark styling. */
   connectModal?: "default" | "pro";

@@ -39,7 +39,7 @@ export function PhoneContactPicker({ selected, onSelect }: PhoneContactPickerPro
   if (contacts.length === 0) {
     return (
       <p className="text-center text-[11px] leading-snug text-[#888]">
-        No saved contacts yet — paste a recipient address above.
+        No saved contacts yet — paste a @handle or address above.
       </p>
     );
   }

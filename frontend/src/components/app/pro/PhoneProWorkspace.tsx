@@ -106,7 +106,7 @@ function ProPhoneDock({
 
   return (
     <div className="relative z-20 shrink-0 px-1 pb-0.5 pt-3">
-      <div className="relative flex items-center justify-between rounded-[1.35rem] border border-white/12 bg-[#141414]/92 px-1.5 py-1 shadow-[0_8px_28px_rgba(0,0,0,0.45)] backdrop-blur-xl">
+      <div className="relative flex items-center justify-between rounded-[1.75rem] border border-white/[0.08] bg-[#171717]/96 px-1.5 py-1.5 shadow-[0_12px_36px_rgba(0,0,0,0.55)] backdrop-blur-xl">
         <div className="flex flex-1 items-center justify-around">
           {left.map((item) => (
             <DockTab
@@ -124,7 +124,7 @@ function ProPhoneDock({
             type="button"
             onClick={onCompose}
             aria-label="Create"
-            className="absolute -top-3.5 flex h-[44px] w-[44px] items-center justify-center rounded-full bg-white text-[#0a0a0a] shadow-[0_6px_20px_rgba(255,255,255,0.18)] transition-transform active:scale-95"
+            className="absolute -top-3.5 flex h-[46px] w-[46px] items-center justify-center rounded-full bg-[#22c55e] text-white shadow-[0_8px_24px_rgba(34,197,94,0.4)] transition-transform active:scale-95"
           >
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden>
               <path
@@ -206,7 +206,7 @@ function ComposeSheet({
         className="absolute inset-0 bg-black/55 backdrop-blur-[2px]"
         onClick={onClose}
       />
-      <div className="relative mx-1 mb-1 rounded-[1.35rem] border border-white/12 bg-[#161616] p-3 shadow-2xl">
+      <div className="relative mx-1 mb-1 rounded-[1.6rem] border border-white/[0.1] bg-[#151515] p-3.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.06),0_16px_40px_rgba(0,0,0,0.45)]">
         <div className="mb-2.5 flex items-center justify-between px-0.5">
           <div>
             <p className="text-[8px] font-medium uppercase tracking-[0.18em] text-white/35">
@@ -362,8 +362,10 @@ function OverviewTab({
   expanded: Record<string, boolean>;
   onToggle: (id: string) => void;
 }) {
-  const { workspace, totals } = useProWorkspace();
+  const { workspace, totals, setModal } = useProWorkspace();
   const ungrouped = workspace.workers.filter((w) => !w.groupId);
+  const alloc = workspace.pool.allocation;
+  const poolTotal = alloc.idle + alloc.yield_vault + alloc.reserve || 1;
 
   const payrollPerSec = useMemo(
     () =>
@@ -377,130 +379,544 @@ function OverviewTab({
     return vault * (YIELD_APY / 365 / 24 / 3600);
   }, [workspace.pool.allocation.yield_vault]);
 
+  const netPerSec = yieldPerSec - payrollPerSec;
+  const coverPct =
+    payrollPerSec > 0
+      ? Math.round((yieldPerSec / payrollPerSec) * 100)
+      : yieldPerSec > 0
+        ? 100
+        : 0;
+
+  const greetName = workspace.orgName?.trim() || "Workspace";
+  const periodLabel = new Date()
+    .toLocaleDateString(undefined, { month: "short", year: "2-digit" })
+    .toUpperCase();
+
+  const bars = useMemo(() => {
+    const groupBars = workspace.groups.slice(0, 4).map((g, i) => {
+      const v = groupCommitted(workspace, g.id);
+      return {
+        key: g.id,
+        value: Math.max(v, 1),
+        label: compactUsd(v),
+        up: i !== 1,
+      };
+    });
+    while (groupBars.length < 4) {
+      const seeds = [
+        totals.claimable,
+        totals.monthly * 0.35,
+        totals.poolBalance * 0.12,
+        totals.yieldEarned * 40 || totals.monthly * 0.22,
+      ];
+      const i = groupBars.length;
+      groupBars.push({
+        key: `pad-${i}`,
+        value: Math.max(seeds[i] || 1, 1),
+        label: compactUsd(seeds[i] || 1),
+        up: i % 2 === 0,
+      });
+    }
+    const max = Math.max(...groupBars.map((b) => b.value), 1);
+    const heroIdx = groupBars.reduce(
+      (best, b, i, arr) => (b.value > arr[best].value ? i : best),
+      0
+    );
+    return groupBars.map((b, i) => ({
+      ...b,
+      height: Math.max(24, Math.round((b.value / max) * 100)),
+      hero: i === heroIdx,
+    }));
+  }, [workspace, totals]);
+
+  const donut = useMemo(() => {
+    const segs = [
+      { key: "idle", value: alloc.idle, stroke: "rgba(255,255,255,0.78)" },
+      { key: "yield", value: alloc.yield_vault, stroke: "#22c55e" },
+      { key: "reserve", value: alloc.reserve, stroke: "rgba(255,255,255,0.28)" },
+    ];
+    let offset = 0;
+    return segs.map((seg) => {
+      const pct = (seg.value / poolTotal) * 100;
+      const item = { ...seg, dash: `${pct} ${100 - pct}`, offset: -offset };
+      offset += pct;
+      return item;
+    });
+  }, [alloc, poolTotal]);
+
+  const recentWorkers = useMemo(
+    () =>
+      [...workspace.workers]
+        .sort((a, b) => b.monthlyUsd - a.monthlyUsd)
+        .slice(0, 5),
+    [workspace.workers]
+  );
+
   return (
-    <div className="flex flex-col px-0.5 pb-1 pt-0.5">
-      <p className="text-[8px] font-medium uppercase tracking-[0.18em] text-white/40">
-        Payroll run
-      </p>
+    <div className="flex flex-col gap-2.5 px-0.5 pb-1 pt-0.5">
+      {/* Payroll header */}
+      <header className="flex items-center justify-between gap-2 px-0.5">
+        <div className="flex min-w-0 items-center gap-2.5">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-[#22c55e]/80 to-[#166534] text-[12px] font-semibold text-white shadow-[0_4px_14px_rgba(34,197,94,0.25)]">
+            {greetName.slice(0, 1).toUpperCase()}
+          </div>
+          <div className="min-w-0">
+            <p className="truncate text-[13px] font-semibold tracking-tight text-white">
+              {greetName}
+            </p>
+            <p className="truncate text-[9px] text-white/40">
+              Payroll admin · {totals.active} live
+            </p>
+          </div>
+        </div>
+        <button
+          type="button"
+          aria-label="Notifications"
+          className="sl-pro-icon-btn"
+          onClick={() => setModal("fund")}
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden>
+            <path
+              d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"
+              stroke="currentColor"
+              strokeWidth="1.7"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+            <path
+              d="M13.73 21a2 2 0 0 1-3.46 0"
+              stroke="currentColor"
+              strokeWidth="1.7"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+        </button>
+      </header>
 
-      <div className="mt-1.5">
-        <p className="text-[1.65rem] font-semibold tabular leading-none tracking-tight text-white">
-          {fmtUsd(totals.displayTotal, totals.displayTotal % 1 ? 2 : 0)}
-        </p>
-      </div>
-
-      <div className="mt-1.5 grid grid-cols-2 gap-1">
-        <div className="rounded-md border border-[#1d9e75]/20 bg-[#1d9e75]/[0.06] px-1.5 py-1">
-          <p className="text-[6px] font-semibold uppercase tracking-[0.12em] text-[#1d9e75]/70">
-            Yield in
+      {/* Balance + Fund */}
+      <div className="flex items-end justify-between gap-3 px-0.5">
+        <div className="min-w-0">
+          <p className="text-[9px] font-medium uppercase tracking-[0.14em] text-white/35">
+            Pool balance
           </p>
-          <p className="mt-0.5 text-[10px] font-semibold tabular leading-none text-[#1d9e75]">
-            +{fmtUsd(yieldPerSec, 4)}
-            <span className="text-[7px] font-medium text-[#1d9e75]/60">/s</span>
+          <p className="mt-1 text-[1.85rem] font-semibold tabular leading-none tracking-tight text-white">
+            {fmtUsd(totals.displayTotal, totals.displayTotal % 1 ? 2 : 0)}
           </p>
         </div>
-        <div className="rounded-md border border-white/10 bg-white/[0.03] px-1.5 py-1">
-          <p className="text-[6px] font-semibold uppercase tracking-[0.12em] text-white/35">
-            Payroll out
+        <button
+          type="button"
+          onClick={() => setModal("fund")}
+          className="inline-flex shrink-0 items-center gap-1 rounded-full bg-[#22c55e] px-3.5 py-2 text-[11px] font-semibold text-white shadow-[0_6px_18px_rgba(34,197,94,0.35)] transition-transform active:scale-[0.97]"
+        >
+          <span className="text-[13px] leading-none">+</span>
+          Fund
+        </button>
+      </div>
+
+      {/* Finance hero — striped run chart */}
+      <section className="sl-pro-card sl-pro-card--flush p-3.5">
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-[10px] text-white/45">Total run</p>
+          <span className="sl-pro-chip !py-1 !text-[8px]">Live</span>
+        </div>
+
+        <div className="relative mt-1">
+          <div className="sl-pro-callout">
+            <p className="text-[13px] font-semibold tabular leading-none text-[#22c55e]">
+              {netPerSec >= 0 ? "+" : "−"}
+              {coverPct}%
+            </p>
+            <p className="mt-0.5 text-[8px] leading-snug text-white/40">
+              {netPerSec >= 0 ? "yield covering payroll" : "payroll ahead of yield"}
+            </p>
+            <div className="sl-pro-callout-line" aria-hidden />
+          </div>
+
+          <div className="sl-pro-bars">
+            {bars.map((bar) => (
+              <div
+                key={bar.key}
+                className="sl-pro-bar"
+                style={{ height: `${bar.height}%` }}
+              >
+                <div
+                  className={`absolute inset-0 overflow-hidden rounded-full ${
+                    bar.hero
+                      ? "bg-white"
+                      : bar.up
+                        ? "bg-white/35"
+                        : "bg-white/20"
+                  }`}
+                >
+                  <span
+                    className={`absolute inset-0 ${
+                      bar.hero
+                        ? "sl-pro-stripe opacity-45"
+                        : "sl-pro-stripe-light opacity-55"
+                    }`}
+                    aria-hidden
+                  />
+                </div>
+                <span
+                  className={`sl-pro-bar-tag ${
+                    bar.hero ? "sl-pro-bar-tag--dark" : "sl-pro-bar-tag--light"
+                  }`}
+                >
+                  {bar.up ? "↗" : "↙"} {bar.label}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="mt-3 grid grid-cols-2 gap-1.5">
+          <div className="rounded-[1.1rem] bg-[#22c55e]/[0.12] px-2.5 py-2.5">
+            <p className="text-[7px] font-semibold uppercase tracking-[0.14em] text-[#22c55e]/75">
+              Yield in
+            </p>
+            <p className="mt-1 text-[12px] font-semibold tabular leading-none text-[#22c55e]">
+              +{fmtUsd(yieldPerSec, 4)}
+              <span className="text-[8px] font-medium text-[#22c55e]/55">/s</span>
+            </p>
+          </div>
+          <div className="rounded-[1.1rem] bg-white/[0.045] px-2.5 py-2.5">
+            <p className="text-[7px] font-semibold uppercase tracking-[0.14em] text-white/40">
+              Payroll out
+            </p>
+            <p className="mt-1 text-[12px] font-semibold tabular leading-none text-white/85">
+              −{fmtUsd(payrollPerSec, 4)}
+              <span className="text-[8px] font-medium text-white/35">/s</span>
+            </p>
+          </div>
+        </div>
+      </section>
+
+      {/* Payroll twin stats */}
+      <div className="grid grid-cols-2 gap-2">
+        <button
+          type="button"
+          onClick={() => setModal("invest")}
+          className="sl-pro-card sl-pro-card--flush p-3 text-left transition-transform active:scale-[0.99]"
+        >
+          <div className="flex items-center gap-1.5">
+            <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[#22c55e]/15 text-[#22c55e]">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden>
+                <path
+                  d="M4 7h11M4 12h16M4 17h9"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                />
+              </svg>
+            </span>
+            <span className="text-[10px] font-medium text-white/55">Streaming</span>
+            <span className="ml-auto text-[10px] tabular text-white/35">
+              {totals.active} ›
+            </span>
+          </div>
+          <p className="mt-2.5 text-[1.05rem] font-semibold tabular tracking-tight text-white">
+            {fmtUsd(totals.monthly, 0)}
           </p>
-          <p className="mt-0.5 text-[10px] font-semibold tabular leading-none text-white/75">
-            −{fmtUsd(payrollPerSec, 4)}
-            <span className="text-[7px] font-medium text-white/35">/s</span>
+          <p className="mt-0.5 text-[8px] text-white/35">/mo committed</p>
+        </button>
+
+        <div className="sl-pro-card sl-pro-card--flush p-3">
+          <div className="flex items-center gap-1.5">
+            <span className="flex h-6 w-6 items-center justify-center rounded-full bg-white/8 text-white/70">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden>
+                <rect
+                  x="4"
+                  y="5"
+                  width="16"
+                  height="14"
+                  rx="2"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                />
+                <path
+                  d="M8 9h8M8 13h5"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                  strokeLinecap="round"
+                />
+              </svg>
+            </span>
+            <span className="text-[10px] font-medium text-white/55">Claimable</span>
+            <span className="ml-auto text-[10px] tabular text-white/35">
+              {workspace.workers.length} ›
+            </span>
+          </div>
+          <p className="mt-2.5 text-[1.05rem] font-semibold tabular tracking-tight text-white">
+            {fmtUsd(totals.claimable)}
           </p>
+          <p className="mt-0.5 text-[8px] text-white/35">open across roster</p>
         </div>
       </div>
 
-      <p className="mt-1.5 text-[9px] text-white/35">
-        {workspace.groups.length} group{workspace.groups.length === 1 ? "" : "s"} ·{" "}
-        {totals.active} streaming · {fmtUsd(totals.monthly, 0)}/mo
-      </p>
+      {/* Finance pool holdings + donut */}
+      <section className="sl-pro-card sl-pro-card--flush p-3.5">
+        <div className="flex items-center justify-between gap-2">
+          <div>
+            <p className="text-[12px] font-medium text-white/90">Pool holdings</p>
+            <p className="mt-0.5 text-[9px] text-white/35">
+              {fmtUsd(totals.poolBalance)} total
+            </p>
+          </div>
+          <button
+            type="button"
+            aria-label="Allocate"
+            onClick={() => setModal("invest")}
+            className="flex h-8 w-8 items-center justify-center rounded-full bg-[#22c55e] text-white shadow-[0_6px_18px_rgba(34,197,94,0.35)] transition-transform active:scale-95"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden>
+              <path
+                d="M7 17L17 7M17 7H9M17 7v8"
+                stroke="currentColor"
+                strokeWidth="2.2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+          </button>
+        </div>
 
-      <div className="mt-3 space-y-1.5">
-        {workspace.groups.map((group) => {
-          const members = workspace.workers.filter((w) => w.groupId === group.id);
-          const dripping = members.filter((w) => w.status === "dripping");
-          const dripPerSec = dripping.reduce(
-            (s, w) => s + monthlyToPerSec(w.monthlyUsd),
-            0
-          );
-          const isOpen = !!expanded[group.id];
-          return (
-            <button
-              key={group.id}
-              type="button"
-              onClick={() => onToggle(group.id)}
-              className="w-full rounded-lg border border-white/10 bg-white/5 px-2.5 py-2 text-left"
-            >
-              <div className="flex items-start justify-between gap-2">
-                <div className="min-w-0">
-                  <p className="truncate text-[11px] font-medium text-white/85">
-                    {group.name}
+        <div className="mt-2 flex items-center gap-3">
+          <div className="min-w-0 flex-1 space-y-2">
+            {(
+              [
+                {
+                  key: "idle",
+                  label: bucketLabel("idle"),
+                  value: alloc.idle,
+                  color: "bg-white/75",
+                },
+                {
+                  key: "yield",
+                  label: bucketLabel("yield_vault"),
+                  value: alloc.yield_vault,
+                  color: "bg-[#22c55e]",
+                },
+                {
+                  key: "reserve",
+                  label: bucketLabel("reserve"),
+                  value: alloc.reserve,
+                  color: "bg-white/30",
+                },
+              ] as const
+            ).map((seg) => (
+              <div key={seg.key} className="flex items-center justify-between gap-2">
+                <span className="flex min-w-0 items-center gap-1.5 text-[9px] text-white/50">
+                  <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${seg.color}`} />
+                  <span className="truncate">{seg.label}</span>
+                </span>
+                <span className="shrink-0 tabular text-[9px] text-white/75">
+                  {fmtUsd(seg.value, 0)}
+                </span>
+              </div>
+            ))}
+          </div>
+
+          <div className="sl-pro-donut-wrap shrink-0">
+            <svg viewBox="0 0 140 84" className="w-[7.25rem]" aria-hidden>
+              <path
+                d="M16 78 A54 54 0 0 1 124 78"
+                fill="none"
+                stroke="rgba(255,255,255,0.06)"
+                strokeWidth="14"
+                strokeLinecap="round"
+                pathLength={100}
+              />
+              {donut.map((seg) => (
+                <path
+                  key={seg.key}
+                  d="M16 78 A54 54 0 0 1 124 78"
+                  fill="none"
+                  stroke={seg.stroke}
+                  strokeWidth="14"
+                  strokeLinecap="butt"
+                  pathLength={100}
+                  strokeDasharray={seg.dash}
+                  strokeDashoffset={seg.offset}
+                />
+              ))}
+            </svg>
+            <div className="pointer-events-none absolute inset-x-0 bottom-0 flex flex-col items-center pb-0.5">
+              <p className="text-[7px] uppercase tracking-[0.14em] text-white/35">
+                Total
+              </p>
+              <p className="text-[12px] font-semibold tabular leading-none text-white">
+                {compactUsd(totals.poolBalance)}
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Payroll payment cards */}
+      <div>
+        <div className="mb-2 flex items-center justify-between px-0.5">
+          <p className="text-[13px] font-semibold text-white">Recent streams</p>
+          <span className="text-[9px] text-white/35">
+            {workspace.groups.length} groups
+          </span>
+        </div>
+
+        <div className="space-y-2">
+          {workspace.groups.map((group) => {
+            const members = workspace.workers.filter((w) => w.groupId === group.id);
+            const dripping = members.filter((w) => w.status === "dripping");
+            const committed = groupCommitted(workspace, group.id);
+            const isOpen = !!expanded[group.id];
+            const lead = members[0];
+            return (
+              <button
+                key={group.id}
+                type="button"
+                onClick={() => onToggle(group.id)}
+                className="sl-pro-card sl-pro-card--flush w-full p-3 text-left transition-transform active:scale-[0.99]"
+              >
+                <div className="flex items-center gap-2.5">
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/8 text-[11px] font-semibold text-white/80 ring-1 ring-white/10">
+                    {group.name.slice(0, 1).toUpperCase()}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-[12px] font-semibold text-white">
+                      {group.name}
+                    </p>
+                    <p className="truncate text-[9px] text-white/40">
+                      {members.length} people · {dripping.length} streaming
+                      {lead ? ` · ${lead.alias}` : ""}
+                    </p>
+                  </div>
+                  <span className="text-[14px] text-white/25">{isOpen ? "‹" : "›"}</span>
+                </div>
+
+                <div className="mt-3 grid grid-cols-2 gap-3">
+                  <div>
+                    <p className="text-[7px] font-medium uppercase tracking-[0.14em] text-white/30">
+                      Pay period
+                    </p>
+                    <p className="mt-1 text-[11px] font-semibold text-white/85">
+                      {periodLabel}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-[7px] font-medium uppercase tracking-[0.14em] text-white/30">
+                      Rate
+                    </p>
+                    <p className="mt-1 text-[11px] font-semibold tabular text-white/85">
+                      {fmtUsd(committed, 0)}
+                      <span className="text-[8px] font-medium text-white/35">/mo</span>
+                    </p>
+                  </div>
+                </div>
+
+                <div className="mt-3 flex items-center justify-between rounded-[1rem] bg-black/35 px-3 py-2.5">
+                  <p className="text-[8px] font-medium uppercase tracking-[0.14em] text-white/35">
+                    Monthly total
                   </p>
-                  <p className="text-[9px] text-white/35">
-                    {members.length} · {dripping.length} streaming
+                  <p className="text-[13px] font-semibold tabular text-white">
+                    {fmtUsd(committed, 0)}
                   </p>
                 </div>
-                <div className="shrink-0 text-right">
-                  <p className="text-[11px] font-semibold tabular text-white/75">
-                    {fmtUsd(groupCommitted(workspace, group.id), 0)}
-                    <span className="text-[8px] font-normal text-white/35">
-                      /mo
-                    </span>
+
+                {isOpen && members.length > 0 ? (
+                  <div className="mt-2.5 space-y-1.5 border-t border-white/[0.06] pt-2.5">
+                    {members.map((w) => (
+                      <div
+                        key={w.id}
+                        className="flex items-center justify-between gap-2 rounded-xl px-1 py-1"
+                      >
+                        <div className="flex min-w-0 items-center gap-2">
+                          <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-white/8 text-[8px] font-semibold text-white/70">
+                            {w.alias.slice(0, 1).toUpperCase()}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="truncate text-[10px] font-medium text-white/80">
+                              {w.alias}
+                            </p>
+                            <p className="text-[8px] text-white/30">
+                              {fmtUsd(w.monthlyUsd, 0)}/mo
+                            </p>
+                          </div>
+                        </div>
+                        <StatusPill status={w.status} compact />
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+              </button>
+            );
+          })}
+
+          {recentWorkers
+            .filter((w) => !w.groupId)
+            .slice(0, 2)
+            .map((w) => (
+              <div key={w.id} className="sl-pro-card sl-pro-card--flush w-full p-3">
+                <div className="flex items-center gap-2.5">
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/8 text-[11px] font-semibold text-white/80 ring-1 ring-white/10">
+                    {w.alias.slice(0, 1).toUpperCase()}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-[12px] font-semibold text-white">
+                      {w.alias}
+                    </p>
+                    <p className="truncate text-[9px] text-white/40">
+                      {shortAddress(w.walletAddress)} · ungrouped
+                    </p>
+                  </div>
+                  <StatusPill status={w.status} compact />
+                </div>
+                <div className="mt-3 grid grid-cols-2 gap-3">
+                  <div>
+                    <p className="text-[7px] font-medium uppercase tracking-[0.14em] text-white/30">
+                      Pay period
+                    </p>
+                    <p className="mt-1 text-[11px] font-semibold text-white/85">
+                      {periodLabel}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-[7px] font-medium uppercase tracking-[0.14em] text-white/30">
+                      Rate
+                    </p>
+                    <p className="mt-1 text-[11px] font-semibold tabular text-white/85">
+                      {fmtUsd(w.monthlyUsd, 0)}
+                      <span className="text-[8px] font-medium text-white/35">/mo</span>
+                    </p>
+                  </div>
+                </div>
+                <div className="mt-3 flex items-center justify-between rounded-[1rem] bg-black/35 px-3 py-2.5">
+                  <p className="text-[8px] font-medium uppercase tracking-[0.14em] text-white/35">
+                    Monthly total
                   </p>
-                  <p className="text-[8px] font-medium tabular text-white/40">
-                    −{dripPerSec.toFixed(2)}/sec
+                  <p className="text-[13px] font-semibold tabular text-white">
+                    {fmtUsd(w.monthlyUsd, 0)}
                   </p>
                 </div>
               </div>
-              {isOpen && members.length > 0 ? (
-                <div className="mt-2 space-y-1 border-t border-white/10 pt-2">
-                  {members.map((w) => (
-                    <div
-                      key={w.id}
-                      className="flex items-center justify-between gap-2 rounded-md bg-white/[0.03] px-1.5 py-1"
-                    >
-                      <div className="min-w-0">
-                        <p className="truncate text-[10px] font-medium text-white/75">
-                          {w.alias}
-                        </p>
-                        <p className="text-[8px] text-white/30">
-                          {fmtUsd(w.monthlyUsd, 0)}/mo
-                        </p>
-                      </div>
-                      <StatusPill status={w.status} compact />
-                    </div>
-                  ))}
-                </div>
-              ) : null}
-            </button>
-          );
-        })}
+            ))}
 
-        {ungrouped.length > 0 ? (
-          <div className="rounded-lg border border-white/10 bg-white/5 px-2.5 py-2">
-            <p className="text-[11px] font-medium text-white/80">Ungrouped</p>
-            <div className="mt-1.5 space-y-1">
-              {ungrouped.map((w) => (
-                <div
-                  key={w.id}
-                  className="flex items-center justify-between gap-2"
-                >
-                  <p className="truncate text-[10px] text-white/70">{w.alias}</p>
-                  <StatusPill status={w.status} compact />
-                </div>
-              ))}
+          {workspace.groups.length === 0 && ungrouped.length === 0 ? (
+            <div className="sl-pro-card sl-pro-card--flush px-3 py-8 text-center">
+              <p className="text-[12px] text-white/40">
+                No substreams yet — tap + to start a run.
+              </p>
             </div>
-          </div>
-        ) : null}
-
-        {workspace.groups.length === 0 && ungrouped.length === 0 ? (
-          <p className="py-6 text-center text-[11px] text-white/35">
-            No substreams yet — tap + to grow the run.
-          </p>
-        ) : null}
+          ) : null}
+        </div>
       </div>
     </div>
   );
+}
+
+function compactUsd(n: number) {
+  const abs = Math.abs(n);
+  if (abs >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (abs >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
+  return abs >= 10 ? n.toFixed(0) : n.toFixed(1);
 }
 
 function StreamsTab() {
@@ -522,7 +938,7 @@ function StreamsTab() {
           return (
             <div
               key={w.id}
-              className="rounded-lg border border-white/10 bg-white/5 px-2.5 py-2"
+              className="sl-pro-card sl-pro-card--flush px-2.5 py-2.5"
             >
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
@@ -586,28 +1002,51 @@ function StreamsTab() {
 
 function PeopleTab() {
   const { workspace, setModal } = useProWorkspace();
-  const rows = useMemo(
-    () =>
-      [...workspace.workers].sort((a, b) => a.alias.localeCompare(b.alias)),
-    [workspace.workers]
-  );
+  const [query, setQuery] = useState("");
+  const rows = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return [...workspace.workers]
+      .sort((a, b) => a.alias.localeCompare(b.alias))
+      .filter(
+        (w) =>
+          !q ||
+          w.alias.toLowerCase().includes(q) ||
+          w.walletAddress.toLowerCase().includes(q)
+      );
+  }, [workspace.workers, query]);
 
   return (
-    <div className="flex flex-col px-0.5 pb-1 pt-0.5">
-      <div className="flex items-center justify-between gap-2">
-        <p className="text-[8px] font-medium uppercase tracking-[0.18em] text-white/40">
-          Roster
-        </p>
+    <div className="flex flex-col gap-2.5 px-0.5 pb-1 pt-0.5">
+      <div className="flex items-center justify-between gap-2 px-0.5">
+        <p className="text-[13px] font-semibold text-white">People</p>
         <button
           type="button"
           onClick={() => setModal("worker")}
-          className="rounded-full border border-white/12 px-2 py-0.5 text-[8px] uppercase tracking-wider text-white/55"
+          className="rounded-full bg-[#22c55e] px-3 py-1 text-[9px] font-semibold text-white shadow-[0_4px_12px_rgba(34,197,94,0.3)]"
         >
-          Add
+          + Add
         </button>
       </div>
 
-      <div className="mt-2 flex gap-1 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      <label className="flex items-center gap-2 rounded-full border border-white/[0.08] bg-[#1a1a1a] px-3 py-2.5">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden>
+          <circle cx="11" cy="11" r="6.5" stroke="rgba(255,255,255,0.35)" strokeWidth="1.7" />
+          <path
+            d="M16.5 16.5L20 20"
+            stroke="rgba(255,255,255,0.35)"
+            strokeWidth="1.7"
+            strokeLinecap="round"
+          />
+        </svg>
+        <input
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Search roster"
+          className="w-full bg-transparent text-[12px] text-white outline-none placeholder:text-white/30"
+        />
+      </label>
+
+      <div className="flex gap-1 overflow-x-auto pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {workspace.groups.map((g) => (
           <button
             key={g.id}
@@ -627,33 +1066,58 @@ function PeopleTab() {
         </button>
       </div>
 
-      <div className="mt-1.5 space-y-1.5">
+      <div className="sl-pro-card sl-pro-card--flush divide-y divide-white/[0.05] overflow-hidden p-0">
         {rows.map((w) => {
           const group = workspace.groups.find((g) => g.id === w.groupId);
+          const active = w.status === "dripping";
           return (
             <button
               key={w.id}
               type="button"
               onClick={() => setModal({ kind: "worker-edit", workerId: w.id })}
-              className="flex w-full items-center justify-between gap-2 rounded-lg border border-white/10 bg-white/5 px-2.5 py-2 text-left"
+              className="flex w-full items-center gap-2.5 px-3 py-2.5 text-left transition-colors active:bg-white/[0.04]"
             >
-              <div className="min-w-0">
-                <p className="truncate text-[11px] font-medium text-white/85">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/8 text-[11px] font-semibold text-white/80 ring-1 ring-white/10">
+                {w.alias.slice(0, 1).toUpperCase()}
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-[12px] font-semibold text-white">
                   {w.alias}
                 </p>
-                <p className="text-[8px] text-white/35">
-                  {group?.name ?? "Ungrouped"}
+                <p className="truncate text-[9px] text-white/40">
+                  {group?.name ?? "Ungrouped"} · {fmtUsd(w.monthlyUsd, 0)}/mo
                 </p>
               </div>
-              <div className="shrink-0 text-right">
-                <p className="text-[11px] tabular text-white/75">
-                  {fmtUsd(w.monthlyUsd, 0)}
-                </p>
-                <StatusPill status={w.status} compact />
-              </div>
+              <span
+                className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full ${
+                  active
+                    ? "bg-[#22c55e] text-white"
+                    : "border border-white/15 text-transparent"
+                }`}
+                aria-hidden
+              >
+                {active ? (
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none">
+                    <path
+                      d="M5 13l4 4L19 7"
+                      stroke="currentColor"
+                      strokeWidth="3"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                ) : (
+                  "·"
+                )}
+              </span>
             </button>
           );
         })}
+        {rows.length === 0 ? (
+          <p className="px-3 py-6 text-center text-[11px] text-white/35">
+            No people match.
+          </p>
+        ) : null}
       </div>
     </div>
   );
@@ -664,86 +1128,108 @@ function CapitalTab() {
   const alloc = workspace.pool.allocation;
   const total = alloc.idle + alloc.yield_vault + alloc.reserve || 1;
   const segments = [
-    { key: "idle", label: bucketLabel("idle"), value: alloc.idle, color: "bg-white/70" },
+    {
+      key: "idle",
+      label: bucketLabel("idle"),
+      value: alloc.idle,
+      color: "bg-white/75",
+      stripe: true,
+    },
     {
       key: "yield",
       label: bucketLabel("yield_vault"),
       value: alloc.yield_vault,
       color: "bg-[#1d9e75]",
+      stripe: false,
     },
     {
       key: "reserve",
       label: bucketLabel("reserve"),
       value: alloc.reserve,
-      color: "bg-[#5b54e6]",
+      color: "bg-white/35",
+      stripe: true,
     },
   ];
 
   return (
-    <div className="flex flex-col px-0.5 pb-1 pt-0.5">
-      <p className="text-[8px] font-medium uppercase tracking-[0.18em] text-white/40">
-        Capital
-      </p>
-      <p className="mt-1 text-[1.4rem] font-semibold tabular leading-none text-white">
-        {fmtUsd(totals.poolBalance)}
-      </p>
-      <p className="mt-0.5 text-[9px] tabular text-[#1d9e75]">
-        +{fmtUsd(totals.yieldEarned, 4)} accrued
-        {alloc.yield_vault > 0 && (
-          <span className="text-[#1d9e75]/60">
-            {" · +"}
-            {fmtUsd(alloc.yield_vault * (YIELD_APY / 365 / 24 / 3600), 6)}/s
-          </span>
-        )}
-      </p>
-
-      <div className="mt-3 flex h-2 overflow-hidden rounded-full bg-white/5">
-        {segments.map((seg) => (
-          <div
-            key={seg.key}
-            className={seg.color}
-            style={{ width: `${(seg.value / total) * 100}%` }}
-          />
-        ))}
-      </div>
-      <div className="mt-2 space-y-1">
-        {segments.map((seg) => (
-          <div
-            key={seg.key}
-            className="flex items-center justify-between text-[10px]"
-          >
-            <span className="flex items-center gap-1.5 text-white/45">
-              <span className={`h-1.5 w-1.5 rounded-full ${seg.color}`} />
-              {seg.label}
-            </span>
-            <span className="tabular text-white/80">{fmtUsd(seg.value, 0)}</span>
+    <div className="flex flex-col gap-2.5 px-0.5 pb-1 pt-0.5">
+      <section className="sl-pro-card sl-pro-card--flush p-3.5">
+        <div className="flex items-start justify-between gap-2">
+          <div>
+            <p className="text-[8px] font-medium uppercase tracking-[0.16em] text-white/40">
+              Capital
+            </p>
+            <p className="mt-1.5 text-[1.45rem] font-semibold tabular leading-none text-white">
+              {fmtUsd(totals.poolBalance)}
+            </p>
           </div>
-        ))}
-      </div>
+          <span className="sl-pro-chip !px-2 !py-1 !text-[8px]">Pool</span>
+        </div>
+        <p className="mt-1.5 text-[9px] tabular text-[#1d9e75]">
+          +{fmtUsd(totals.yieldEarned, 4)} accrued
+          {alloc.yield_vault > 0 && (
+            <span className="text-[#1d9e75]/60">
+              {" · +"}
+              {fmtUsd(alloc.yield_vault * (YIELD_APY / 365 / 24 / 3600), 6)}/s
+            </span>
+          )}
+        </p>
 
-      <p className="mt-3 text-[9px] leading-snug text-white/35">
-        Floor {fmtUsd(totals.floor, 0)} stays liquid · investable{" "}
-        {fmtUsd(totals.investable, 0)}
-      </p>
+        <div className="mt-3 flex h-3 overflow-hidden rounded-full bg-white/[0.04] p-0.5">
+          {segments.map((seg) => (
+            <div
+              key={seg.key}
+              className={`relative h-full overflow-hidden rounded-full ${seg.color}`}
+              style={{ width: `${(seg.value / total) * 100}%` }}
+            >
+              {seg.stripe ? (
+                <span
+                  className="pointer-events-none absolute inset-0 sl-pro-stripe-light opacity-70"
+                  aria-hidden
+                />
+              ) : null}
+            </div>
+          ))}
+        </div>
+        <div className="mt-2.5 space-y-1">
+          {segments.map((seg) => (
+            <div
+              key={seg.key}
+              className="flex items-center justify-between rounded-xl bg-white/[0.04] px-2.5 py-2 text-[10px]"
+            >
+              <span className="flex items-center gap-1.5 text-white/45">
+                <span className={`h-1.5 w-1.5 rounded-full ${seg.color}`} />
+                {seg.label}
+              </span>
+              <span className="tabular text-white/80">{fmtUsd(seg.value, 0)}</span>
+            </div>
+          ))}
+        </div>
 
-      <WalletBalanceRow />
+        <p className="mt-3 text-[9px] leading-snug text-white/35">
+          Floor {fmtUsd(totals.floor, 0)} stays liquid · investable{" "}
+          {fmtUsd(totals.investable, 0)}
+        </p>
 
-      <div className="mt-3 grid grid-cols-2 gap-1.5">
-        <button
-          type="button"
-          onClick={() => setModal("withdraw")}
-          className="sl-glass-btn-dark !px-2 !py-2 !text-[9px]"
-        >
-          Withdraw
-        </button>
-        <button
-          type="button"
-          onClick={() => setModal("invest")}
-          className="sl-glass-btn-dark sl-glass-btn-dark-primary !px-2 !py-2 !text-[9px]"
-        >
-          Allocate
-        </button>
-      </div>
+        <WalletBalanceRow />
+
+        <div className="mt-3 grid grid-cols-2 gap-1.5">
+          <button
+            type="button"
+            onClick={() => setModal("withdraw")}
+            className="sl-glass-btn-dark !px-2 !py-2 !text-[9px]"
+          >
+            Withdraw
+          </button>
+          <button
+            type="button"
+            onClick={() => setModal("invest")}
+            className="sl-glass-btn-dark sl-glass-btn-dark-primary !px-2 !py-2 !text-[9px]"
+          >
+            Allocate
+          </button>
+        </div>
+      </section>
     </div>
   );
 }

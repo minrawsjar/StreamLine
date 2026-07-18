@@ -17,6 +17,8 @@ import { HowStepsTimeline } from "./HowStepsTimeline";
 import { FinancePhonePreview } from "@/components/app/FinanceFlowViz";
 import { PrivacyPhonePreview } from "./PrivacyPhonePreview";
 import { ProPhonePreview } from "./ProPhonePreview";
+import { NamesPhonePreview } from "./NamesPhonePreview";
+import { useNeedsHandleOnboarding } from "@/lib/use-handle-onboarding";
 
 /** iPhone 15 proportions: 393 × 852 pt → screen aspect 9:19.5 */
 const SCREEN_ASPECT = "9 / 19.5";
@@ -289,9 +291,19 @@ function PhoneScreenContent({
       return <PrivacyScreen progress={sceneProgress} />;
     case "pro":
       return <ProScreen progress={sceneProgress} />;
+    case "names":
+      return <NamesScreen progress={sceneProgress} />;
     case "launch":
       return <LaunchScreen compact={compact} />;
   }
+}
+
+function NamesScreen({ progress }: { progress: number }) {
+  return (
+    <div className="-mx-1 flex min-h-0 flex-1 flex-col overflow-hidden">
+      <NamesPhonePreview progress={progress} />
+    </div>
+  );
 }
 
 export function PhoneMockup({
@@ -306,14 +318,15 @@ export function PhoneMockup({
   onLaunchApp,
 }: PhoneMockupProps) {
   const account = useCurrentAccount();
+  const { needsStep } = useNeedsHandleOnboarding();
   const inApp = phoneApp !== null;
   const isLaunchScene = scene === "launch" && !inApp;
   const isPro =
     phoneApp === "pro" || (!inApp && (theme === "pro" || scene === "pro"));
   const useDarkGlass = isPro;
   /** Edge-to-edge onboarding inside the phone glass. */
-  const proOnboarding = phoneApp === "pro" && !account;
-  const userOnboarding = phoneApp === "user" && !account;
+  const proOnboarding = phoneApp === "pro" && (!account || needsStep);
+  const userOnboarding = phoneApp === "user" && (!account || needsStep);
   const appOnboarding = proOnboarding || userOnboarding;
 
   /** iOS-style icon splash when leaving the launcher into an app. */
@@ -448,7 +461,7 @@ export function PhoneMockup({
                 )}
                 <div
                   className={`flex min-h-0 flex-col ${
-                    scene === "states" || scene === "finance" || scene === "privacy" || scene === "pro"
+                    scene === "states" || scene === "finance" || scene === "privacy" || scene === "pro" || scene === "names"
                       ? "flex-1"
                       : ""
                   }`}
