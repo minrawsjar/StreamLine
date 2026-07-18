@@ -6,10 +6,10 @@ import { StreamLineMark } from "./StreamLineMark";
 import { HERO_LAYOUT_MAX_CLASS } from "./heroLayout";
 import type { SceneTheme } from "./heroScenes";
 
-// Defaults to the in-app /docs route, so it works on any domain with no env var.
-// Override NEXT_PUBLIC_DOCS_URL only to point at an external docs site.
+// The docs live in the standalone `packages/docs` (Fumadocs) app. Set
+// NEXT_PUBLIC_DOCS_URL to its deployment; falls back to the local :3001 dev server.
 const DOCS_URL =
-  process.env.NEXT_PUBLIC_DOCS_URL?.replace(/\/$/, "") || "/docs";
+  process.env.NEXT_PUBLIC_DOCS_URL?.replace(/\/$/, "") || "http://localhost:3001";
 
 type HeroNavProps = {
   theme?: SceneTheme;
