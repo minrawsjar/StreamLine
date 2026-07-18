@@ -6,6 +6,9 @@ import { StreamLineMark } from "./StreamLineMark";
 import { HERO_LAYOUT_MAX_CLASS } from "./heroLayout";
 import type { SceneTheme } from "./heroScenes";
 
+const DOCS_URL =
+  process.env.NEXT_PUBLIC_DOCS_URL?.replace(/\/$/, "") || "http://localhost:3001";
+
 type HeroNavProps = {
   theme?: SceneTheme;
   inApp?: boolean;
@@ -41,17 +44,31 @@ export function HeroNav({
         </span>
       </Link>
 
-      <button
-        type="button"
-        onClick={inApp ? onBackToMain : onLaunchApp}
-        className={`font-semibold ${
-          isPro
-            ? "sl-glass-btn-dark sl-glass-btn-dark-primary"
-            : "sl-glass-btn sl-glass-btn-primary"
-        }`}
-      >
-        {inApp ? "Back to main" : "Start App"}
-      </button>
+      <div className="flex items-center gap-5 sm:gap-6">
+        <a
+          href={DOCS_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          className={`text-[13px] font-medium tracking-wide transition-colors duration-300 ${
+            isPro
+              ? "text-white/55 hover:text-white"
+              : "text-[#666] hover:text-[#111]"
+          }`}
+        >
+          Docs
+        </a>
+        <button
+          type="button"
+          onClick={inApp ? onBackToMain : onLaunchApp}
+          className={`font-semibold ${
+            isPro
+              ? "sl-glass-btn-dark sl-glass-btn-dark-primary"
+              : "sl-glass-btn sl-glass-btn-primary"
+          }`}
+        >
+          {inApp ? "Back to main" : "Start App"}
+        </button>
+      </div>
     </nav>
   );
 }

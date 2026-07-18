@@ -10,6 +10,7 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@streamline/sdk": "*",
     "@mysten/dapp-kit": "0.16.16",
     "@mysten/enoki": "0.13.0",
     "@mysten/seal": "^0.10.0",

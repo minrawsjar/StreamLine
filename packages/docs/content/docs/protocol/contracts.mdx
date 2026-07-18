@@ -1,0 +1,34 @@
+---
+title: Contracts
+description: Move package modules and the primary stream surface.
+icon: FileCode
+---
+
+# Contracts
+
+Package name: **`streamline`** (Sui testnet). Source: [`contracts/`](https://github.com/minrawsjar/StreamLine/tree/main/contracts).
+
+## Core modules
+
+| Module | Role |
+| --- | --- |
+| `stream` | `create_stream` / `create_stream_v2`, raise, approve, drip, cancel, dispute, confidential variants |
+| `yield_vault` | Deposit / redeem share receipts |
+| `collateral` | Borrow / repay against a live stream |
+| `treasury` | Pro treasury open / deposit / withdraw / invest |
+| `confidential_balance` | ZK wrap / transfer / unwrap |
+| `lazy_stream` / `shielded_pool` | Advanced payment modes |
+
+## Entry points agents use today
+
+SDK v1 calls:
+
+```
+package::stream::create_stream_v2<USDC>
+```
+
+with clock `0x6`, milestone vectors, and optional `yield_bps`.
+
+Package and coin type IDs are exported from `@streamline/sdk` via `resolveNetworkConfig("testnet")` and mirrored in the frontend constants.
+
+Full deployment notes: [`contracts/README.md`](https://github.com/minrawsjar/StreamLine/blob/main/contracts/README.md).

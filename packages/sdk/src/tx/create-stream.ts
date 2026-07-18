@@ -1,0 +1,95 @@
+import { Transaction, coinWithBalance } from "@mysten/sui/transactions";
+
+/** The shared on-chain Clock object. */
+const CLOCK = "0x6";
+
+/** Default review window before a raised milestone auto-approves (48h). */
+export const DEFAULT_DISPUTE_WINDOW_MS = 48 * 60 * 60 * 1000;
+
+export type CreateStreamArgs = {
+  packageId: string;
+  usdcType: string;
+  /** Client address — required so `coinWithBalance` can pick the USDC coins. */
+  sender: string;
+  freelancer: string;
+  milestoneNames: string[];
+  /** Per-milestone amounts in base units; must sum to `totalBase`. */
+  milestoneAmountsBase: bigint[];
+  totalBase: bigint;
+  durationMs: number;
+  disputeWindowMs?: number;
+  revocable?: boolean;
+};
+
+/** Lock USDC and create a milestone stream (client signs). */
+export function buildCreateStream(a: CreateStreamArgs): Transaction {
+  const tx = new Transaction();
+  tx.setSenderIfNotSet(a.sender);
+  tx.moveCall({
+    target: `${a.packageId}::stream::create_stream`,
+    typeArguments: [a.usdcType],
+    arguments: [
+      coinWithBalance({ type: a.usdcType, balance: a.totalBase }),
+      tx.pure.address(a.freelancer),
+      tx.pure.vector("string", a.milestoneNames),
+      tx.pure.vector("u64", a.milestoneAmountsBase),
+      tx.pure.u64(a.durationMs),
+      tx.pure.u64(a.disputeWindowMs ?? DEFAULT_DISPUTE_WINDOW_MS),
+      tx.pure.bool(a.revocable ?? true),
+      tx.object(CLOCK),
+    ],
+  });
+  return tx;
+}
+
+/**
+ * Like `buildCreateStream` but with an auto-yield split: `yieldBps` of every
+ * drip is auto-deposited into the vault.
+ */
+export function buildCreateStreamV2(
+  a: CreateStreamArgs & { yieldBps: number }
+): Transaction {
+  const tx = new Transaction();
+  tx.setSenderIfNotSet(a.sender);
+  tx.moveCall({
+    target: `${a.packageId}::stream::create_stream_v2`,
+    typeArguments: [a.usdcType],
+    arguments: [
+      coinWithBalance({ type: a.usdcType, balance: a.totalBase }),
+      tx.pure.address(a.freelancer),
+      tx.pure.vector("string", a.milestoneNames),
+      tx.pure.vector("u64", a.milestoneAmountsBase),
+      tx.pure.u64(a.durationMs),
+      tx.pure.u64(a.disputeWindowMs ?? DEFAULT_DISPUTE_WINDOW_MS),
+      tx.pure.bool(a.revocable ?? true),
+      tx.pure.u64(BigInt(a.yieldBps)),
+      tx.object(CLOCK),
+    ],
+  });
+  return tx;
+}
+
+/** Find a created `Stream<T>` object id from transaction effects. */
+export function findCreatedStreamId(
+  objectChanges:
+    | ReadonlyArray<{
+        type: string;
+        objectType?: string;
+        objectId?: string;
+      }>
+    | null
+    | undefined
+): string | undefined {
+  if (!objectChanges) return undefined;
+  for (const c of objectChanges) {
+    if (
+      c.type === "created" &&
+      c.objectId &&
+      typeof c.objectType === "string" &&
+      c.objectType.includes("::stream::Stream<")
+    ) {
+      return c.objectId;
+    }
+  }
+  return undefined;
+}

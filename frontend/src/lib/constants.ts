@@ -3,23 +3,19 @@
  * this module is safe to load in server route handlers (the Enoki sponsorship
  * proxy) as well as client components. `networks.ts` builds the dApp Kit network
  * config on top of these.
+ *
+ * Package / USDC / fullnode IDs are shared with `@streamline/sdk`.
  */
 
-// Deployed StreamLine package on testnet (see contracts/Published.toml).
-// v8 (2026-06-13) adds auto-yield (create_stream_v2 + drip_with_yield).
-// v7 added the lending pool (borrow against a stream).
-// v6 added the Scallop-shaped yield_vault.
-// v5 added mutual dispute resolution (propose/accept resolution).
-// v3 added Seal secrets + confidential milestone review.
-// v2 added confidential_balance + ConfidentialStream; v9 added the treasury module.
-const TESTNET_PACKAGE =
-  "0x9e9be0f65ce3c45092b25553f6eabc4520bd57bb2f29dacdeb770c3e8e2de3e1";
+export {
+  PACKAGE_IDS,
+  TEST_USDC,
+  USDC_TYPE,
+  FULLNODE_URLS,
+  type NetworkName,
+} from "@streamline/sdk";
 
-export const PACKAGE_IDS = {
-  mainnet: process.env.NEXT_PUBLIC_PACKAGE_ID_MAINNET ?? "0x0",
-  testnet: process.env.NEXT_PUBLIC_PACKAGE_ID_TESTNET ?? TESTNET_PACKAGE,
-  devnet: "0x0",
-} as const;
+import type { NetworkName } from "@streamline/sdk";
 
 /**
  * The *original* (v1) package ids. Object types and Seal's identity namespace
@@ -43,19 +39,6 @@ export const CONF_DEFINING_PACKAGE_IDS = {
   testnet:
     "0x25e2dac28bdda5655040ceab5876794b8bdc3687178c1309974017c16dd76fdb",
   devnet: "0x0",
-} as const;
-
-/**
- * Mintable test USDC deployed for the demo (6 decimals, symbol "USDC"). The
- * TreasuryCap is shared, so the faucet is permissionless on testnet.
- */
-export const TEST_USDC = {
-  packageId:
-    "0xf6ce32fe48338464f3947b9d15cd4a0befa0fe9b3926fd9daf6cee3658482ed3",
-  treasuryId:
-    "0xa7cb971f4f93e5713c5703f63f3bc17fdf0f6bf1f9795dc010ac164827715330",
-  coinType:
-    "0xf6ce32fe48338464f3947b9d15cd4a0befa0fe9b3926fd9daf6cee3658482ed3::mock_usdc::MOCK_USDC",
 } as const;
 
 /**
@@ -106,31 +89,6 @@ export const LENDING_DEFINING_PACKAGE = {
   mainnet: "0x0",
   devnet: "0x0",
 } as const;
-
-/** USDC is the primary streamed asset. Testnet uses our mintable test USDC. */
-export const USDC_TYPE = {
-  mainnet:
-    process.env.NEXT_PUBLIC_USDC_TYPE_MAINNET ??
-    "0xdba34672e30cb065b1f93e3ab55318768fd6fef66c15942c9f7cb846e2f900e7::usdc::USDC",
-  testnet: process.env.NEXT_PUBLIC_USDC_TYPE_TESTNET ?? TEST_USDC.coinType,
-  devnet: "0x2::sui::SUI",
-} as const;
-
-/**
- * Sui fullnode endpoints (getFullnodeUrl was removed in Sui SDK v2).
- * The public fullnodes rate-limit browser traffic (surfaces as CORS/ERR_FAILED
- * floods), so allow overriding with a keyed RPC (e.g. Ankr) via env.
- */
-export const FULLNODE_URLS = {
-  mainnet:
-    process.env.NEXT_PUBLIC_SUI_MAINNET_RPC ?? "https://fullnode.mainnet.sui.io:443",
-  testnet:
-    process.env.NEXT_PUBLIC_SUI_TESTNET_RPC ?? "https://fullnode.testnet.sui.io:443",
-  devnet:
-    process.env.NEXT_PUBLIC_SUI_DEVNET_RPC ?? "https://fullnode.devnet.sui.io:443",
-} as const;
-
-export type NetworkName = keyof typeof PACKAGE_IDS;
 
 export const DEFAULT_NETWORK: NetworkName =
   (process.env.NEXT_PUBLIC_DEFAULT_NETWORK as NetworkName) ?? "testnet";

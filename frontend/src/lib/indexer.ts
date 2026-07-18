@@ -2,12 +2,22 @@
 
 import { useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
+import {
+  IndexerClient,
+  type StreamRecord,
+  type DripRecord,
+} from "@streamline/sdk";
 
 /**
  * Client for the StreamLine Rust indexer: typed REST reads + a WebSocket hook
- * for live drip / state updates. The frontend reads stream state from here
- * (fast, cached) rather than hitting Sui RPC directly.
+ * for live drip / state updates. REST helpers come from `@streamline/sdk`.
  */
+
+export type { StreamRecord, DripRecord };
+
+export type LiveUpdate =
+  | { type: "drip"; stream_id: string; amount: number; timestamp_ms: number }
+  | { type: "state"; stream_id: string; state: string };
 
 const HTTP =
   process.env.NEXT_PUBLIC_INDEXER_URL?.replace(/\/$/, "") ??
@@ -16,51 +26,17 @@ const WS =
   process.env.NEXT_PUBLIC_INDEXER_WS_URL ??
   HTTP.replace(/^http/, "ws") + "/ws";
 
-/** Mirrors the indexer's `StreamRecord` JSON. */
-export type StreamRecord = {
-  id: string;
-  sender: string;
-  freelancer: string;
-  coin_type: string;
-  total: number;
-  remaining: number;
-  state: "locked" | "pending_review" | "dripping" | "paused" | "done";
-  current_milestone: number;
-  n_milestones: number;
-  duration_ms: number;
-  drip_interval_ms: number;
-  last_drip_ms: number;
-  review_deadline_ms: number | null;
-  created_at_ms: number;
-};
-
-export type DripRecord = {
-  id: number;
-  stream_id: string;
-  amount: number;
-  timestamp_ms: number;
-  tx_digest: string | null;
-};
-
-export type LiveUpdate =
-  | { type: "drip"; stream_id: string; amount: number; timestamp_ms: number }
-  | { type: "state"; stream_id: string; state: string };
-
-async function getJson<T>(path: string): Promise<T> {
-  const res = await fetch(`${HTTP}${path}`);
-  if (!res.ok) throw new Error(`indexer ${res.status}: ${path}`);
-  return res.json() as Promise<T>;
-}
+const indexer = new IndexerClient(HTTP);
 
 export function fetchStreams(params: {
   freelancer?: string;
   sender?: string;
 }): Promise<StreamRecord[]> {
-  const q = new URLSearchParams();
-  if (params.freelancer) q.set("freelancer", params.freelancer);
-  if (params.sender) q.set("sender", params.sender);
-  const qs = q.toString();
-  return getJson<StreamRecord[]>(`/streams${qs ? `?${qs}` : ""}`);
+  return indexer.list(params);
+}
+
+export function fetchStreamDrips(streamId: string): Promise<DripRecord[]> {
+  return indexer.drips(streamId);
 }
 
 // === React Query hooks ===
@@ -77,7 +53,7 @@ export function useStreams(params: { freelancer?: string; sender?: string }) {
 export function useStream(id: string | undefined) {
   return useQuery({
     queryKey: ["stream", id],
-    queryFn: () => getJson<StreamRecord>(`/stream/${id}`),
+    queryFn: () => indexer.get(id!),
     enabled: !!id,
   });
 }
@@ -89,10 +65,6 @@ export function useStreamDrips(id: string | undefined) {
     enabled: !!id,
     refetchInterval: 20_000,
   });
-}
-
-export function fetchStreamDrips(streamId: string): Promise<DripRecord[]> {
-  return getJson<DripRecord[]>(`/stream/${streamId}/drips`);
 }
 
 /**

@@ -298,11 +298,15 @@ StreamLine/
 │       ├── components/         #   landing/, app/ dashboards, hero/ (dither), wallet/
 │       └── lib/                #   networks, streamline-tx (PTBs), stream-math, indexer
 │
-├── docs/                       # Vision + privacy build (Groth16 amounts, Seal metadata)
+├── packages/
+│   ├── sdk/                    #   @streamline/sdk — pay by handle, create stream, indexer reads
+│   └── docs/                   #   Fumadocs site (npm run dev:docs → :3001)
+│
+├── docs/                       # Engineering plans (privacy, Seal) — not the public docs site
 └── .gitignore
 ```
 
-Each top-level package has its own README: **[contracts](contracts/README.md)** · **[backend](backend/README.md)** · **[frontend](frontend/README.md)** · **[mock-usdc](mock-usdc/README.md)**. Privacy build details live in [`docs/complete-privacy-build.md`](docs/complete-privacy-build.md), [`docs/confidential-streaming-plan.md`](docs/confidential-streaming-plan.md), and [`docs/privacy-seal-plan.md`](docs/privacy-seal-plan.md).
+Each top-level package has its own README: **[contracts](contracts/README.md)** · **[backend](backend/README.md)** · **[frontend](frontend/README.md)** · **[sdk](packages/sdk/README.md)** · **[docs site](packages/docs/README.md)** · **[mock-usdc](mock-usdc/README.md)**. Privacy build details live in [`docs/complete-privacy-build.md`](docs/complete-privacy-build.md), [`docs/confidential-streaming-plan.md`](docs/confidential-streaming-plan.md), and [`docs/privacy-seal-plan.md`](docs/privacy-seal-plan.md).
 
 ---
 

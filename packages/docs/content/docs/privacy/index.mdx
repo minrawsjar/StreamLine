@@ -1,0 +1,47 @@
+---
+title: Overview
+description: Privacy is a product pillar — not a toggle bolted on later.
+icon: Shield
+---
+
+# Privacy
+
+Most payment rails treat privacy as an afterthought: cleartext invoices, public ledgers that read like a payroll dump, and “optional” mixing that nobody enables under deadline pressure.
+
+StreamLine takes the opposite stance. **Privacy is a first-class mode of the protocol** — the same milestone-gated, gasless streaming model, with amounts and secrets that only the two parties can read.
+
+## The three layers
+
+| Layer | What stays private | How |
+| --- | --- | --- |
+| **Identity** | Link from payment to a seed phrase / exchange KYC trail | [zkLogin](/docs/privacy/identity) — Google → fresh Sui address, sponsored gas |
+| **Amounts** | Totals, remaining, earned, drip sizes | [Confidential streams](/docs/privacy/amounts) — Poseidon commitments + Groth16 proofs |
+| **Metadata** | Briefs, terms, deliverables | [Seal](/docs/privacy/metadata) — threshold encryption gated by on-chain policy |
+
+Public streams still exist when transparency is the point (open payroll, demos, agent telemetry). Confidential mode is for work that should not become a public spreadsheet.
+
+## Design principles
+
+1. **Selective disclosure** — The chain enforces rules without broadcasting every number.
+2. **Two-party readability** — Client and freelancer decrypt locally; indexers and keepers never hold plaintext balances.
+3. **Proof, not trust** — Drips that move confidential value carry **zero-knowledge proofs** verified natively on Sui.
+4. **Same UX shape** — Create → raise → approve → drip. Privacy does not invent a second product.
+
+## What observers still see
+
+Honesty beats theater. A third party watching the chain can typically observe:
+
+- That a confidential stream **exists** and which package/module it uses
+- Object IDs, parties’ **addresses** (unless they rotate via zkLogin aliases)
+- That a drip **occurred** (timing / proof verification), not the dollar amount
+- Unwrapped cash-outs once value exits into a public `Coin`
+
+That is intentional. StreamLine hides **economic content**, not the fact that settlement is happening.
+
+## Where to go next
+
+<Cards>
+  <Card title="Confidential amounts" href="/docs/privacy/amounts" description="Groth16 · Poseidon · Seal openings" />
+  <Card title="Identity" href="/docs/privacy/identity" description="zkLogin · gasless · seedless" />
+  <Card title="Encrypted metadata" href="/docs/privacy/metadata" description="Seal policy · Walrus blobs" />
+</Cards>
