@@ -32,10 +32,24 @@ export {
 };
 export type { NetworkName };
 
+/**
+ * Next.js only inlines *statically* referenced `process.env.NEXT_PUBLIC_*` into
+ * the browser bundle. The SDK reads env dynamically (`process.env[name]`), which
+ * is NOT inlined client-side — so in the browser the RPC silently fell back to
+ * the public fullnode (which now 404s), breaking every SuiClient call including
+ * `tx.build`. Referencing the vars statically here gives the browser the real
+ * endpoints; the SDK value is the server/CLI fallback.
+ */
+const RPC_URLS = {
+  mainnet: process.env.NEXT_PUBLIC_SUI_MAINNET_RPC || FULLNODE_URLS.mainnet,
+  testnet: process.env.NEXT_PUBLIC_SUI_TESTNET_RPC || FULLNODE_URLS.testnet,
+  devnet: process.env.NEXT_PUBLIC_SUI_DEVNET_RPC || FULLNODE_URLS.devnet,
+};
+
 export const { networkConfig, useNetworkVariable, useNetworkVariables } =
   createNetworkConfig({
     mainnet: {
-      url: FULLNODE_URLS.mainnet,
+      url: RPC_URLS.mainnet,
       variables: {
         packageId: PACKAGE_IDS.mainnet,
         usdcType: USDC_TYPE.mainnet,
@@ -49,7 +63,7 @@ export const { networkConfig, useNetworkVariable, useNetworkVariables } =
       },
     },
     testnet: {
-      url: FULLNODE_URLS.testnet,
+      url: RPC_URLS.testnet,
       variables: {
         packageId: PACKAGE_IDS.testnet,
         usdcType: USDC_TYPE.testnet,
@@ -63,7 +77,7 @@ export const { networkConfig, useNetworkVariable, useNetworkVariables } =
       },
     },
     devnet: {
-      url: FULLNODE_URLS.devnet,
+      url: RPC_URLS.devnet,
       variables: {
         packageId: PACKAGE_IDS.devnet,
         usdcType: USDC_TYPE.devnet,

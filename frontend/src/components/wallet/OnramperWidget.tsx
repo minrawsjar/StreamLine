@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useCurrentAccount } from "@mysten/dapp-kit";
 
 /**
@@ -32,11 +32,19 @@ const WIDGET_HOST = API_KEY.startsWith("pk_test")
 /** Whether the Onramper key is configured (build-time NEXT_PUBLIC). */
 export const onramperConfigured = !!API_KEY;
 
-function widgetUrl(mode: OnrampMode, address: string): string {
+/**
+ * Build the widget URL and (if a signing secret is configured) sign the
+ * sensitive params. Onramper rejects unsigned URLs with "Signature validation
+ * failed" when verification is on — it HMAC-signs `signContent` (the `wallets`
+ * param, sorted by key) and expects a matching `&signature=` (hex). Signing runs
+ * server-side via /api/onramper/sign so the secret never reaches the browser.
+ */
+async function buildSignedUrl(mode: OnrampMode, address: string): Promise<string> {
+  const wallets = `${CRYPTO}:${address}`;
   const p = new URLSearchParams({
     apiKey: API_KEY,
     mode,
-    wallets: `${CRYPTO}:${address}`,
+    wallets,
     themeName: "light",
   });
   if (mode === "buy") {
@@ -47,6 +55,21 @@ function widgetUrl(mode: OnrampMode, address: string): string {
     p.set("sell_onlyCryptos", CRYPTO);
     p.set("sell_defaultCrypto", CRYPTO);
     p.set("sell_defaultFiat", "usd");
+  }
+  // signContent = the sensitive params (only `wallets` here), key-sorted.
+  try {
+    const res = await fetch("/api/onramper/sign", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ signContent: `wallets=${wallets}` }),
+    });
+    if (res.ok) {
+      const { signature } = (await res.json()) as { signature?: string };
+      if (signature) p.set("signature", signature);
+    }
+    // 501 (no secret) → load unsigned; works only if verification is off.
+  } catch {
+    /* network blip — fall through to unsigned */
   }
   return `https://${WIDGET_HOST}/?${p.toString()}`;
 }
@@ -62,6 +85,23 @@ export function OnramperModal({
   onClose: () => void;
 }) {
   const account = useCurrentAccount();
+  const [url, setUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!open || !API_KEY || !account) {
+      setUrl(null);
+      return;
+    }
+    let cancelled = false;
+    setUrl(null);
+    void buildSignedUrl(mode, account.address).then((u) => {
+      if (!cancelled) setUrl(u);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, mode, account?.address]);
+
   if (!open || !API_KEY || !account) return null;
   const title = mode === "buy" ? "Buy USDC" : "Cash out USDC";
 
@@ -84,12 +124,18 @@ export function OnramperModal({
             Close
           </button>
         </div>
-        <iframe
-          title={`${title} via Onramper`}
-          src={widgetUrl(mode, account.address)}
-          className="min-h-0 flex-1 border-0"
-          allow="accelerometer; autoplay; camera; gyroscope; payment; microphone"
-        />
+        {url ? (
+          <iframe
+            title={`${title} via Onramper`}
+            src={url}
+            className="min-h-0 flex-1 border-0"
+            allow="accelerometer; autoplay; camera; gyroscope; payment; microphone"
+          />
+        ) : (
+          <div className="flex min-h-0 flex-1 items-center justify-center text-[12px] text-[#888]">
+            Loading…
+          </div>
+        )}
       </div>
     </div>
   );

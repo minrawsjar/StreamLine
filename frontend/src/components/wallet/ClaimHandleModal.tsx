@@ -24,6 +24,7 @@ export function ClaimHandleModal({
   const [raw, setRaw] = useState("");
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState<string | null>(null);
+  const [changing, setChanging] = useState(false);
   const availability = useHandleAvailability(raw);
 
   if (!open) return null;
@@ -51,6 +52,7 @@ export function ClaimHandleModal({
     try {
       const result = await claim(availability.handle);
       setDone(result.displayName);
+      setChanging(false);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -76,15 +78,17 @@ export function ClaimHandleModal({
             StreamLine name
           </p>
           <h2 className="mt-1 text-[16px] font-semibold tracking-tight">
-            {handle || done
-              ? "Your handle"
-              : `Claim @${brand}`}
+            {changing
+              ? "Use a different name"
+              : handle || done
+                ? "Your handle"
+                : `Claim @${brand}`}
           </h2>
           <p className={`mt-1.5 text-[12px] leading-snug ${muted}`}>
             A portable SuiNS identity. Others can pay and stream to you by name.
           </p>
 
-          {(handle || done) && (
+          {(handle || done) && !changing && (
             <div
               className={`mt-4 rounded-xl border px-3 py-3 ${
                 dark
@@ -98,10 +102,25 @@ export function ClaimHandleModal({
               <p className={`mt-1 text-[11px] ${muted}`}>
                 Resolves on-chain via SuiNS
               </p>
+              {handle && !done && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setChanging(true);
+                    setRaw("");
+                    setError(null);
+                  }}
+                  className={`mt-2 text-[11px] font-semibold ${
+                    dark ? "text-white/70" : "text-[#5b54e6]"
+                  }`}
+                >
+                  Use a different name
+                </button>
+              )}
             </div>
           )}
 
-          {!handle && !done && (
+          {(!handle || changing) && !done && (
             <div className="mt-4 space-y-2">
               <label className={`block text-[9px] font-semibold uppercase tracking-[0.14em] ${muted}`}>
                 Choose a name
@@ -152,7 +171,7 @@ export function ClaimHandleModal({
             dark ? "border-white/8" : "border-black/6"
           }`}
         >
-          {!handle && !done && (
+          {(!handle || changing) && !done && (
             <button
               type="button"
               className={primary}
