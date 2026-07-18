@@ -26,6 +26,7 @@ import {
   buildOpenTreasury,
   buildTreasuryDeposit,
   buildTreasuryWithdraw,
+  buildTreasuryDivestWithdraw,
   buildTreasuryInvest,
   DEFAULT_STREAM_YIELD_BPS,
 } from "@/lib/streamline-tx";
@@ -119,6 +120,7 @@ type ProWorkspaceContextValue = {
     yieldEarned: number;
     displayTotal: number;
     investable: number;
+    withdrawable: number;
     floor: number;
   };
 };
@@ -159,7 +161,7 @@ export function ProWorkspaceProvider({ children }: { children: ReactNode }) {
   const { execute, isPending: creating } = useGaslessExecute();
 
   // Live treasury (Pro pool) state — real idle + invested USDC on-chain.
-  const { data: treasury } = useTreasuryState(suiClient, {
+  const { data: treasury, dataUpdatedAt: treasuryUpdatedAt } = useTreasuryState(suiClient, {
     packageId,
     usdcType,
     treasuryId: workspace.treasuryId,
@@ -495,18 +497,34 @@ export function ProWorkspaceProvider({ children }: { children: ReactNode }) {
     async (amount: number): Promise<boolean> => {
       if (amount <= 0) return false;
       if (!workspace.treasuryId) throw new Error("No treasury to withdraw from");
-      return runTreasuryTx(
-        buildTreasuryWithdraw({
-          packageId,
-          usdcType,
-          sender: address,
-          treasuryId: workspace.treasuryId,
-          amountBase: toBaseUnits(amount),
-        }),
-        { kind: "withdrawn", label: "Withdrew from treasury", amount }
-      );
+      const amountBase = toBaseUnits(amount);
+      // treasury::withdraw only spends idle. If the request exceeds liquid but the
+      // rest is in the yield vault, redeem the vault back to idle first (same PTB).
+      const needsDivest =
+        amountBase > toBaseUnits(treasury?.idle ?? 0) && (treasury?.invested ?? 0) > 0;
+      const tx = needsDivest
+        ? buildTreasuryDivestWithdraw({
+            packageId,
+            usdcType,
+            sender: address,
+            treasuryId: workspace.treasuryId,
+            vaultId: yieldVaultId,
+            amountBase,
+          })
+        : buildTreasuryWithdraw({
+            packageId,
+            usdcType,
+            sender: address,
+            treasuryId: workspace.treasuryId,
+            amountBase,
+          });
+      return runTreasuryTx(tx, {
+        kind: "withdrawn",
+        label: "Withdrew from treasury",
+        amount,
+      });
     },
-    [workspace.treasuryId, runTreasuryTx, packageId, usdcType, address]
+    [workspace.treasuryId, treasury, yieldVaultId, runTreasuryTx, packageId, usdcType, address]
   );
 
   const investTreasury = useCallback(
@@ -728,13 +746,20 @@ export function ProWorkspaceProvider({ children }: { children: ReactNode }) {
           },
         }
       : null;
-    // Real accrued yield = vault position value − principal we put in.
+    // Real accrued yield = vault position value − principal we put in. The chain
+    // is only read every 15s and 8% APR moves sub-cent per second, so interpolate
+    // forward from the last read (re-anchors on each refetch) to visibly tick.
     const yieldOverride = treasury
       ? {
-          yieldEarned: Math.max(
-            0,
-            treasury.invested - (workspace.investedPrincipal ?? 0)
-          ),
+          yieldEarned: (() => {
+            const onChain = Math.max(
+              0,
+              treasury.invested - (workspace.investedPrincipal ?? 0)
+            );
+            const perSec = treasury.invested * (YIELD_APY / 365 / 24 / 3600);
+            const dt = Math.max(0, (nowMs - treasuryUpdatedAt) / 1000);
+            return onChain + perSec * dt;
+          })(),
         }
       : null;
     if (streams.length === 0) {
@@ -800,7 +825,7 @@ export function ProWorkspaceProvider({ children }: { children: ReactNode }) {
       pool: { ...workspace.pool, streamed, ...(poolOverride ?? {}) },
       ...yieldOverride,
     };
-  }, [workspace, chainStreams, treasury]);
+  }, [workspace, chainStreams, treasury, nowMs, treasuryUpdatedAt]);
 
   const totals = useMemo(() => {
     const poolBalance = poolTotal(workspaceView.pool) + workspaceView.yieldEarned;
@@ -818,6 +843,12 @@ export function ProWorkspaceProvider({ children }: { children: ReactNode }) {
       yieldEarned: workspaceView.yieldEarned,
       displayTotal: poolBalance,
       investable: investableIdle(workspaceView),
+      // Everything above the coverage floor is withdrawable — idle now, vault funds
+      // after an automatic divest.
+      withdrawable: Math.max(
+        0,
+        poolTotal(workspaceView.pool) - coverageFloor(workspaceView)
+      ),
       floor: coverageFloor(workspaceView),
     };
   }, [workspaceView, nowMs]);

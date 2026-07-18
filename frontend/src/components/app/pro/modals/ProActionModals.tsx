@@ -95,14 +95,16 @@ function FundModal({ onClose }: { onClose: () => void }) {
 
 function WithdrawModal({ onClose }: { onClose: () => void }) {
   const { withdrawTreasury, totals, creating } = useProWorkspace();
-  const max = Math.max(0, totals.investable);
+  const max = Math.max(0, totals.withdrawable);
+  const idle = Math.max(0, totals.investable) + totals.floor; // liquid balance
   const [amount, setAmount] = useState(String(Math.floor(max) || 0));
   const [err, setErr] = useState<string | null>(null);
+  const willDivest = Number(amount) > idle;
 
   return (
     <ProModal
-      title="Withdraw excess"
-      subtitle="Pull unused liquid capital above the coverage floor back to the org wallet."
+      title="Withdraw"
+      subtitle="Pull capital above the coverage floor back to the org wallet."
       onClose={onClose}
     >
       <div className="space-y-4">
@@ -116,6 +118,12 @@ function WithdrawModal({ onClose }: { onClose: () => void }) {
         </ProField>
         <p className="text-[12px] text-white/40">
           Available above floor: {fmtUsd(max)}
+          {willDivest && max > 0 && (
+            <span className="text-[#1d9e75]/80">
+              {" "}
+              · redeems the yield vault to cover it
+            </span>
+          )}
         </p>
         {err && <p className="text-[12px] text-[#e0866a]">{err}</p>}
         <div className="flex justify-end gap-2">
@@ -129,6 +137,10 @@ function WithdrawModal({ onClose }: { onClose: () => void }) {
             onClick={async () => {
               const n = Number(amount);
               if (!Number.isFinite(n) || n <= 0) return;
+              if (n > max) {
+                setErr(`Max withdrawable is ${fmtUsd(max)}.`);
+                return;
+              }
               setErr(null);
               try {
                 if (await withdrawTreasury(n)) onClose();

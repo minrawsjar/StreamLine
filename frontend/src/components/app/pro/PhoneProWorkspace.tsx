@@ -1,7 +1,10 @@
 "use client";
 
 import { useMemo, useState, type ReactNode } from "react";
+import { useCurrentAccount, useSuiClientQuery } from "@mysten/dapp-kit";
 
+import { useNetworkVariable } from "@/lib/networks";
+import { USDC_BASE } from "@/lib/stream-math";
 import { shortAddress } from "@/lib/format";
 import { useProWorkspace } from "./ProWorkspaceContext";
 import {
@@ -685,7 +688,13 @@ function CapitalTab() {
         {fmtUsd(totals.poolBalance)}
       </p>
       <p className="mt-0.5 text-[9px] tabular text-[#1d9e75]">
-        +{fmtUsd(totals.yieldEarned, 2)} accrued
+        +{fmtUsd(totals.yieldEarned, 4)} accrued
+        {alloc.yield_vault > 0 && (
+          <span className="text-[#1d9e75]/60">
+            {" · +"}
+            {fmtUsd(alloc.yield_vault * (YIELD_APY / 365 / 24 / 3600), 6)}/s
+          </span>
+        )}
       </p>
 
       <div className="mt-3 flex h-2 overflow-hidden rounded-full bg-white/5">
@@ -717,6 +726,8 @@ function CapitalTab() {
         {fmtUsd(totals.investable, 0)}
       </p>
 
+      <WalletBalanceRow />
+
       <div className="mt-3 grid grid-cols-2 gap-1.5">
         <button
           type="button"
@@ -733,6 +744,30 @@ function CapitalTab() {
           Allocate
         </button>
       </div>
+    </div>
+  );
+}
+
+/** Connected wallet's spendable USDC — the balance you fund the pool from. */
+function WalletBalanceRow() {
+  const account = useCurrentAccount();
+  const usdcType = useNetworkVariable("usdcType");
+  const { data } = useSuiClientQuery(
+    "getBalance",
+    { owner: account?.address ?? "", coinType: usdcType },
+    { enabled: !!account, refetchInterval: 15000 }
+  );
+  if (!account) return null;
+  const bal = data ? Number(BigInt(data.totalBalance)) / USDC_BASE : 0;
+  return (
+    <div className="mt-2 flex items-center justify-between rounded-md border border-white/10 bg-white/[0.03] px-2 py-1.5">
+      <span className="flex items-center gap-1.5 text-[9px] uppercase tracking-[0.12em] text-white/40">
+        <span className="h-1.5 w-1.5 rounded-full bg-white/40" />
+        In your wallet
+      </span>
+      <span className="tabular text-[11px] font-semibold text-white">
+        {fmtUsd(bal, 2)}
+      </span>
     </div>
   );
 }

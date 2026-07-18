@@ -419,6 +419,29 @@ export function buildTreasuryDivest(
 }
 
 /**
+ * Redeem the whole vault position back to idle, then withdraw `amountBase` to the
+ * wallet — one atomic PTB. Used when a withdrawal exceeds the liquid balance.
+ */
+export function buildTreasuryDivestWithdraw(
+  a: TreasuryRef & { vaultId: string; amountBase: bigint }
+): Transaction {
+  const tx = new Transaction();
+  tx.setSenderIfNotSet(a.sender);
+  tx.moveCall({
+    target: `${a.packageId}::treasury::divest`,
+    typeArguments: [a.usdcType],
+    arguments: [tx.object(a.treasuryId), tx.object(a.vaultId), tx.object(CLOCK)],
+  });
+  const coin = tx.moveCall({
+    target: `${a.packageId}::treasury::withdraw`,
+    typeArguments: [a.usdcType],
+    arguments: [tx.object(a.treasuryId), tx.pure.u64(a.amountBase)],
+  });
+  tx.transferObjects([coin], a.sender);
+  return tx;
+}
+
+/**
  * Split a total into N per-milestone base-unit amounts that sum exactly to the
  * total (the remainder lands on the last milestone).
  */
