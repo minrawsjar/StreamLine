@@ -1,18 +1,12 @@
 "use client";
 
-import {
-  getSession,
-  isEnokiWallet,
-} from "@mysten/enoki";
 import type { WalletWithRequiredFeatures } from "@mysten/wallet-standard";
 import type { SuiClient } from "@mysten/sui/client";
 
 import {
-  createSubnameWithJwt,
   enokiNetwork,
   listSubnamesForAddress,
   publicEnokiKey,
-  waitForSubnameActive,
 } from "./enoki-subnames";
 import {
   bareHandleFromName,
@@ -41,23 +35,10 @@ export type ClaimHandleResult = {
   status: string;
 };
 
-function requireActive(
-  created: { status: string },
-  active: { status: string } | null | undefined
-): "ACTIVE" {
-  const status = active?.status ?? created.status;
-  if (status !== "ACTIVE") {
-    throw new Error(
-      "Handle is still provisioning. Wait a moment and try again."
-    );
-  }
-  return "ACTIVE";
-}
-
 /**
- * Claim a StreamLine subname.
- * Prefer Enoki public key + zkLogin JWT; fall back to signed server claim
- * only when the wallet is not Enoki / has no JWT (extension wallets).
+ * Claim a StreamLine subname. The wallet signs an ownership-proof message and the
+ * server mints a leaf subname under our domain with the backend admin key — one
+ * path for every wallet type (zkLogin + extension).
  */
 export async function claimHandle(opts: {
   handle: string;
@@ -84,48 +65,9 @@ export async function claimHandle(opts: {
   }
 
   const network = enokiNetwork(opts.network);
-  const apiKey = publicEnokiKey();
-  const isEnoki = !!(opts.wallet && isEnokiWallet(opts.wallet));
 
-  // Path A: Enoki zkLogin JWT (public key) — no private-key fallthrough.
-  if (apiKey && isEnoki) {
-    const session = await getSession(opts.wallet!, { network });
-    const jwt = session?.jwt;
-    if (!jwt) {
-      throw new Error(
-        "Google session expired. Sign in with Google again to claim a handle."
-      );
-    }
-    const created = await createSubnameWithJwt({
-      apiKey,
-      jwt,
-      subname: parsed.handle,
-      network,
-      domain: suinsDomain(),
-    });
-    const active =
-      created.status === "ACTIVE"
-        ? created
-        : await waitForSubnameActive({
-            apiKey,
-            address: opts.address,
-            network,
-            domain: suinsDomain(),
-            subname: parsed.handle,
-          });
-    requireActive(created, active);
-    return {
-      handle: parsed.handle,
-      displayName: formatHandle(parsed.handle),
-      status: "ACTIVE",
-    };
-  }
-
-  // Path B: server private-key claim with ownership proof (extension wallets).
   if (!opts.signPersonalMessage) {
-    throw new Error(
-      "Connect with Google (zkLogin) to claim a handle, or enable the server claim key."
-    );
+    throw new Error("Your wallet can't sign the claim message.");
   }
 
   const { signature } = await opts.signPersonalMessage(

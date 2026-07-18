@@ -3,12 +3,7 @@ import { SuiClient } from "@mysten/sui/client";
 import { verifyPersonalMessageSignature } from "@mysten/sui/verify";
 
 import { FULLNODE_URLS, type NetworkName } from "@/lib/constants";
-import {
-  createSubnameForAddress,
-  enokiNetwork,
-  privateEnokiKey,
-  waitForSubnameActive,
-} from "@/lib/enoki-subnames";
+import { mintLeafSubname, suinsMintConfigured } from "@/lib/suins-mint";
 import {
   formatHandle,
   normalizeHandle,
@@ -37,14 +32,6 @@ function networkFrom(raw: unknown): NetworkName {
  * when the user is on an Enoki zkLogin wallet.
  */
 export async function POST(req: Request) {
-  const key = privateEnokiKey();
-  if (!key) {
-    return NextResponse.json(
-      { error: "enoki_private_key_unset" },
-      { status: 503 }
-    );
-  }
-
   let body: {
     handle?: string;
     address?: string;
@@ -71,6 +58,9 @@ export async function POST(req: Request) {
   }
 
   const network = networkFrom(body.network);
+  if (!suinsMintConfigured(network)) {
+    return NextResponse.json({ error: "claim_key_unset" }, { status: 503 });
+  }
   const signature = body.signature?.trim() ?? "";
   if (!signature) {
     return NextResponse.json({ error: "missing_signature" }, { status: 400 });
@@ -96,41 +86,19 @@ export async function POST(req: Request) {
   }
 
   try {
-    const created = await createSubnameForAddress({
-      apiKey: key,
+    const { name } = await mintLeafSubname({
+      client,
+      network,
       subname: parsed.handle,
       targetAddress: address,
-      network: enokiNetwork(network),
       domain: suinsDomain(),
     });
-
-    const active =
-      created.status === "ACTIVE"
-        ? created
-        : await waitForSubnameActive({
-            apiKey: key,
-            address,
-            network: enokiNetwork(network),
-            domain: suinsDomain(),
-            subname: parsed.handle,
-          });
-
-    if (active.status !== "ACTIVE") {
-      return NextResponse.json(
-        {
-          error: "provisioning",
-          message:
-            "Handle is still provisioning. Wait a moment and try again.",
-        },
-        { status: 202 }
-      );
-    }
 
     return NextResponse.json({
       handle: parsed.handle,
       displayName: formatHandle(parsed.handle),
       status: "ACTIVE",
-      name: active.name,
+      name,
       domain: suinsDomain(),
     });
   } catch (e) {
