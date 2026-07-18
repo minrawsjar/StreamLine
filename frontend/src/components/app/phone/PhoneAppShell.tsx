@@ -16,6 +16,7 @@ import { PhoneScanView } from "./PhoneScanView";
 import { PhoneFulfillRequestView } from "./PhoneFulfillRequestView";
 import { PhoneRequestStreamView } from "./PhoneRequestStreamView";
 import { PhoneCreateStreamView } from "./PhoneCreateStreamView";
+import { PhoneExportActivityModal } from "./PhoneExportActivityModal";
 import type { PhoneAppRoute } from "./types";
 
 type PhoneAppShellProps = {
@@ -58,6 +59,7 @@ export function PhoneAppShell({ route, onNavigate }: PhoneAppShellProps) {
     !isCreate &&
     !appOnboarding;
   const [scanReturnRoute, setScanReturnRoute] = useState<PhoneAppRoute>("user");
+  const [exportOpen, setExportOpen] = useState(false);
   const [pendingRequest, setPendingRequestState] =
     useState<StreamRequestParams | null>(readStoredRequest);
 
@@ -87,7 +89,7 @@ export function PhoneAppShell({ route, onNavigate }: PhoneAppShellProps) {
   };
 
   return (
-    <>
+    <div className="relative flex min-h-0 flex-1 flex-col">
       <div className="flex shrink-0 items-center justify-between">
         {isScan ? (
           <button
@@ -171,17 +173,20 @@ export function PhoneAppShell({ route, onNavigate }: PhoneAppShellProps) {
               showFaucetInMenu
               faucetAmount={isPro ? 10000 : 1000}
               profilePro={isPro}
+              onExportActivity={
+                !isPro ? () => setExportOpen(true) : undefined
+              }
             />
           </div>
         )}
       </div>
 
       <div
-        className={`flex min-h-0 flex-1 flex-col ${
+        className={`relative flex min-h-0 flex-1 flex-col ${
           appOnboarding
-            ? "relative mt-1.5 overflow-hidden isolate"
+            ? "mt-1.5 overflow-hidden isolate"
             : isPro
-              ? "relative mt-1.5 overflow-hidden"
+              ? "mt-1.5 overflow-hidden"
               : "mt-2"
         }`}
       >
@@ -231,6 +236,10 @@ export function PhoneAppShell({ route, onNavigate }: PhoneAppShellProps) {
           </div>
         )}
       </div>
-    </>
+      <PhoneExportActivityModal
+        open={exportOpen && !isPro}
+        onClose={() => setExportOpen(false)}
+      />
+    </div>
   );
 }

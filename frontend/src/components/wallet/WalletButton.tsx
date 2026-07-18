@@ -20,6 +20,7 @@ export function WalletButton({
   label,
   connectModal = "default",
   containedModal = false,
+  onExportActivity,
 }: {
   className?: string;
   showFaucetInMenu?: boolean;
@@ -32,6 +33,7 @@ export function WalletButton({
   connectModal?: "default" | "pro";
   /** Keep the modal inside the phone / Pro shell instead of document.body. */
   containedModal?: boolean;
+  onExportActivity?: () => void;
 }) {
   const [mounted, setMounted] = useState(false);
   const [open, setOpen] = useState(false);
@@ -64,6 +66,7 @@ export function WalletButton({
         faucetAmount={faucetAmount}
         variant={variant}
         profilePro={profilePro}
+        onExportActivity={onExportActivity}
       />
     );
   }

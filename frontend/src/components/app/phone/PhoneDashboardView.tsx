@@ -2,6 +2,8 @@
 
 import type { ReactNode } from "react";
 
+import type { UserActivityItem } from "@/lib/user-activity";
+
 const SECTION_GAP = "mb-5";
 
 export const PHONE_QUICK_ACTIONS = [
@@ -38,11 +40,7 @@ export const PHONE_QUICK_ACTIONS = [
   },
 ] as const;
 
-export type PhoneActivityItem = {
-  time: string;
-  text: string;
-  amount: string | null;
-};
+export type PhoneActivityItem = UserActivityItem;
 
 export type StreamCardData = {
   id: string;
@@ -76,6 +74,7 @@ type PhoneDashboardViewProps = {
   /** Landing hero phone only — macro layout + subtitle under balance amount. */
   heroPreview?: boolean;
   onQuickAction?: (id: string) => void;
+  onActivityClick?: (item: PhoneActivityItem) => void;
   onShiftCards?: () => void;
   onPrimaryCardClick?: () => void;
   onPrimaryCardDetails?: () => void;
@@ -306,6 +305,7 @@ export function PhoneDashboardView({
   activityLoading = false,
   heroPreview = false,
   onQuickAction,
+  onActivityClick,
   onShiftCards,
   onPrimaryCardClick,
   onPrimaryCardDetails,
@@ -423,14 +423,16 @@ export function PhoneDashboardView({
           ) : activity.length === 0 ? (
             <p className="px-3 py-3 text-[10px] text-[#999]">No activity yet</p>
           ) : (
-            activity.map((item, i) => (
-              <div
-                key={`${item.time}-${item.text}-${i}`}
-                className="flex items-center justify-between gap-2 px-3 py-2"
+            activity.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => onActivityClick?.(item)}
+                className="flex w-full items-center justify-between gap-2 px-3 py-2.5 text-left transition-colors hover:bg-black/[0.03] active:bg-black/[0.05]"
               >
               <div className="min-w-0">
                 <p className="truncate text-[10px] font-medium text-[#111]">
-                  {item.text}
+                  {item.title}
                 </p>
                 <p className="text-[8px] text-[#999]">{item.time}</p>
               </div>
@@ -439,7 +441,7 @@ export function PhoneDashboardView({
                   {item.amount}
                 </p>
               )}
-            </div>
+            </button>
             ))
           )}
         </div>

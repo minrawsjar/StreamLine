@@ -33,6 +33,20 @@ Redeploy the indexer after pulling so `schema.sql` creates `audit_events` and th
 3. Audit timeline — exportable event feed
 4. Selective disclosure — encrypt payroll + timeline to an auditor `@handle` or `0x` via Seal; download a pack file only they can decrypt
 
+## User (personal) activity
+
+**User → Activity** (home feed):
+
+1. Tap a row → receipt modal (type, time, amount, subject, digest)
+2. **Export receipt** (JSON), **Copy digest**, **View on explorer**
+
+**User → Profile menu → Export activity**:
+
+1. Period filter (30d / 90d / 1y / all)
+2. Download full personal audit trail as CSV or JSON (same `GET /audit?party=` feed, wallet-scoped)
+
+Org-grade payroll packs stay in Pro; User is personal receipts + history.
+
 ## Selective disclosure
 
 The auditor pack is Seal-encrypted to the auditor’s wallet identity (same `seal_approve` identity model as private streams). Share the JSON file out-of-band; plaintext never hits the indexer.

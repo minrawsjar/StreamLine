@@ -6,10 +6,17 @@ import { useQueries } from "@tanstack/react-query";
 
 import {
   fetchStreamDrips,
+  useAuditEvents,
   useLiveUpdates,
   useStreams,
   type StreamRecord,
 } from "@/lib/indexer";
+import { usdFromBase } from "@/lib/compliance";
+import {
+  auditToActivityItem,
+  labelForKind,
+  type UserActivityItem,
+} from "@/lib/user-activity";
 import { useNetworkVariable } from "@/lib/networks";
 import { USDC_BASE } from "@/lib/stream-math";
 import {
@@ -38,10 +45,10 @@ import { usePrivateStreams } from "@/lib/use-private-streams";
 import type { PrivateStreamOnChain } from "@/lib/private-streams";
 import {
   PhoneDashboardView,
-  type PhoneActivityItem,
   type PhoneTopStat,
   type StreamCardData,
 } from "./PhoneDashboardView";
+import { PhoneActivityDetailModal } from "./PhoneActivityDetailModal";
 import { PhoneStreamsPanel } from "./PhoneStreamsPanel";
 import { PhoneStreamDetailsView } from "./PhoneStreamDetailsView";
 import { PrivateStreamsPanel } from "../PrivateStreamsPanel";
@@ -184,6 +191,8 @@ export function PhoneHomeView({
   const [activeCardIndex, setActiveCardIndex] = useState(0);
   const [detailsView, setDetailsView] = useState<HomeDetailsView>({ kind: "home" });
   const [actionStatus, setActionStatus] = useState<string | null>(null);
+  const [selectedActivity, setSelectedActivity] =
+    useState<UserActivityItem | null>(null);
   const addr = account?.address;
 
   const incomingQ = useStreams({ freelancer: addr });
@@ -263,6 +272,11 @@ export function PhoneHomeView({
     })),
   });
 
+  const auditQ = useAuditEvents({
+    party: addr,
+    limit: 40,
+  });
+
   const refetchDrips = () => {
     dripQueries.forEach((q) => q.refetch());
   };
@@ -279,6 +293,7 @@ export function PhoneHomeView({
     privOutgoingQ.refetch();
     balanceQ.refetch();
     refetchDrips();
+    auditQ.refetch();
     pool.refetch();
     setPendingBorrows(readPendingBorrows());
   });
@@ -430,48 +445,106 @@ export function PhoneHomeView({
     ];
   }, [allStreams, incomingDripping, outgoingDripping]);
 
-  const activity = useMemo((): PhoneActivityItem[] => {
-    const drips = dripQueries.flatMap((q) => q.data ?? []);
-    const dripItems = drips
-      .sort((a, b) => b.timestamp_ms - a.timestamp_ms)
-      .map((d) => ({
-        ts: d.timestamp_ms,
-        time: formatRelative(d.timestamp_ms, now),
-        text: "Drip received",
-        amount: `+${usd(d.amount)}`,
-      }));
+  const activity = useMemo((): UserActivityItem[] => {
+    const auditItems = (auditQ.data ?? []).map((e) =>
+      auditToActivityItem(e, formatRelative, now)
+    );
 
-    const streamItems = allStreams.map((s) => ({
-      ts: s.created_at_ms,
-      time: formatRelative(s.created_at_ms, now),
-      text: addr && isStreamIncoming(s, addr) ? "Stream request received" : "Stream funded",
-      amount: null as string | null,
-    }));
-
-    const loanItems = pool.loans.map((l) => ({
-      ts: l.openedMs,
+    const loanItems: UserActivityItem[] = pool.loans.map((l) => ({
+      id: `loan-${l.loanId}`,
+      kind: "borrow_opened",
+      title: labelForKind("borrow_opened"),
       time: formatRelative(l.openedMs, now),
-      text: "Borrowed against stream",
-      amount: usd(l.principalBase),
+      timestampMs: l.openedMs,
+      amount: usdFromBase(l.principalBase),
+      amountBase: l.principalBase,
+      subjectId: l.streamId,
+      counterparty: null,
+      txDigest: null,
+      module: "lending",
+      metaJson: null,
     }));
 
-    const pendingItems = pendingBorrows
+    const pendingItems: UserActivityItem[] = pendingBorrows
       .filter((p) => !pool.loans.some((l) => l.streamId === p.streamId))
       .map((p) => ({
-        ts: p.at,
+        id: `pending-${p.streamId}-${p.at}`,
+        kind: "borrow_pending",
+        title: labelForKind("borrow_pending"),
         time: formatRelative(p.at, now),
-        text: "Borrow pending confirmation",
-        amount: usd(p.principalBase),
+        timestampMs: p.at,
+        amount: usdFromBase(p.principalBase),
+        amountBase: p.principalBase,
+        subjectId: p.streamId,
+        counterparty: null,
+        txDigest: null,
+        module: "lending",
+        metaJson: null,
       }));
 
+    // Prefer indexer audit trail; keep local borrow rows + drip fallback when empty.
+    if (auditItems.length > 0) {
+      return [...loanItems, ...pendingItems, ...auditItems]
+        .sort((a, b) => b.timestampMs - a.timestampMs)
+        .slice(0, 8);
+    }
+
+    const drips = dripQueries.flatMap((q) => q.data ?? []);
+    const dripItems: UserActivityItem[] = drips
+      .sort((a, b) => b.timestamp_ms - a.timestamp_ms)
+      .map((d) => ({
+        id: `drip-${d.stream_id}-${d.id}`,
+        kind: "stream_dripped",
+        title: labelForKind("stream_dripped"),
+        time: formatRelative(d.timestamp_ms, now),
+        timestampMs: d.timestamp_ms,
+        amount: `+${usdFromBase(d.amount)}`,
+        amountBase: d.amount,
+        subjectId: d.stream_id,
+        counterparty: null,
+        txDigest: d.tx_digest,
+        module: "stream",
+        metaJson: null,
+      }));
+
+    const streamItems: UserActivityItem[] = allStreams.map((s) => {
+      const incoming = !!(addr && isStreamIncoming(s, addr));
+      const kind = incoming ? "stream_request" : "stream_funded";
+      return {
+        id: `stream-${s.id}`,
+        kind,
+        title: labelForKind(kind),
+        time: formatRelative(s.created_at_ms, now),
+        timestampMs: s.created_at_ms,
+        amount: null,
+        amountBase: null,
+        subjectId: s.id,
+        counterparty: incoming ? s.sender : s.freelancer,
+        txDigest: null,
+        module: "stream",
+        metaJson: null,
+      };
+    });
+
     return [...loanItems, ...pendingItems, ...dripItems, ...streamItems]
-      .sort((a, b) => b.ts - a.ts)
-      .slice(0, 5)
-      .map(({ time, text, amount }) => ({ time, text, amount }));
-  }, [dripQueries, allStreams, now, addr, pool.loans, pendingBorrows]);
+      .sort((a, b) => b.timestampMs - a.timestampMs)
+      .slice(0, 8);
+  }, [
+    auditQ.data,
+    dripQueries,
+    allStreams,
+    now,
+    addr,
+    pool.loans,
+    pendingBorrows,
+  ]);
 
   const activityLoading =
-    !!addr && activityStreamIds.length > 0 && dripQueries.some((q) => q.isLoading);
+    !!addr &&
+    ((auditQ.isLoading && !auditQ.data) ||
+      (activityStreamIds.length > 0 &&
+        !auditQ.data?.length &&
+        dripQueries.some((q) => q.isLoading)));
 
   const handleQuickAction = (id: string) => {
     if (id === "create") onCreate?.();
@@ -738,16 +811,26 @@ export function PhoneHomeView({
   }
 
   return (
-    <PhoneDashboardView
-      cards={cards}
-      activeCardIndex={activeCardIndex}
-      topStats={topStats}
-      activity={activity}
-      activityLoading={activityLoading}
-      onQuickAction={handleQuickAction}
-      onShiftCards={shiftCards}
-      onPrimaryCardClick={openActiveCard}
-      onPrimaryCardDetails={openActiveCard}
-    />
+    <div className="relative flex min-h-0 flex-1 flex-col">
+      <PhoneDashboardView
+        cards={cards}
+        activeCardIndex={activeCardIndex}
+        topStats={topStats}
+        activity={activity}
+        activityLoading={activityLoading}
+        onQuickAction={handleQuickAction}
+        onActivityClick={setSelectedActivity}
+        onShiftCards={shiftCards}
+        onPrimaryCardClick={openActiveCard}
+        onPrimaryCardDetails={openActiveCard}
+      />
+      {selectedActivity && addr && (
+        <PhoneActivityDetailModal
+          item={selectedActivity}
+          party={addr}
+          onClose={() => setSelectedActivity(null)}
+        />
+      )}
+    </div>
   );
 }
