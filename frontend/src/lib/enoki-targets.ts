@@ -56,6 +56,11 @@ export function allowedMoveCallTargets(network: NetworkName): string[] {
     targets.push(`${pkg}::lazy_stream::settle`);
     targets.push(`${pkg}::lazy_stream::settle_at`);
     targets.push(`${pkg}::lazy_stream::claim`);
+    // Shielded pool (gasless deposit/spend/withdraw + note publish).
+    targets.push(`${pkg}::shielded_pool::deposit`);
+    targets.push(`${pkg}::shielded_pool::spend`);
+    targets.push(`${pkg}::shielded_pool::withdraw`);
+    targets.push(`${pkg}::shielded_pool::publish_note`);
   }
 
   // Test-USDC faucet is only deployed (and only worth sponsoring) on testnet.

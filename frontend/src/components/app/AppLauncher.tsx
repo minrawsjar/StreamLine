@@ -22,6 +22,20 @@ const APPS = [
     description: "Payroll & contractor ops",
     variant: "pro" as const,
   },
+  {
+    href: "/app/lazy",
+    name: "StreamLine",
+    subtitle: "Lazy",
+    description: "Private streams, one-proof settle",
+    variant: "default" as const,
+  },
+  {
+    href: "/app/shielded",
+    name: "StreamLine",
+    subtitle: "Shield",
+    description: "Deposit, transfer & withdraw privately",
+    variant: "default" as const,
+  },
 ];
 
 function ConnectGate() {

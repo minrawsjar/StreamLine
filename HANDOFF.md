@@ -264,18 +264,59 @@ disclosure = the owner re-encrypts an opening to a chosen auditor identity — n
 Called in the same PTB as `spend`/`deposit`. Seal primitives already exist (`seal.ts`,
 `seal_approve`).
 
-## 12. What remains — the shielded-pool FRONTEND (not built)
+## 12. Shielded-pool FRONTEND — BUILT ✅
 
-The Phase 2/3/4 contracts are live (v13) and fully tested, but there is **no frontend** for
-the shielded pool yet. It mirrors the Phase 1 lazy-stream frontend pattern:
-- Note store + scanning: watch `Deposited`/`Spent`/`Withdrawn`/`EncryptedNote` events,
-  trial-decrypt `EncryptedNote` via Seal to find your notes, keep openings locally.
-- Build the Merkle path from the public commitment list (or mirror the on-chain tree) for the
-  note you're spending.
-- Prove with `public/circuits/{shielded,deposit,withdraw}.{wasm,zkey}` (use the split
-  `wtns.calculate`+`prove` path if fullProve hangs), serialize via the `confidential.ts`
-  helpers (already byte-compatible with Sui), and call the pool entries.
-- UI: deposit / private transfer / withdraw; a "pool yield" readout from `invested_value`.
-- Add the pool entry fns to `enoki-targets.ts` for gasless.
+Full Phase 2 frontend, wired to the live pool
+`0x03048230a55bb4f49cecc36735e55559c94c1d27dcf5e49d2bd28b84ebc7e7d4` (const
+`SHIELDED_POOL.testnet` in `constants.ts`). Typecheck green.
+- **`frontend/src/lib/shielded.ts`** — note crypto (`pk`/`noteCommit`/`nullifier`),
+  Merkle reconstruction (`fetchCommitments` replays events in leaf order →
+  `merklePath` folds the tree exactly like `merkle_tree.move`), provers
+  (`proveDeposit`/`proveShielded`/`proveWithdraw` via `confidential.prove`), and PTB
+  builders (`buildDeposit`/`buildSpend`/`buildWithdraw`, u256 args + `vector<u8>` proof).
+  Public-signal orders: deposit `[cm, value]`, shielded `[root,nf,cm1,cm2]`,
+  withdraw `[root,nf,amount,cm_change]`.
+- **`frontend/src/lib/shielded-store.ts`** — per-wallet spend key + local note openings
+  (`getSpendKey`/`loadNotes`/`addNote`/`markSpent`). Keys `sl-shielded-{sk,notes}:<addr>`.
+- **`frontend/src/components/app/ShieldedPanel.tsx`** + route
+  `frontend/src/app/app/shielded/page.tsx` (**/app/shielded**): deposit / private
+  transfer (split note; recipient pk optional) / withdraw (to any address). Gasless via
+  `useGaslessExecute`. Linked from `AppLauncher` (Shield card; Lazy card also added).
+- **`confidential.ts`** extended: `CircuitName` += shielded/deposit/withdraw; exports
+  `poseidon`, `feToLeBytes`. **`enoki-targets.ts`** += `shielded_pool::{deposit,spend,withdraw,publish_note}`.
+- **Validated (no chain writes needed):** frontend Merkle reconstruction === live
+  on-chain empty root (RPC read), and for a non-empty 7-leaf tree the fold ===
+  on-chain incremental `insert`, with every `merklePath` recomputing the tree root
+  (matches `shielded.circom` MerkleProof). Scripts in the session scratchpad.
 
-Also still open from Phase 1: the live browser click-through and cross-party Seal (§8).
+### Cross-party private payments — BUILT ✅
+
+A note sent to someone else needs its opening `(value, rho)` delivered privately. We do
+it on-chain via the existing `publish_note` hook — no Seal key servers, no access policy,
+no side channel:
+- **`frontend/src/lib/shielded-address.ts`** — a self-contained ECIES sealed box:
+  x25519 ECDH → HKDF-SHA256 → AES-GCM (native WebCrypto). Zero new deps (`@noble/curves`
+  + `@noble/hashes` already vendored by `@mysten/*`). A **shielded address** (`sl1…`,
+  base64 of `pk‖x25519-pub`) bundles both keys the sender needs; both derive
+  deterministically from the wallet `sk`, so nothing extra is stored.
+- **Send:** transfer takes the recipient's `sl1…` address → sets `pk1 = their pk`,
+  encrypts `(v1, rho1)` to their x25519 pubkey, and `buildSpend` appends
+  `publish_note(cm1, ciphertext)` in the same (gasless) PTB.
+- **Receive:** `scanIncoming` (in `shielded.ts`) walks `EncryptedNote` events, AES-GCM
+  trial-decrypts each (wrong-key ⇒ tag mismatch ⇒ skip), recomputes the commitment to
+  confirm it's really theirs, and adds the note locally. Wired to a **"Scan for incoming"**
+  button; the receive address is shown + copyable in the balance card.
+- **Validated headlessly:** sealed box round-trips and a wrong recipient decrypts to
+  `null` (scratchpad `validate-crypto.mjs`). `publish_note` was already in
+  `enoki-targets.ts`.
+- **Ceiling (ponytail):** scan doesn't check whether a received note was already spent by
+  its sender before you scanned (no nullifier lookup); it's marked spent only when *you*
+  spend it. Fine for the demo; add a `pool.nullifiers` check on scan if it matters.
+
+### Remaining (genuinely manual)
+- Live browser click-through of deposit→transfer→(scan)→withdraw with a funded wallet.
+  All crypto/Merkle/serialization is validated headlessly and proving reuses the same
+  in-browser `confidential.prove` the working lazy flow uses; the click-through itself
+  needs a human + wallet. If `fullProve` ever hangs in-browser, switch `prove` to the
+  split `wtns.calculate`+`groth16.prove` path (as the node test scripts do).
+- Optional "pool yield" readout from `invested_value` (Phase 3) in the panel.

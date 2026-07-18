@@ -1,9 +1,10 @@
 "use client";
 
-import { Transaction } from "@mysten/sui/transactions";
+import { Transaction, coinWithBalance } from "@mysten/sui/transactions";
 import type { SuiClient } from "@mysten/sui/client";
 
 import { poseidon, prove, feToLeBytes, type ProofBytes } from "@/lib/confidential";
+import { deriveEnc, decryptNote } from "@/lib/shielded-address";
 
 export const SHIELDED_DEPTH = 20;
 const CLOCK_ID = "0x6";
@@ -73,12 +74,12 @@ export async function fetchCommitments(
   packageId: string
 ): Promise<bigint[]> {
   const out: bigint[] = [];
-  let cursor: string | null | undefined = undefined;
+  let cursor: Awaited<ReturnType<SuiClient["queryEvents"]>>["nextCursor"] = null;
   for (let page = 0; page < 20; page++) {
     const res = await client.queryEvents({
       query: { MoveModule: { package: packageId, module: "shielded_pool" } },
       order: "ascending",
-      cursor: cursor ?? null,
+      cursor,
       limit: 200,
     });
     for (const e of res.data) {
@@ -90,7 +91,49 @@ export async function fetchCommitments(
       } else if (e.type.endsWith("::Withdrawn")) out.push(BigInt(pj.cm_change));
     }
     if (!res.hasNextPage) break;
-    cursor = res.nextCursor as unknown as string;
+    cursor = res.nextCursor;
+  }
+  return out;
+}
+
+/** Scan EncryptedNote events for notes addressed to me (cross-party receive).
+ * Returns openings whose recomputed commitment matches the on-chain event. */
+export async function scanIncoming(
+  client: SuiClient,
+  packageId: string,
+  sk: bigint,
+  myPk: bigint
+): Promise<{ commitment: string; value: string; rho: string }[]> {
+  const { secret, pub } = deriveEnc(sk);
+  const out: { commitment: string; value: string; rho: string }[] = [];
+  let cursor: Awaited<ReturnType<SuiClient["queryEvents"]>>["nextCursor"] = null;
+  for (let page = 0; page < 20; page++) {
+    const res = await client.queryEvents({
+      query: { MoveModule: { package: packageId, module: "shielded_pool" } },
+      order: "ascending",
+      cursor,
+      limit: 200,
+    });
+    for (const e of res.data) {
+      if (!e.type.endsWith("::EncryptedNote")) continue;
+      const pj = e.parsedJson as { commitment: string; ciphertext: number[] | string };
+      const bytes =
+        typeof pj.ciphertext === "string"
+          ? Uint8Array.from(atob(pj.ciphertext), (c) => c.charCodeAt(0))
+          : Uint8Array.from(pj.ciphertext);
+      const opening = await decryptNote(secret, pub, bytes);
+      if (!opening) continue;
+      const cm = await noteCommit(opening.value, myPk, opening.rho);
+      if (cm === BigInt(pj.commitment)) {
+        out.push({
+          commitment: pj.commitment,
+          value: opening.value.toString(),
+          rho: opening.rho.toString(),
+        });
+      }
+    }
+    if (!res.hasNextPage) break;
+    cursor = res.nextCursor;
   }
   return out;
 }
@@ -174,8 +217,6 @@ export function buildDeposit(a: {
 }): Transaction {
   const tx = new Transaction();
   tx.setSenderIfNotSet(a.sender);
-  // coinWithBalance needs the sender set; import lazily to keep this file lean.
-  const { coinWithBalance } = require("@mysten/sui/transactions");
   tx.moveCall({
     target: `${a.packageId}::shielded_pool::deposit`,
     typeArguments: [a.coinType],
@@ -205,6 +246,8 @@ export function buildSpend(a: {
   cm1: bigint;
   cm2: bigint;
   proof: Uint8Array;
+  /** Encrypted opening of cm1 for a cross-party recipient (published on-chain). */
+  cipher1?: Uint8Array;
 }): Transaction {
   const tx = new Transaction();
   tx.moveCall({
@@ -219,6 +262,13 @@ export function buildSpend(a: {
       u8(tx, a.proof),
     ],
   });
+  if (a.cipher1) {
+    tx.moveCall({
+      target: `${a.packageId}::shielded_pool::publish_note`,
+      typeArguments: [a.coinType],
+      arguments: [tx.object(a.poolId), tx.pure.u256(a.cm1), u8(tx, a.cipher1)],
+    });
+  }
   return tx;
 }
 

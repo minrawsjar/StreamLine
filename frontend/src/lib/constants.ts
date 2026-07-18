@@ -69,6 +69,14 @@ export const YIELD_VAULT = {
   devnet: "0x0",
 } as const;
 
+/** Shielded pool (Phase 2) — one shared pool per network for the demo. */
+export const SHIELDED_POOL = {
+  testnet:
+    "0x03048230a55bb4f49cecc36735e55559c94c1d27dcf5e49d2bd28b84ebc7e7d4",
+  mainnet: "0x0",
+  devnet: "0x0",
+} as const;
+
 /**
  * Lending pool for borrowing against a live stream (12% borrow APR, seeded with
  * mock-USDC liquidity). Testnet stand-in for Scallop/NAVI lending.
