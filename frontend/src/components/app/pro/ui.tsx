@@ -58,16 +58,23 @@ export function ProStat({
   value,
   hint,
   accent,
+  align = "center",
 }: {
   label: string;
   value: string;
   hint?: string;
   accent?: boolean;
+  align?: "left" | "center";
 }) {
   const embedded = usePhoneEmbedded();
+  const centered = align === "center";
   return (
-    <ProCard padding="sm">
-      <ProEyebrow className={embedded ? "!tracking-[0.12em]" : ""}>
+    <ProCard padding="sm" className={centered ? "text-center" : ""}>
+      <ProEyebrow
+        className={`${embedded ? "!tracking-[0.12em]" : ""} ${
+          centered ? "justify-center" : ""
+        }`}
+      >
         {label}
       </ProEyebrow>
       <p
@@ -77,7 +84,15 @@ export function ProStat({
       >
         {value}
       </p>
-      {hint ? <p className="mt-1.5 text-[11px] text-white/40">{hint}</p> : null}
+      {hint ? (
+        <p
+          className={`mt-1.5 text-[11px] text-white/40 ${
+            centered ? "mx-auto max-w-[14rem]" : ""
+          }`}
+        >
+          {hint}
+        </p>
+      ) : null}
     </ProCard>
   );
 }
@@ -90,10 +105,10 @@ export function StatusPill({
   compact?: boolean;
 }) {
   const tones: Record<ProWorkerStatus, string> = {
-    dripping: "border-[#1d9e75]/35 bg-[#1d9e75]/10 text-[#1d9e75]",
-    paused: "border-amber-400/30 bg-amber-400/10 text-amber-200",
-    stopped: "border-white/15 bg-white/5 text-white/45",
-    pending: "border-white/15 bg-white/5 text-white/55",
+    dripping: "border-white/20 bg-white/[0.06] text-white/75",
+    paused: "border-white/15 bg-white/[0.04] text-white/55",
+    stopped: "border-white/10 bg-transparent text-white/40",
+    pending: "border-white/12 bg-white/[0.03] text-white/50",
   };
   return (
     <span
@@ -238,6 +253,83 @@ export function CompositionBar({
             <span className="tabular text-white/80">
               {((seg.value / total) * 100).toFixed(0)}%
             </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/** Vertical month sticks: outer = payroll cost, inner green = yield cover. */
+export function MonthlyRunBars({
+  points,
+  size = "md",
+  showAmounts = true,
+}: {
+  points: {
+    key: string;
+    label: string;
+    payroll: number;
+    yieldUsd: number;
+    coverPct: number;
+    isCurrent?: boolean;
+  }[];
+  size?: "sm" | "md" | "lg";
+  showAmounts?: boolean;
+}) {
+  const maxPayroll = Math.max(...points.map((p) => p.payroll), 1);
+
+  return (
+    <div>
+      <div
+        className={`sl-pro-bars ${
+          size === "lg" ? "sl-pro-bars--lg" : size === "sm" ? "sl-pro-bars--sm" : ""
+        }`}
+      >
+        {points.map((p, i) => {
+          const height = Math.max(22, Math.round((p.payroll / maxPayroll) * 100));
+          // Map 3–12% labels → readable fill (~12–58% of stick).
+          const coverH = Math.round(8 + ((p.coverPct - 3) / 9) * 50);
+          return (
+            <div
+              key={p.key}
+              className={`sl-pro-bar ${p.isCurrent ? "sl-pro-bar--current" : ""}`}
+              style={{
+                height: `${height}%`,
+                animationDelay: `${0.04 + i * 0.06}s`,
+              }}
+              title={`${p.label}: payroll ${p.payroll.toFixed(0)}, yield ${p.yieldUsd.toFixed(0)} (${p.coverPct}%)`}
+            >
+              <div className="sl-pro-bar-track">
+                <span className="sl-pro-stripe-light absolute inset-0 opacity-50" aria-hidden />
+                <div
+                  className="sl-pro-bar-yield"
+                  style={{ height: `${coverH}%` }}
+                >
+                  <span className="sl-pro-stripe absolute inset-0 opacity-40" aria-hidden />
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      <div className="mt-1.5 flex justify-between gap-1">
+        {points.map((p) => (
+          <div key={`lbl-${p.key}`} className="min-w-0 flex-1 text-center">
+            <p
+              className={`sl-pro-bar-label !mt-0 ${
+                p.isCurrent ? "!text-white/70" : ""
+              }`}
+            >
+              {p.label}
+            </p>
+            {showAmounts ? (
+              <p className="mt-0.5 truncate text-[8px] tabular text-white/30">
+                {Number.isInteger(p.coverPct)
+                  ? `${p.coverPct}%`
+                  : `${p.coverPct.toFixed(1)}%`}
+              </p>
+            ) : null}
           </div>
         ))}
       </div>

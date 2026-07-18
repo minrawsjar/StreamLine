@@ -11,9 +11,11 @@ import { onProAction } from "./pro-actions";
 import {
   YIELD_APY,
   bucketLabel,
+  buildMonthlyRun,
   fmtUsd,
   groupCommitted,
   monthlyToPerSec,
+  averageCoverPct,
 } from "./types";
 import {
   OnramperModal,
@@ -21,9 +23,10 @@ import {
   type OnrampMode,
 } from "@/components/wallet/OnramperWidget";
 import { ProActionModals } from "./modals/ProActionModals";
-import { StatusPill } from "./ui";
+import { MonthlyRunBars, StatusPill } from "./ui";
 import { ReportsScreen } from "./screens/ReportsScreen";
 import { ToolsScreen } from "./screens/ToolsScreen";
+import { StreamActions } from "./screens/StreamsScreen";
 
 type PhoneTab = "overview" | "streams" | "people" | "treasury" | "tools" | "reports";
 
@@ -39,7 +42,7 @@ export function PhoneProWorkspace() {
 
   return (
     <div className="relative flex min-h-0 flex-1 flex-col font-[family-name:var(--font-inter)]">
-      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pb-16 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {tab === "overview" && (
           <OverviewTab
             expanded={expanded}
@@ -81,8 +84,16 @@ function ProPhoneDock({
   ];
 
   return (
-    <div className="relative z-20 shrink-0 px-1 pb-0.5 pt-3">
-      <div className="relative flex items-center justify-around rounded-[1.75rem] border border-white/[0.08] bg-[#171717]/96 px-1.5 py-1.5 shadow-[0_12px_36px_rgba(0,0,0,0.55)] backdrop-blur-xl">
+    <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 px-1.5 pb-1 pt-8">
+      <div
+        className="pointer-events-none absolute inset-x-3 bottom-0 h-12 rounded-[1.75rem] bg-black/70 blur-2xl"
+        aria-hidden
+      />
+      <div
+        className="pointer-events-none absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-black/50 to-transparent"
+        aria-hidden
+      />
+      <div className="pointer-events-auto relative flex items-center justify-around rounded-[1.75rem] border border-white/[0.14] bg-white/[0.08] px-1.5 py-1.5 shadow-[0_16px_48px_rgba(0,0,0,0.65),0_4px_16px_rgba(0,0,0,0.45)] backdrop-blur-xl">
         {items.map((item) => (
           <DockTab
             key={item.id}
@@ -220,66 +231,24 @@ function OverviewTab({
   const alloc = workspace.pool.allocation;
   const poolTotal = alloc.idle + alloc.yield_vault + alloc.reserve || 1;
 
-  const payrollPerSec = useMemo(
-    () =>
-      workspace.workers
-        .filter((w) => w.status === "dripping")
-        .reduce((s, w) => s + monthlyToPerSec(w.monthlyUsd), 0),
-    [workspace.workers]
-  );
-  const yieldPerSec = useMemo(() => {
-    const vault = workspace.pool.allocation.yield_vault;
-    return vault * (YIELD_APY / 365 / 24 / 3600);
-  }, [workspace.pool.allocation.yield_vault]);
-
-  const netPerSec = yieldPerSec - payrollPerSec;
-  const coverPct =
-    payrollPerSec > 0
-      ? Math.round((yieldPerSec / payrollPerSec) * 100)
-      : yieldPerSec > 0
-        ? 100
-        : 0;
-
   const periodLabel = new Date()
     .toLocaleDateString(undefined, { month: "short", year: "2-digit" })
     .toUpperCase();
 
-  const bars = useMemo(() => {
-    const groupBars = workspace.groups.slice(0, 4).map((g, i) => {
-      const v = groupCommitted(workspace, g.id);
-      return {
-        key: g.id,
-        value: Math.max(v, 1),
-        label: compactUsd(v),
-        up: i !== 1,
-      };
-    });
-    while (groupBars.length < 4) {
-      const seeds = [
-        totals.claimable,
-        totals.monthly * 0.35,
-        totals.poolBalance * 0.12,
-        totals.yieldEarned * 40 || totals.monthly * 0.22,
-      ];
-      const i = groupBars.length;
-      groupBars.push({
-        key: `pad-${i}`,
-        value: Math.max(seeds[i] || 1, 1),
-        label: compactUsd(seeds[i] || 1),
-        up: i % 2 === 0,
-      });
-    }
-    const max = Math.max(...groupBars.map((b) => b.value), 1);
-    const heroIdx = groupBars.reduce(
-      (best, b, i, arr) => (b.value > arr[best].value ? i : best),
-      0
-    );
-    return groupBars.map((b, i) => ({
-      ...b,
-      height: Math.max(24, Math.round((b.value / max) * 100)),
-      hero: i === heroIdx,
-    }));
-  }, [workspace, totals]);
+  const months = useMemo(
+    () =>
+      buildMonthlyRun(
+        totals.monthly,
+        alloc.yield_vault,
+        totals.yieldEarned,
+        9
+      ),
+    [totals.monthly, alloc.yield_vault, totals.yieldEarned]
+  );
+
+  const currentCover = averageCoverPct(months);
+  const currentMonth = months.find((m) => m.isCurrent);
+  const yieldThisMonth = currentMonth?.yieldUsd ?? 0;
 
   const donut = useMemo(() => {
     const segs = [
@@ -323,73 +292,37 @@ function OverviewTab({
       <section className="sl-pro-card sl-pro-card--flush p-3.5">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <p className="text-[10px] text-white/45">Total run</p>
-            <p className="mt-1.5 text-[1.15rem] font-semibold tabular leading-none text-[#22c55e]">
-              {netPerSec >= 0 ? "+" : "−"}
-              {coverPct}%
+            <p className="text-[10px] text-white/45">Payroll overview</p>
+          </div>
+          <div className="flex shrink-0 items-center gap-2">
+            <p className="max-w-[5.5rem] text-right text-[8px] leading-snug text-white/40">
+              yield covering payroll
             </p>
-            <p className="mt-1 text-[8px] leading-snug text-white/40">
-              {netPerSec >= 0 ? "yield covering payroll" : "payroll ahead of yield"}
+            <p className="text-[1.15rem] font-semibold tabular leading-none text-[#22c55e]">
+              +{currentCover.toFixed(1)}%
             </p>
           </div>
-          <span className="sl-pro-chip shrink-0 !py-1 !text-[8px]">Live</span>
         </div>
 
         <div className="mt-3">
-          <div className="sl-pro-bars">
-            {bars.map((bar) => (
-              <div
-                key={bar.key}
-                className="sl-pro-bar"
-                style={{ height: `${bar.height}%` }}
-              >
-                <div
-                  className={`absolute inset-0 overflow-hidden rounded-full ${
-                    bar.hero
-                      ? "bg-white"
-                      : bar.up
-                        ? "bg-white/35"
-                        : "bg-white/20"
-                  }`}
-                >
-                  <span
-                    className={`absolute inset-0 ${
-                      bar.hero
-                        ? "sl-pro-stripe opacity-45"
-                        : "sl-pro-stripe-light opacity-55"
-                    }`}
-                    aria-hidden
-                  />
-                </div>
-              </div>
-            ))}
-          </div>
-          <div className="mt-1.5 flex justify-between gap-1">
-            {bars.map((bar) => (
-              <p key={`lbl-${bar.key}`} className="sl-pro-bar-label flex-1">
-                {bar.up ? "↗" : "↙"} {bar.label}
-              </p>
-            ))}
-          </div>
+          <MonthlyRunBars points={months} size="sm" showAmounts />
         </div>
 
         <div className="mt-3 grid grid-cols-2 gap-1.5">
           <div className="rounded-[1.1rem] bg-[#22c55e]/[0.12] px-2.5 py-2.5">
             <p className="text-[7px] font-semibold uppercase tracking-[0.14em] text-[#22c55e]/75">
-              Yield in
+              Yield / mo
             </p>
             <p className="mt-1 text-[12px] font-semibold tabular leading-none text-[#22c55e]">
-              +{fmtUsd(yieldPerSec, 4)}
-              <span className="text-[8px] font-medium text-[#22c55e]/55">/s</span>
+              +{fmtUsd(yieldThisMonth, 0)}
             </p>
           </div>
           <div className="rounded-[1.1rem] bg-white/[0.045] px-2.5 py-2.5">
             <p className="text-[7px] font-semibold uppercase tracking-[0.14em] text-white/40">
-              Payroll out
+              Payroll / mo
             </p>
             <p className="mt-1 text-[12px] font-semibold tabular leading-none text-white/85">
-              −{fmtUsd(payrollPerSec, 4)}
-              <span className="text-[8px] font-medium text-white/35">/s</span>
+              −{fmtUsd(totals.monthly, 0)}
             </p>
           </div>
         </div>
@@ -723,18 +656,80 @@ function compactUsd(n: number) {
 }
 
 function StreamsTab() {
-  const { workspace, setWorkerStatus, createWorkerStream, creating, deleteWorker } =
-    useProWorkspace();
+  const {
+    workspace,
+    setModal,
+    setWorkerStatus,
+    createWorkerStream,
+    creating,
+    deleteWorker,
+  } = useProWorkspace();
+
+  const active = workspace.workers.filter((w) => w.status === "dripping");
+  const paused = workspace.workers.filter((w) => w.status === "paused");
+  const activeMonthly = active.reduce((s, w) => s + w.monthlyUsd, 0);
+  const activeFlow = active.reduce(
+    (s, w) => s + monthlyToPerSec(w.monthlyUsd),
+    0
+  );
 
   return (
     <div className="flex flex-col px-0.5 pb-1 pt-0.5">
       <p className="text-[8px] font-medium uppercase tracking-[0.18em] text-white/40">
         Live substreams
       </p>
-      <p className="mt-0.5 text-[9px] text-white/30">
-        Pause or resume drips. Delete removes them from the run.
-      </p>
-      <div className="mt-2 space-y-1.5">
+
+      <div className="mt-2 grid grid-cols-3 gap-1.5">
+        <div className="sl-pro-card sl-pro-card--flush px-2 py-2.5 text-center">
+          <p className="text-[7px] font-semibold uppercase tracking-[0.12em] text-white/40">
+            Active
+          </p>
+          <p className="mt-1 text-[14px] font-semibold tabular text-white">
+            {active.length}
+          </p>
+          <p className="mt-0.5 text-[8px] tabular text-white/35">
+            {fmtUsd(activeMonthly, 0)}/mo
+          </p>
+        </div>
+        <div className="sl-pro-card sl-pro-card--flush px-2 py-2.5 text-center">
+          <p className="text-[7px] font-semibold uppercase tracking-[0.12em] text-white/40">
+            Flow
+          </p>
+          <p className="mt-1 text-[14px] font-semibold tabular text-white">
+            −{fmtUsd(activeFlow, 4)}
+          </p>
+          <p className="mt-0.5 text-[8px] text-white/35">/s live</p>
+        </div>
+        <div className="sl-pro-card sl-pro-card--flush px-2 py-2.5 text-center">
+          <p className="text-[7px] font-semibold uppercase tracking-[0.12em] text-white/40">
+            Roster
+          </p>
+          <p className="mt-1 text-[14px] font-semibold tabular text-white">
+            {workspace.workers.length}
+          </p>
+          <p className="mt-0.5 text-[8px] text-white/35">
+            {paused.length} paused
+          </p>
+        </div>
+      </div>
+
+      <div className="mt-2.5 space-y-1.5">
+        <button
+          type="button"
+          onClick={() => setModal("worker")}
+          className="sl-pro-card sl-pro-card--flush flex w-full items-center gap-2.5 px-2.5 py-2.5 text-left transition-colors active:bg-white/[0.04]"
+        >
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-dashed border-white/25 text-[16px] text-white/45">
+            +
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-[11px] font-medium text-white/85">
+              Add new stream
+            </p>
+            <p className="text-[8px] text-white/35">Hire onto the payroll pool</p>
+          </div>
+        </button>
+
         {workspace.workers.map((w) => {
           const group = workspace.groups.find((g) => g.id === w.groupId);
           const drip = monthlyToPerSec(w.monthlyUsd);
@@ -764,36 +759,20 @@ function StreamsTab() {
                   </p>
                 </div>
               </div>
-              <div className="mt-1.5 flex flex-wrap items-center gap-1">
+              <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
                 <StatusPill status={w.status} compact />
                 <span className="flex-1" />
-                {w.status === "dripping" ? (
-                  <MiniBtn onClick={() => setWorkerStatus(w.id, "paused")}>
-                    Pause
-                  </MiniBtn>
-                ) : null}
-                {w.status === "paused" || w.status === "pending" ? (
-                  <MiniBtn
-                    disabled={creating}
-                    onClick={() =>
-                      w.streamId
-                        ? setWorkerStatus(w.id, "dripping")
-                        : createWorkerStream(w.id)
-                    }
-                  >
-                    {w.streamId ? "Resume" : "Start"}
-                  </MiniBtn>
-                ) : null}
-                <MiniBtn
-                  danger
-                  onClick={() => {
-                    if (window.confirm(`Remove ${w.alias} from the run?`)) {
-                      deleteWorker(w.id);
+                <StreamActions
+                  worker={w}
+                  creating={creating}
+                  onStatus={setWorkerStatus}
+                  onStart={createWorkerStream}
+                  onDelete={(id, alias) => {
+                    if (window.confirm(`Remove ${alias} from the run?`)) {
+                      deleteWorker(id);
                     }
                   }}
-                >
-                  Delete
-                </MiniBtn>
+                />
               </div>
             </div>
           );
@@ -806,29 +785,52 @@ function StreamsTab() {
 function PeopleTab() {
   const { workspace, setModal } = useProWorkspace();
   const [query, setQuery] = useState("");
+  const [groupFilter, setGroupFilter] = useState<string>("all");
+  const [status, setStatus] = useState<
+    "all" | "dripping" | "paused" | "pending" | "stopped"
+  >("all");
+
+  const statusCounts = useMemo(() => {
+    const counts: Record<string, number> = { all: workspace.workers.length };
+    for (const id of ["dripping", "paused", "pending", "stopped"] as const) {
+      counts[id] = workspace.workers.filter((w) => w.status === id).length;
+    }
+    return counts;
+  }, [workspace.workers]);
+
+  const statusFilters = [
+    { id: "all" as const, label: "All" },
+    { id: "dripping" as const, label: "Live" },
+    { id: "paused" as const, label: "Paused" },
+    { id: "pending" as const, label: "Pending" },
+    { id: "stopped" as const, label: "Stopped" },
+  ];
+
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase();
     return [...workspace.workers]
       .sort((a, b) => a.alias.localeCompare(b.alias))
-      .filter(
-        (w) =>
-          !q ||
+      .filter((w) => {
+        if (status !== "all" && w.status !== status) return false;
+        if (groupFilter !== "all" && w.groupId !== groupFilter) return false;
+        if (!q) return true;
+        return (
           w.alias.toLowerCase().includes(q) ||
           w.walletAddress.toLowerCase().includes(q)
-      );
-  }, [workspace.workers, query]);
+        );
+      });
+  }, [workspace.workers, query, groupFilter, status]);
+
+  const deptChipCh = Math.max(
+    8,
+    "Add group".length,
+    ...workspace.groups.map((g) => g.name.length)
+  ) + 1;
 
   return (
     <div className="flex flex-col gap-2.5 px-0.5 pb-1 pt-0.5">
-      <div className="flex items-center justify-between gap-2 px-0.5">
+      <div className="px-0.5">
         <p className="text-[13px] font-semibold text-white">People</p>
-        <button
-          type="button"
-          onClick={() => setModal("worker")}
-          className="rounded-full bg-[#22c55e] px-3 py-1 text-[9px] font-semibold text-white shadow-[0_4px_12px_rgba(34,197,94,0.3)]"
-        >
-          + Add
-        </button>
       </div>
 
       <label className="flex items-center gap-2 rounded-full border border-white/[0.08] bg-[#1a1a1a] px-3 py-2.5">
@@ -849,30 +851,88 @@ function PeopleTab() {
         />
       </label>
 
-      <div className="flex gap-1 overflow-x-auto pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-        {workspace.groups.map((g) => (
+      <div>
+        <p className="mb-1.5 px-0.5 text-[8px] font-medium uppercase tracking-[0.14em] text-white/35">
+          Departments
+        </p>
+        <div className="flex flex-wrap gap-1.5">
+          {workspace.groups.map((g) => {
+            const n = workspace.workers.filter((w) => w.groupId === g.id).length;
+            const selected = groupFilter === g.id;
+            return (
+              <button
+                key={g.id}
+                type="button"
+                onClick={() =>
+                  setGroupFilter((prev) => (prev === g.id ? "all" : g.id))
+                }
+                style={{ width: `${deptChipCh}ch` }}
+                className={`shrink-0 rounded-xl border px-2 py-2 text-left ${
+                  selected
+                    ? "border-white/30 bg-white/[0.1]"
+                    : "border-white/10 bg-white/[0.04]"
+                }`}
+              >
+                <p className="truncate text-[9px] font-semibold text-white">
+                  {g.name}
+                </p>
+                <p className="mt-0.5 text-[8px] tabular text-white/40">{n}</p>
+              </button>
+            );
+          })}
           <button
-            key={g.id}
             type="button"
-            onClick={() => setModal({ kind: "group-edit", groupId: g.id })}
-            className="shrink-0 rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[9px] text-white/70"
+            onClick={() => setModal("group")}
+            style={{ width: `${deptChipCh}ch` }}
+            className="shrink-0 rounded-xl border border-dashed border-white/15 px-2 py-2 text-left text-white/40"
           >
-            {g.name}
+            <p className="truncate text-[9px] font-semibold">+ Add group</p>
+            <p className="mt-0.5 text-[8px] text-white/25">New</p>
+          </button>
+        </div>
+      </div>
+
+      <div className="flex gap-1 overflow-x-auto pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        {statusFilters.map((f) => (
+          <button
+            key={f.id}
+            type="button"
+            onClick={() => setStatus(f.id)}
+            className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2.5 py-1 text-[9px] font-medium ${
+              status === f.id
+                ? "bg-white text-[#0a0a0a]"
+                : "border border-white/10 text-white/50"
+            }`}
+          >
+            {f.label}
+            <span
+              className={`tabular ${
+                status === f.id ? "text-[#0a0a0a]/50" : "text-white/30"
+              }`}
+            >
+              {statusCounts[f.id] ?? 0}
+            </span>
           </button>
         ))}
-        <button
-          type="button"
-          onClick={() => setModal("group")}
-          className="shrink-0 rounded-full border border-dashed border-white/15 px-2.5 py-1 text-[9px] text-white/40"
-        >
-          + Group
-        </button>
       </div>
 
       <div className="sl-pro-card sl-pro-card--flush divide-y divide-white/[0.05] overflow-hidden p-0">
+        <button
+          type="button"
+          onClick={() => setModal("worker")}
+          className="flex w-full items-center gap-2.5 px-3 py-3 text-left transition-colors active:bg-white/[0.04]"
+        >
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-dashed border-white/25 text-[16px] text-white/45">
+            +
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-[12px] font-semibold text-white/85">Add person</p>
+            <p className="text-[9px] text-white/35">New substream on the roster</p>
+          </div>
+        </button>
+
         {rows.map((w) => {
           const group = workspace.groups.find((g) => g.id === w.groupId);
-          const active = w.status === "dripping";
           return (
             <button
               key={w.id}
@@ -891,28 +951,7 @@ function PeopleTab() {
                   {group?.name ?? "Ungrouped"} · {fmtUsd(w.monthlyUsd, 0)}/mo
                 </p>
               </div>
-              <span
-                className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full ${
-                  active
-                    ? "bg-[#22c55e] text-white"
-                    : "border border-white/15 text-transparent"
-                }`}
-                aria-hidden
-              >
-                {active ? (
-                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none">
-                    <path
-                      d="M5 13l4 4L19 7"
-                      stroke="currentColor"
-                      strokeWidth="3"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  </svg>
-                ) : (
-                  "·"
-                )}
-              </span>
+              <StatusPill status={w.status} compact />
             </button>
           );
         })}
@@ -1024,51 +1063,57 @@ function TreasuryTab() {
         <WalletBalanceRow />
       </section>
 
-      <section className="sl-pro-card sl-pro-card--flush p-3.5">
-        <div className="grid grid-cols-3 gap-1.5">
-          <button
-            type="button"
-            onClick={() => setModal("fund")}
-            className="flex flex-col items-center gap-1 rounded-2xl bg-[#22c55e] px-2 py-3 text-[11px] font-semibold tracking-tight text-white shadow-[0_8px_24px_rgba(34,197,94,0.28)] transition-transform active:scale-[0.98]"
-          >
-            <PhoneFundIcon />
-            Fund
-          </button>
-          <button
-            type="button"
-            onClick={() => setModal("withdraw")}
-            className="flex flex-col items-center gap-1 rounded-2xl border border-white/12 bg-white/[0.06] px-2 py-3 text-[11px] font-semibold tracking-tight text-white transition-colors active:bg-white/[0.1]"
-          >
-            <PhoneWithdrawIcon />
-            Withdraw
-          </button>
-          <button
-            type="button"
-            onClick={() => setModal("invest")}
-            className="flex flex-col items-center gap-1 rounded-2xl border border-white/12 bg-white/[0.06] px-2 py-3 text-[11px] font-semibold tracking-tight text-white transition-colors active:bg-white/[0.1]"
-          >
-            <PhoneRebalanceIcon />
-            Rebalance
-          </button>
-        </div>
-        {canRamp ? (
-          <div className="mt-2 grid grid-cols-2 gap-1.5 border-t border-white/[0.06] pt-2">
+      <section className="relative">
+        <div
+          className="pointer-events-none absolute inset-x-1.5 inset-y-0.5 rounded-[1.4rem] bg-black/45 blur-xl"
+          aria-hidden
+        />
+        <div className="relative rounded-[1.4rem] border border-white/[0.1] bg-transparent p-3.5 shadow-[0_12px_36px_rgba(0,0,0,0.55),0_2px_10px_rgba(0,0,0,0.35)]">
+          <div className="grid grid-cols-3 gap-1.5">
             <button
               type="button"
-              onClick={() => setRampMode("buy")}
-              className="rounded-xl border border-white/[0.08] bg-transparent px-2 py-2 text-[10px] font-medium text-white/50 transition-colors active:text-white/80"
+              onClick={() => setModal("fund")}
+              className="flex flex-col items-center gap-1 rounded-2xl bg-[#22c55e] px-2 py-3 text-[11px] font-semibold tracking-tight text-white shadow-[0_8px_24px_rgba(34,197,94,0.28)] transition-transform active:scale-[0.98]"
             >
-              Add funds
+              <PhoneFundIcon />
+              Fund
             </button>
             <button
               type="button"
-              onClick={() => setRampMode("sell")}
-              className="rounded-xl border border-white/[0.08] bg-transparent px-2 py-2 text-[10px] font-medium text-white/50 transition-colors active:text-white/80"
+              onClick={() => setModal("withdraw")}
+              className="flex flex-col items-center gap-1 rounded-2xl border border-white/12 bg-white/[0.06] px-2 py-3 text-[11px] font-semibold tracking-tight text-white transition-colors active:bg-white/[0.1]"
             >
-              Cash out
+              <PhoneWithdrawIcon />
+              Withdraw
+            </button>
+            <button
+              type="button"
+              onClick={() => setModal("invest")}
+              className="flex flex-col items-center gap-1 rounded-2xl border border-white/12 bg-white/[0.06] px-2 py-3 text-[11px] font-semibold tracking-tight text-white transition-colors active:bg-white/[0.1]"
+            >
+              <PhoneRebalanceIcon />
+              Rebalance
             </button>
           </div>
-        ) : null}
+          {canRamp ? (
+            <div className="mt-2 grid grid-cols-2 gap-1.5 border-t border-white/[0.06] pt-2">
+              <button
+                type="button"
+                onClick={() => setRampMode("buy")}
+                className="rounded-xl border border-white/[0.08] bg-transparent px-2 py-2 text-[10px] font-medium text-white/50 transition-colors active:text-white/80"
+              >
+                Add funds
+              </button>
+              <button
+                type="button"
+                onClick={() => setRampMode("sell")}
+                className="rounded-xl border border-white/[0.08] bg-transparent px-2 py-2 text-[10px] font-medium text-white/50 transition-colors active:text-white/80"
+              >
+                Cash out
+              </button>
+            </div>
+          ) : null}
+        </div>
       </section>
 
       <OnramperModal

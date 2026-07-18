@@ -207,7 +207,7 @@ function RebalanceModal({ onClose }: { onClose: () => void }) {
     {
       id: "native",
       name: "StreamLine vault",
-      detail: "Native adapter · ~8% APR testnet",
+      detail: "Native adapter · ~3% APR testnet",
       available: true,
     },
     {

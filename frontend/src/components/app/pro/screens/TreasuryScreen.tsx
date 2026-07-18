@@ -69,52 +69,58 @@ export function TreasuryScreen() {
         />
       </div>
 
-      <ProCard padding="sm">
-        <div className="grid grid-cols-3 gap-2">
-          <button
-            type="button"
-            className="sl-glass-btn-dark sl-glass-btn-dark-primary flex !w-full flex-col items-center gap-1 !px-2 !py-3 !text-[11px]"
-            onClick={() => setModal("fund")}
-          >
-            <FundIcon />
-            Fund
-          </button>
-          <button
-            type="button"
-            className="sl-glass-btn-dark flex !w-full flex-col items-center gap-1 !px-2 !py-3 !text-[11px]"
-            onClick={() => setModal("withdraw")}
-          >
-            <WithdrawIcon />
-            Withdraw
-          </button>
-          <button
-            type="button"
-            className="sl-glass-btn-dark flex !w-full flex-col items-center gap-1 !px-2 !py-3 !text-[11px]"
-            onClick={() => setModal("invest")}
-          >
-            <RebalanceIcon />
-            Rebalance
-          </button>
-        </div>
-        {canRamp ? (
-          <div className="mt-2 grid grid-cols-2 gap-2 border-t border-white/[0.06] pt-2">
+      <div className="relative">
+        <div
+          className="pointer-events-none absolute inset-x-2 inset-y-1 rounded-[1.5rem] bg-black/45 blur-xl"
+          aria-hidden
+        />
+        <div className="relative rounded-[1.5rem] border border-white/[0.1] bg-transparent p-3.5 shadow-[0_12px_36px_rgba(0,0,0,0.55),0_2px_10px_rgba(0,0,0,0.35)]">
+          <div className="grid grid-cols-3 gap-2">
             <button
               type="button"
-              className="sl-glass-btn-dark !w-full !px-3 !py-2.5 !text-[11px]"
-              onClick={() => setRampMode("buy")}
+              className="sl-glass-btn-dark sl-glass-btn-dark-primary flex !w-full flex-col items-center gap-1 !px-2 !py-3 !text-[11px]"
+              onClick={() => setModal("fund")}
             >
-              Add funds
+              <FundIcon />
+              Fund
             </button>
             <button
               type="button"
-              className="sl-glass-btn-dark !w-full !px-3 !py-2.5 !text-[11px]"
-              onClick={() => setRampMode("sell")}
+              className="sl-glass-btn-dark flex !w-full flex-col items-center gap-1 !px-2 !py-3 !text-[11px]"
+              onClick={() => setModal("withdraw")}
             >
-              Cash out
+              <WithdrawIcon />
+              Withdraw
+            </button>
+            <button
+              type="button"
+              className="sl-glass-btn-dark flex !w-full flex-col items-center gap-1 !px-2 !py-3 !text-[11px]"
+              onClick={() => setModal("invest")}
+            >
+              <RebalanceIcon />
+              Rebalance
             </button>
           </div>
-        ) : null}
-      </ProCard>
+          {canRamp ? (
+            <div className="mt-2 grid grid-cols-2 gap-2 border-t border-white/[0.06] pt-2">
+              <button
+                type="button"
+                className="sl-glass-btn-dark !w-full !px-3 !py-2.5 !text-[11px]"
+                onClick={() => setRampMode("buy")}
+              >
+                Add funds
+              </button>
+              <button
+                type="button"
+                className="sl-glass-btn-dark !w-full !px-3 !py-2.5 !text-[11px]"
+                onClick={() => setRampMode("sell")}
+              >
+                Cash out
+              </button>
+            </div>
+          ) : null}
+        </div>
+      </div>
 
       <div className="grid gap-4 lg:grid-cols-[1.3fr_1fr]">
         <ProCard>

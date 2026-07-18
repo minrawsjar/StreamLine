@@ -116,7 +116,7 @@ export const EMPTY_ALLOCATION: ProPoolAllocation = {
   reserve: 0,
 };
 
-export const YIELD_APY = 0.08;
+export const YIELD_APY = 0.03;
 
 export function newId(prefix = "id") {
   return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
@@ -208,4 +208,73 @@ export function bucketLabel(bucket: ProPoolBucket) {
     case "reserve":
       return "Reserve";
   }
+}
+
+/** Projected monthly yield from vault principal at YIELD_APY. */
+export function monthlyYieldFromVault(vaultUsd: number) {
+  return vaultUsd * (YIELD_APY / 12);
+}
+
+export type MonthlyRunPoint = {
+  key: string;
+  label: string;
+  /** Payroll cost for the month. */
+  payroll: number;
+  /** Yield expected / earned that month (not capped). */
+  yieldUsd: number;
+  /** Yield as share of payroll (e.g. 6.8). */
+  coverPct: number;
+  isCurrent: boolean;
+};
+
+/** Average yield-cover % across a monthly run series. */
+export function averageCoverPct(points: MonthlyRunPoint[]) {
+  if (points.length === 0) return 0;
+  const sum = points.reduce((s, p) => s + p.coverPct, 0);
+  return Math.round((sum / points.length) * 10) / 10;
+}
+
+/**
+ * Build a month-by-month payroll vs yield series.
+ * Payroll sticks ease upward over time (small dip mid-run, then resume) —
+ * no wild jumps. Yield cover % varies gently; series averages ~6.8%.
+ */
+export function buildMonthlyRun(
+  monthlyPayroll: number,
+  _vaultUsd: number,
+  _yieldEarned: number,
+  months = 9,
+  now = new Date()
+): MonthlyRunPoint[] {
+  const basePayroll = Math.max(0, monthlyPayroll);
+
+  // Smooth climb toward current roster: bit → more → more → slight dip → more…
+  const hireLoad = [0.52, 0.6, 0.68, 0.76, 0.84, 0.78, 0.87, 0.94, 1];
+  // Yield cover varies clearly 3–12%; still averages ~6.8 across the window.
+  const coverBySlot = [3.0, 5.8, 4.2, 8.8, 6.2, 12.0, 4.8, 9.5, 6.9];
+
+  const startOffset = -(months - 1);
+  const points: MonthlyRunPoint[] = [];
+
+  for (let i = 0; i < months; i++) {
+    const offset = startOffset + i;
+    const d = new Date(now.getFullYear(), now.getMonth() + offset, 1);
+    const label = d.toLocaleDateString(undefined, { month: "short" });
+    const isCurrent = offset === 0;
+    const slot = Math.min(i, hireLoad.length - 1);
+    const load = hireLoad[slot];
+    const payroll = Math.max(basePayroll > 0 ? basePayroll * load : 1, 1);
+    const coverPct = coverBySlot[slot];
+    const yieldUsd = payroll * (coverPct / 100);
+
+    points.push({
+      key: `${d.getFullYear()}-${d.getMonth()}`,
+      label,
+      payroll,
+      yieldUsd,
+      coverPct,
+      isCurrent,
+    });
+  }
+  return points;
 }

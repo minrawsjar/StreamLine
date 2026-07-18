@@ -422,7 +422,7 @@ function Header({ title }: { title: string }) {
 
 function StatTile({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-xl bg-white/[0.04] px-2.5 py-2.5">
+    <div className="rounded-xl bg-white/[0.04] px-2.5 py-2.5 text-center">
       <p className="text-[8px] font-medium uppercase tracking-[0.12em] text-white/35">
         {label}
       </p>

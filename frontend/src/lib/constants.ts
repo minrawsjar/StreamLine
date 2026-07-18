@@ -44,7 +44,7 @@ export const CONF_DEFINING_PACKAGE_IDS = {
 
 /**
  * Scallop-shaped yield vault for the streamed coin (testnet stand-in for
- * Scallop's lending pool). 8% APR, seeded with a mock-USDC interest buffer.
+ * Scallop's lending pool). 3% APR, seeded with a mock-USDC interest buffer.
  */
 export const YIELD_VAULT = {
   testnet:

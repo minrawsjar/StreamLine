@@ -1,19 +1,23 @@
 "use client";
 
 import Link from "next/link";
-import type { ReactNode } from "react";
+import { useMemo, type ReactNode } from "react";
 
 import { usePhoneEmbedded } from "@/components/app/phone/PhoneEmbeddedContext";
 import { shortAddress } from "@/lib/format";
 import { useProWorkspace } from "../ProWorkspaceContext";
 import {
+  YIELD_APY,
   bucketLabel,
+  buildMonthlyRun,
   fmtUsd,
   groupCommitted,
+  averageCoverPct,
   workerClaimable,
 } from "../types";
 import {
   CompositionBar,
+  MonthlyRunBars,
   ProCard,
   ProChip,
   ProEyebrow,
@@ -50,6 +54,22 @@ export function OverviewScreen() {
   const topWorkers = [...workspace.workers]
     .sort((a, b) => b.monthlyUsd - a.monthlyUsd)
     .slice(0, 5);
+
+  const monthCount = 9;
+  const months = useMemo(
+    () =>
+      buildMonthlyRun(
+        totals.monthly,
+        alloc.yield_vault,
+        totals.yieldEarned,
+        monthCount
+      ),
+    [totals.monthly, alloc.yield_vault, totals.yieldEarned, monthCount]
+  );
+
+  const coverPct = averageCoverPct(months);
+  const yieldThisMonth =
+    months.find((m) => m.isCurrent)?.yieldUsd ?? 0;
 
   return (
     <div className="space-y-6">
@@ -110,27 +130,86 @@ export function OverviewScreen() {
         />
       </div>
 
+      <ProCard padding="lg">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="min-w-0">
+            <ProEyebrow>Payroll overview</ProEyebrow>
+          </div>
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="flex items-center gap-2.5">
+              <p className="text-right text-[11px] leading-snug text-white/40">
+                yield covering payroll
+              </p>
+              <p
+                className={`font-semibold tabular tracking-tight text-[#22c55e] ${
+                  embedded ? "text-[1.45rem]" : "text-[2rem]"
+                }`}
+              >
+                +{coverPct.toFixed(1)}%
+              </p>
+            </div>
+            <div className="rounded-2xl bg-[#22c55e]/[0.12] px-3.5 py-2.5">
+              <p className="text-[9px] font-semibold uppercase tracking-[0.14em] text-[#22c55e]/80">
+                Yield / mo
+              </p>
+              <p className="mt-1 text-[14px] font-semibold tabular text-[#22c55e]">
+                +{fmtUsd(yieldThisMonth, 0)}
+              </p>
+            </div>
+            <div className="rounded-2xl bg-white/[0.04] px-3.5 py-2.5">
+              <p className="text-[9px] font-semibold uppercase tracking-[0.14em] text-white/40">
+                Payroll / mo
+              </p>
+              <p className="mt-1 text-[14px] font-semibold tabular text-white/85">
+                −{fmtUsd(totals.monthly, 0)}
+              </p>
+            </div>
+            <ProIconButton
+              label="Rebalance capital"
+              onClick={() => setModal("invest")}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden>
+                <path
+                  d="M12 19V5M12 5l-5 5M12 5l5 5"
+                  stroke="currentColor"
+                  strokeWidth="2.2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            </ProIconButton>
+          </div>
+        </div>
+
+        <div className="mt-6">
+          <MonthlyRunBars
+            points={months}
+            size={embedded ? "sm" : "lg"}
+            showAmounts={!embedded}
+          />
+        </div>
+
+        <div className="mt-5 flex flex-wrap items-center gap-x-5 gap-y-2 text-[11px] text-white/40">
+          <span className="flex items-center gap-2">
+            <span className="h-2.5 w-2.5 rounded-full bg-white/25" />
+            Payroll cost
+          </span>
+          <span className="flex items-center gap-2">
+            <span className="h-2.5 w-2.5 rounded-full bg-[#22c55e]" />
+            Yield cover inside each month
+          </span>
+          <span className="text-white/30">
+            {(YIELD_APY * 100).toFixed(0)}% APR on vault ·{" "}
+            {fmtUsd(alloc.yield_vault, 0)} invested
+          </span>
+        </div>
+      </ProCard>
+
       <div className="grid gap-4 lg:grid-cols-[1.4fr_1fr]">
         <ProCard padding="lg">
           <div className="flex items-center justify-between gap-3">
             <ProEyebrow>Pool composition</ProEyebrow>
-            <div className="flex items-center gap-2">
-              <ProChip>Live</ProChip>
-              <ProIconButton
-                label="Rebalance capital"
-                onClick={() => setModal("invest")}
-              >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden>
-                  <path
-                    d="M12 19V5M12 5l-5 5M12 5l5 5"
-                    stroke="currentColor"
-                    strokeWidth="2.2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </svg>
-              </ProIconButton>
-            </div>
+            <ProChip>Live</ProChip>
           </div>
           <p
             className={`mt-4 font-semibold tabular tracking-tight text-white ${
@@ -257,7 +336,7 @@ export function OverviewScreen() {
 
         <ProCard>
           <ProEyebrow>Recent activity</ProEyebrow>
-      <div className="mt-4 space-y-2.5">
+          <div className="mt-4 space-y-2.5">
             {recent.length === 0 ? (
               <p className="text-[13px] text-white/40">No activity yet.</p>
             ) : (

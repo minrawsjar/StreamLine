@@ -860,7 +860,7 @@ export function ProWorkspaceProvider({
         }
       : null;
     // Real accrued yield = vault position value − principal we put in. The chain
-    // is only read every 15s and 8% APR moves sub-cent per second, so interpolate
+    // is only read every 15s and 3% APR moves sub-cent per second, so interpolate
     // forward from the last read (re-anchors on each refetch) to visibly tick.
     const yieldOverride = treasury
       ? {

@@ -1,11 +1,14 @@
 "use client";
 
+import type { ReactNode } from "react";
 import { shortAddress } from "@/lib/format";
 import { useProWorkspace } from "../ProWorkspaceContext";
 import {
   bucketLabel,
   fmtUsd,
   monthlyToPerSec,
+  type ProWorker,
+  type ProWorkerStatus,
 } from "../types";
 import {
   CompositionBar,
@@ -14,6 +17,141 @@ import {
   ProStat,
   StatusPill,
 } from "../ui";
+
+function IconPause() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden>
+      <path d="M7 5h3v14H7V5zm7 0h3v14h-3V5z" fill="currentColor" />
+    </svg>
+  );
+}
+
+function IconPlay() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden>
+      <path d="M8 5v14l11-7L8 5z" fill="currentColor" />
+    </svg>
+  );
+}
+
+function IconStop() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden>
+      <rect x="6" y="6" width="12" height="12" rx="1.5" fill="currentColor" />
+    </svg>
+  );
+}
+
+function IconTrash() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden>
+      <path
+        d="M5 7h14M9 7V5h6v2m-8 0v12a1 1 0 001 1h6a1 1 0 001-1V7"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function ActionIconBtn({
+  label,
+  onClick,
+  disabled,
+  danger,
+  children,
+}: {
+  label: string;
+  onClick: () => void;
+  disabled?: boolean;
+  danger?: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      title={label}
+      disabled={disabled}
+      onClick={(e) => {
+        e.stopPropagation();
+        onClick();
+      }}
+      className={`inline-flex h-7 w-7 items-center justify-center rounded-full border transition-colors disabled:opacity-40 ${
+        danger
+          ? "border-[#c0533a]/35 text-[#c0533a] hover:bg-[#c0533a]/10"
+          : "border-white/12 text-white/70 hover:bg-white/5 hover:text-white"
+      }`}
+    >
+      {children}
+    </button>
+  );
+}
+
+export function StreamActions({
+  worker,
+  creating,
+  onStatus,
+  onStart,
+  onDelete,
+}: {
+  worker: ProWorker;
+  creating: boolean;
+  onStatus: (id: string, status: ProWorkerStatus) => void;
+  onStart: (id: string) => void;
+  onDelete: (id: string, alias: string) => void;
+}) {
+  return (
+    <div className="flex items-center justify-end gap-1">
+      {worker.status === "dripping" ? (
+        <ActionIconBtn
+          label="Pause"
+          onClick={() => onStatus(worker.id, "paused")}
+        >
+          <IconPause />
+        </ActionIconBtn>
+      ) : null}
+      {worker.status === "paused" ||
+      worker.status === "pending" ||
+      worker.status === "stopped" ? (
+        <ActionIconBtn
+          label={
+            worker.status === "pending"
+              ? "Start"
+              : worker.status === "stopped"
+                ? "Restart"
+                : "Resume"
+          }
+          disabled={creating}
+          onClick={() =>
+            worker.streamId && worker.status !== "pending"
+              ? onStatus(worker.id, "dripping")
+              : onStart(worker.id)
+          }
+        >
+          <IconPlay />
+        </ActionIconBtn>
+      ) : null}
+      {worker.status === "dripping" || worker.status === "paused" ? (
+        <ActionIconBtn
+          label="Stop"
+          onClick={() => onStatus(worker.id, "stopped")}
+        >
+          <IconStop />
+        </ActionIconBtn>
+      ) : null}
+      <ActionIconBtn
+        label="Delete"
+        danger
+        onClick={() => onDelete(worker.id, worker.alias)}
+      >
+        <IconTrash />
+      </ActionIconBtn>
+    </div>
+  );
+}
 
 export function StreamsScreen() {
   const {
@@ -27,6 +165,21 @@ export function StreamsScreen() {
   } = useProWorkspace();
   const alloc = workspace.pool.allocation;
 
+  const active = workspace.workers.filter((w) => w.status === "dripping");
+  const paused = workspace.workers.filter((w) => w.status === "paused");
+  const stopped = workspace.workers.filter((w) => w.status === "stopped");
+  const activeMonthly = active.reduce((s, w) => s + w.monthlyUsd, 0);
+  const activeFlow = active.reduce(
+    (s, w) => s + monthlyToPerSec(w.monthlyUsd),
+    0
+  );
+
+  const removeWorker = (id: string, alias: string) => {
+    if (window.confirm(`Remove ${alias} from the payroll run?`)) {
+      deleteWorker(id);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-4">
@@ -36,8 +189,8 @@ export function StreamsScreen() {
             Run the payroll pool
           </h1>
           <p className="mt-1 max-w-xl text-[13px] text-white/45">
-            One USDC pool for the org. Pause or resume drips, remove people from
-            the run, and keep a liquid coverage floor while idle float earns.
+            One USDC pool for the org. Pause, resume, or stop drips — stop
+            returns unearned capital to the pool.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -57,7 +210,7 @@ export function StreamsScreen() {
           </button>
           <button
             type="button"
-            className="sl-glass-btn-dark sl-glass-btn-dark-primary !px-4 !py-2 !text-[11px]"
+            className="sl-glass-btn-dark !px-4 !py-2 !text-[11px]"
             onClick={() => setModal("fund")}
           >
             Fund & start
@@ -65,14 +218,26 @@ export function StreamsScreen() {
         </div>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-3">
-        <ProStat label="In pool" value={fmtUsd(totals.poolBalance)} accent />
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <ProStat
-          label="Liquid / invested"
-          value={`${fmtUsd(alloc.idle, 0)} / ${fmtUsd(alloc.yield_vault, 0)}`}
-          hint={`Reserve ${fmtUsd(alloc.reserve, 0)}`}
+          align="center"
+          label="Active streams"
+          value={String(active.length)}
+          hint={`${fmtUsd(activeMonthly, 0)}/mo · −${fmtUsd(activeFlow, 4)}/s`}
         />
         <ProStat
+          align="center"
+          label="Paused"
+          value={String(paused.length)}
+          hint={`${stopped.length} stopped · ${workspace.workers.length} total`}
+        />
+        <ProStat
+          align="center"
+          label="In pool"
+          value={fmtUsd(totals.poolBalance)}
+        />
+        <ProStat
+          align="center"
           label="Coverage floor"
           value={fmtUsd(totals.floor, 0)}
           hint={`${workspace.pool.coverageWeeks} weeks committed`}
@@ -88,20 +253,20 @@ export function StreamsScreen() {
                 key: "idle",
                 label: bucketLabel("idle"),
                 value: alloc.idle,
-                color: "bg-white/75",
+                color: "bg-white/70",
                 stripe: true,
               },
               {
                 key: "yield",
                 label: bucketLabel("yield_vault"),
                 value: alloc.yield_vault,
-                color: "bg-[#1d9e75]",
+                color: "bg-white/40",
               },
               {
                 key: "reserve",
                 label: bucketLabel("reserve"),
                 value: alloc.reserve,
-                color: "bg-white/35",
+                color: "bg-white/20",
                 stripe: true,
               },
             ]}
@@ -110,110 +275,79 @@ export function StreamsScreen() {
       </ProCard>
 
       <ProCard padding="sm">
-        <div className="mb-3 flex items-center justify-between px-1.5 pt-1">
-          <ProEyebrow>Live substreams</ProEyebrow>
-          <p className="mt-1 text-[12px] text-white/45">
-            Funded from the org treasury · pause / stop returns unearned capital
-            to the pool
-          </p>
+        <div className="mb-3 flex flex-wrap items-end justify-between gap-2 px-1.5 pt-1">
+          <div>
+            <ProEyebrow>Live substreams</ProEyebrow>
+            <p className="mt-1 text-[12px] text-white/45">
+              {active.length} active · {fmtUsd(activeMonthly, 0)}/mo streaming
+            </p>
+          </div>
           <span className="text-[11px] text-white/35">
             {workspace.workers.length} total
           </span>
         </div>
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[720px] text-left text-[13px]">
-            <thead>
-              <tr className="border-b border-white/10 text-[10px] uppercase tracking-[0.14em] text-white/35">
-                <th className="px-2 py-2 font-medium">Recipient</th>
-                <th className="px-2 py-2 font-medium">Rate</th>
-                <th className="px-2 py-2 font-medium">Flow</th>
-                <th className="px-2 py-2 font-medium">Status</th>
-                <th className="px-2 py-2 font-medium text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {workspace.workers.map((w) => {
-                const group = workspace.groups.find((g) => g.id === w.groupId);
-                const drip = monthlyToPerSec(w.monthlyUsd);
-                return (
-                  <tr
-                    key={w.id}
-                    className="border-b border-white/5 last:border-0"
-                  >
-                    <td className="px-2 py-3">
-                      <p className="font-medium text-white">{w.alias}</p>
-                      <p className="text-[11px] text-white/35">
-                        {group?.name ?? "Ungrouped"} ·{" "}
-                        {shortAddress(w.walletAddress)}
-                      </p>
-                    </td>
-                    <td className="px-2 py-3 tabular text-white/80">
-                      {fmtUsd(w.monthlyUsd, 0)}
-                      <span className="text-white/35">
-                        /{w.cadence === "HOURLY" ? "hr*" : "mo"}
-                      </span>
-                    </td>
-                    <td className="px-2 py-3 tabular text-white/55">
-                      {w.status === "dripping"
-                        ? `−${fmtUsd(drip, 4)}/s`
-                        : "—"}
-                    </td>
-                    <td className="px-2 py-3">
-                      <StatusPill status={w.status} />
-                    </td>
-                    <td className="px-2 py-3">
-                      <div className="flex justify-end gap-1.5">
-                        {w.status === "dripping" ? (
-                          <button
-                            type="button"
-                            className="rounded-full border border-white/12 px-2.5 py-1 text-[10px] text-white/70 hover:bg-white/5"
-                            onClick={() => setWorkerStatus(w.id, "paused")}
-                          >
-                            Pause
-                          </button>
-                        ) : null}
-                        {w.status === "paused" || w.status === "pending" ? (
-                          <button
-                            type="button"
-                            disabled={creating}
-                            className="rounded-full border border-white/12 px-2.5 py-1 text-[10px] text-white/70 hover:bg-white/5 disabled:opacity-50"
-                            onClick={() =>
-                              w.streamId
-                                ? setWorkerStatus(w.id, "dripping")
-                                : createWorkerStream(w.id)
-                            }
-                          >
-                            {w.streamId ? "Resume" : "Start"}
-                          </button>
-                        ) : null}
-                        <button
-                          type="button"
-                          className="rounded-full border border-[#c0533a]/35 px-2.5 py-1 text-[10px] text-[#c0533a] hover:bg-[#c0533a]/10"
-                          onClick={() => {
-                            if (
-                              window.confirm(
-                                `Remove ${w.alias} from the payroll run?`
-                              )
-                            ) {
-                              deleteWorker(w.id);
-                            }
-                          }}
-                        >
-                          Delete
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+
+        <div className="space-y-0 divide-y divide-white/[0.05] overflow-hidden rounded-2xl border border-white/[0.06]">
+          <button
+            type="button"
+            onClick={() => setModal("worker")}
+            className="flex w-full items-center gap-3 px-3.5 py-3.5 text-left transition-colors hover:bg-white/[0.04]"
+          >
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-dashed border-white/25 text-[18px] text-white/45">
+              +
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-[13px] font-medium text-white/85">
+                Add new stream
+              </p>
+              <p className="mt-0.5 text-[11px] text-white/35">
+                Hire a recipient onto the payroll pool
+              </p>
+            </div>
+          </button>
+
+          {workspace.workers.map((w) => {
+            const group = workspace.groups.find((g) => g.id === w.groupId);
+            const drip = monthlyToPerSec(w.monthlyUsd);
+            return (
+              <div
+                key={w.id}
+                className="flex flex-wrap items-center gap-3 px-3.5 py-3"
+              >
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/8 text-[12px] font-semibold text-white/80 ring-1 ring-white/10">
+                  {w.alias.slice(0, 1).toUpperCase()}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-[13px] font-medium text-white">
+                    {w.alias}
+                  </p>
+                  <p className="truncate text-[11px] text-white/35">
+                    {group?.name ?? "Ungrouped"} · {shortAddress(w.walletAddress)} ·{" "}
+                    {fmtUsd(w.monthlyUsd, 0)}/mo
+                    {w.status === "dripping"
+                      ? ` · −${fmtUsd(drip, 4)}/s`
+                      : ""}
+                  </p>
+                </div>
+                <StatusPill status={w.status} />
+                <StreamActions
+                  worker={w}
+                  creating={creating}
+                  onStatus={setWorkerStatus}
+                  onStart={createWorkerStream}
+                  onDelete={removeWorker}
+                />
+              </div>
+            );
+          })}
         </div>
         <p className="mt-3 px-2 text-[11px] text-white/30">
           Claims are employee-side — recipients pull accrued pay themselves. Org
-          controls are pause, resume, and remove.
+          controls are pause, resume, and stop.
         </p>
       </ProCard>
     </div>
   );
 }
+
+export { IconPause, IconPlay, IconStop, IconTrash };

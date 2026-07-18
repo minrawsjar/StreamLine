@@ -11,11 +11,13 @@ import {
   payrollToCsv,
   usdFromBase,
 } from "@/lib/compliance";
+import { buildDemoCompliance } from "@/lib/demo-compliance";
 import { shortAddress } from "@/lib/format";
 import { isHexAddress, suinsBrand } from "@/lib/handle";
 import { useAuditEvents, usePayrollStatement } from "@/lib/indexer";
 import { useNetworkVariable } from "@/lib/networks";
 import { resolveRecipient } from "@/lib/suins";
+import { useProWorkspace } from "../ProWorkspaceContext";
 import {
   ProCard,
   ProChip,
@@ -44,6 +46,7 @@ export function ReportsScreen({ onBack }: { onBack?: () => void }) {
   const account = useCurrentAccount();
   const client = useSuiClient();
   const embedded = usePhoneEmbedded();
+  const { workspace, isDemo } = useProWorkspace();
   const sealNamespace = useNetworkVariable("originalPackageId");
   const sender = account?.address;
 
@@ -54,15 +57,25 @@ export function ReportsScreen({ onBack }: { onBack?: () => void }) {
 
   const fromMs = rangeDays === 0 ? undefined : daysAgoMs(rangeDays);
 
-  const payrollQ = usePayrollStatement({ sender, fromMs });
+  const payrollQ = usePayrollStatement({
+    sender: isDemo ? undefined : sender,
+    fromMs,
+  });
   const auditQ = useAuditEvents({
-    party: sender,
+    party: isDemo ? undefined : sender,
     fromMs,
     limit: 400,
   });
 
-  const payroll = payrollQ.data ?? [];
-  const audit = auditQ.data ?? [];
+  const demo = useMemo(
+    () => (isDemo ? buildDemoCompliance(workspace, fromMs) : null),
+    [isDemo, workspace, fromMs]
+  );
+
+  const payroll = isDemo ? demo!.payroll : (payrollQ.data ?? []);
+  const audit = isDemo ? demo!.audit : (auditQ.data ?? []);
+  const loading = !isDemo && (payrollQ.isLoading || auditQ.isLoading);
+  const indexerError = !isDemo && (payrollQ.isError || auditQ.isError);
 
   const totals = useMemo(() => {
     const dripped = payroll.reduce(
@@ -91,7 +104,13 @@ export function ReportsScreen({ onBack }: { onBack?: () => void }) {
       downloadText(
         `streamline-payroll-${stamp}.json`,
         JSON.stringify(
-          { exportedAt: Date.now(), sender, fromMs: fromMs ?? null, rows: payroll },
+          {
+            exportedAt: Date.now(),
+            sender: sender ?? demo?.orgSender ?? null,
+            demo: isDemo,
+            fromMs: fromMs ?? null,
+            rows: payroll,
+          },
           null,
           2
         ),
@@ -112,7 +131,13 @@ export function ReportsScreen({ onBack }: { onBack?: () => void }) {
       downloadText(
         `streamline-audit-${stamp}.json`,
         JSON.stringify(
-          { exportedAt: Date.now(), party: sender, fromMs: fromMs ?? null, events: audit },
+          {
+            exportedAt: Date.now(),
+            party: sender ?? demo?.orgSender ?? null,
+            demo: isDemo,
+            fromMs: fromMs ?? null,
+            events: audit,
+          },
           null,
           2
         ),
@@ -122,6 +147,10 @@ export function ReportsScreen({ onBack }: { onBack?: () => void }) {
   };
 
   const onShareAuditor = async () => {
+    if (isDemo) {
+      setStatus("Connect a wallet to encrypt a Seal disclosure pack.");
+      return;
+    }
     if (!account || !sender) {
       setStatus("Connect a wallet first.");
       return;
@@ -173,7 +202,7 @@ export function ReportsScreen({ onBack }: { onBack?: () => void }) {
     }
   };
 
-  if (!sender) {
+  if (!sender && !isDemo) {
     return (
       <div className={embedded ? "px-1 py-4" : "p-6"}>
         <ProEyebrow>Compliance</ProEyebrow>
@@ -225,11 +254,17 @@ export function ReportsScreen({ onBack }: { onBack?: () => void }) {
             Reports & audit
           </h1>
           <p className="mt-1 max-w-xl text-[12px] leading-relaxed text-white/45 md:text-[13px]">
-            Cryptographic payment history from the indexer — export statements,
-            review disputes, and selectively disclose to an auditor handle.
+            {isDemo
+              ? "Explore-demo sample payroll & timeline — exports work; Seal packs need a connected wallet."
+              : "Cryptographic payment history from the indexer — export statements, review disputes, and selectively disclose to an auditor handle."}
           </p>
         </div>
-        <div className="flex flex-wrap gap-1.5">
+        <div className="flex flex-wrap items-center gap-1.5">
+          {isDemo ? (
+            <span className="mr-1 rounded-full border border-white/15 px-2 py-0.5 text-[9px] uppercase tracking-wider text-white/40">
+              Demo
+            </span>
+          ) : null}
           {([30, 90, 365, 0] as const).map((d) => (
             <button
               key={d}
@@ -282,10 +317,10 @@ export function ReportsScreen({ onBack }: { onBack?: () => void }) {
             </button>
           </div>
         </div>
-        {payrollQ.isLoading && (
+        {loading && (
           <p className="mt-3 text-[12px] text-white/40">Loading payroll…</p>
         )}
-        {payrollQ.isError && (
+        {indexerError && (
           <p className="mt-3 text-[12px] text-amber-400/90">
             Indexer unavailable — start the indexer or check NEXT_PUBLIC_INDEXER_URL.
           </p>
@@ -309,7 +344,7 @@ export function ReportsScreen({ onBack }: { onBack?: () => void }) {
               </p>
             </div>
           ))}
-          {!payrollQ.isLoading && !payroll.length && !payrollQ.isError && (
+          {!loading && !payroll.length && !indexerError && (
             <p className="text-[12px] text-white/40">No drips in this period.</p>
           )}
         </div>
@@ -352,9 +387,7 @@ export function ReportsScreen({ onBack }: { onBack?: () => void }) {
             >
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-1.5">
-                  <ProChip>
-                    {KIND_LABEL[e.kind] ?? e.kind}
-                  </ProChip>
+                  <ProChip>{KIND_LABEL[e.kind] ?? e.kind}</ProChip>
                   <span className="font-mono text-[9px] text-white/30">
                     {e.tx_digest ? shortAddress(e.tx_digest) : "—"}
                   </span>
@@ -377,7 +410,7 @@ export function ReportsScreen({ onBack }: { onBack?: () => void }) {
               </div>
             </div>
           ))}
-          {!auditQ.isLoading && !audit.length && !auditQ.isError && (
+          {!loading && !audit.length && !indexerError && (
             <p className="text-[12px] text-white/40">
               No audit events yet — disputes and gift cards appear after the
               indexer upgrade is deployed.
@@ -401,14 +434,15 @@ export function ReportsScreen({ onBack }: { onBack?: () => void }) {
             placeholder={`auditor@${suinsBrand()} or 0x…`}
             value={auditorInput}
             onChange={(e) => setAuditorInput(e.target.value)}
+            disabled={isDemo}
           />
           <button
             type="button"
-            disabled={busy || (!payroll.length && !audit.length)}
+            disabled={busy || isDemo || (!payroll.length && !audit.length)}
             onClick={() => void onShareAuditor()}
             className="rounded-xl bg-white px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-[#0a0a0a] disabled:opacity-40"
           >
-            {busy ? "Working…" : "Encrypt pack"}
+            {busy ? "Working…" : isDemo ? "Connect to encrypt" : "Encrypt pack"}
           </button>
         </div>
         {status && (

@@ -4,10 +4,10 @@ import { useMemo, useState } from "react";
 
 import { shortAddress } from "@/lib/format";
 import { useProWorkspace } from "../ProWorkspaceContext";
-import { fmtUsd, groupCommitted, type ProWorkerStatus } from "../types";
+import { fmtUsd, type ProWorkerStatus } from "../types";
 import { ProCard, ProEyebrow, ProStat, StatusPill } from "../ui";
 
-const FILTERS: { id: "all" | ProWorkerStatus; label: string }[] = [
+const STATUS_FILTERS: { id: "all" | ProWorkerStatus; label: string }[] = [
   { id: "all", label: "All" },
   { id: "dripping", label: "Streaming" },
   { id: "paused", label: "Paused" },
@@ -20,6 +20,15 @@ export function PeopleScreen() {
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState<"all" | ProWorkerStatus>("all");
   const [groupFilter, setGroupFilter] = useState<string>("all");
+
+  const statusCounts = useMemo(() => {
+    const counts: Record<string, number> = { all: workspace.workers.length };
+    for (const f of STATUS_FILTERS) {
+      if (f.id === "all") continue;
+      counts[f.id] = workspace.workers.filter((w) => w.status === f.id).length;
+    }
+    return counts;
+  }, [workspace.workers]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -34,6 +43,12 @@ export function PeopleScreen() {
     });
   }, [workspace.workers, query, status, groupFilter]);
 
+  const deptChipCh = Math.max(
+    10,
+    "Add group".length,
+    ...workspace.groups.map((g) => g.name.length)
+  ) + 2;
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-4">
@@ -43,8 +58,8 @@ export function PeopleScreen() {
             Roster & stream groups
           </h1>
           <p className="mt-1 max-w-xl text-[13px] text-white/45">
-            Stream groups are labels for the team. Rates live on each recipient;
-            funding still hits the single org pool.
+            Departments are filters for the roster. Tap a group to show its
+            people — edit stays on the pencil.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -55,13 +70,6 @@ export function PeopleScreen() {
           >
             New group
           </button>
-          <button
-            type="button"
-            className="sl-glass-btn-dark sl-glass-btn-dark-primary !px-4 !py-2 !text-[11px]"
-            onClick={() => setModal("worker")}
-          >
-            Add substream
-          </button>
         </div>
       </div>
 
@@ -69,10 +77,10 @@ export function PeopleScreen() {
         <ProStat
           label="Recipients"
           value={String(workspace.workers.length)}
-          hint={`${workspace.workers.filter((w) => w.status === "dripping").length} streaming`}
+          hint={`${statusCounts.dripping ?? 0} streaming`}
         />
         <ProStat
-          label="Stream groups"
+          label="Departments"
           value={String(workspace.groups.length)}
         />
         <ProStat
@@ -84,40 +92,51 @@ export function PeopleScreen() {
         />
       </div>
 
-      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-        {workspace.groups.map((g) => {
-          const members = workspace.workers.filter((w) => w.groupId === g.id);
-          return (
-            <ProCard key={g.id} padding="sm">
-              <div className="flex items-start justify-between gap-2">
-                <div>
-                  <p className="text-[14px] font-medium text-white">{g.name}</p>
-                  <p className="mt-0.5 text-[11px] text-white/40">
-                    {g.description || `${members.length} people`}
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  className="text-[10px] uppercase tracking-wider text-white/35 hover:text-white"
-                  onClick={() =>
-                    setModal({ kind: "group-edit", groupId: g.id })
-                  }
-                >
-                  Edit
-                </button>
-              </div>
-              <p className="mt-3 text-[18px] font-semibold tabular text-white">
-                {fmtUsd(groupCommitted(workspace, g.id), 0)}
-                <span className="text-[12px] font-normal text-white/35">
-                  /mo
-                </span>
-              </p>
-              <p className="mt-1 text-[11px] text-white/35">
-                {members.length} substream{members.length === 1 ? "" : "s"}
-              </p>
-            </ProCard>
-          );
-        })}
+      <div>
+        <div className="mb-2 flex items-center justify-between gap-2">
+          <ProEyebrow>Departments</ProEyebrow>
+          <p className="text-[11px] text-white/35">
+            Select to filter · tap again to clear
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {workspace.groups.map((g) => {
+            const members = workspace.workers.filter((w) => w.groupId === g.id);
+            const selected = groupFilter === g.id;
+            return (
+              <button
+                key={g.id}
+                type="button"
+                onClick={() =>
+                  setGroupFilter((prev) => (prev === g.id ? "all" : g.id))
+                }
+                style={{ width: `${deptChipCh}ch` }}
+                className={`shrink-0 rounded-xl border px-3 py-2.5 text-left transition-colors ${
+                  selected
+                    ? "border-white/30 bg-white/[0.1]"
+                    : "border-white/[0.1] bg-white/[0.03] hover:border-white/20"
+                }`}
+              >
+                <p className="truncate text-[12px] font-semibold text-white">
+                  {g.name}
+                </p>
+                <p className="mt-0.5 truncate text-[10px] tabular text-white/40">
+                  {members.length}{" "}
+                  {members.length === 1 ? "person" : "people"}
+                </p>
+              </button>
+            );
+          })}
+          <button
+            type="button"
+            onClick={() => setModal("group")}
+            style={{ width: `${deptChipCh}ch` }}
+            className="shrink-0 rounded-xl border border-dashed border-white/20 px-3 py-2.5 text-left text-white/45 transition-colors hover:border-white/35 hover:text-white/70"
+          >
+            <p className="text-[12px] font-semibold">+ Add group</p>
+            <p className="mt-0.5 text-[10px] text-white/30">New department</p>
+          </button>
+        </div>
       </div>
 
       <ProCard padding="sm">
@@ -128,96 +147,83 @@ export function PeopleScreen() {
             placeholder="Search name or wallet"
             className="min-w-[180px] flex-1 rounded-full border border-white/12 bg-white/[0.04] px-3 py-2 text-[12px] text-white outline-none placeholder:text-white/25"
           />
-          <select
-            value={groupFilter}
-            onChange={(e) => setGroupFilter(e.target.value)}
-            className="rounded-full border border-white/12 bg-white/[0.04] px-3 py-2 text-[12px] text-white outline-none"
-          >
-            <option value="all">All groups</option>
-            {workspace.groups.map((g) => (
-              <option key={g.id} value={g.id}>
-                {g.name}
-              </option>
-            ))}
-          </select>
           <div className="flex flex-wrap gap-1">
-            {FILTERS.map((f) => (
-              <button
-                key={f.id}
-                type="button"
-                onClick={() => setStatus(f.id)}
-                className={`rounded-full px-2.5 py-1 text-[10px] uppercase tracking-wider ${
-                  status === f.id
-                    ? "bg-white text-[#0a0a0a]"
-                    : "border border-white/10 text-white/45 hover:text-white"
-                }`}
-              >
-                {f.label}
-              </button>
-            ))}
+            {STATUS_FILTERS.map((f) => {
+              const count = statusCounts[f.id] ?? 0;
+              return (
+                <button
+                  key={f.id}
+                  type="button"
+                  onClick={() => setStatus(f.id)}
+                  className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] uppercase tracking-wider ${
+                    status === f.id
+                      ? "bg-white text-[#0a0a0a]"
+                      : "border border-white/10 text-white/45 hover:text-white"
+                  }`}
+                >
+                  {f.label}
+                  <span
+                    className={`tabular ${
+                      status === f.id ? "text-[#0a0a0a]/55" : "text-white/30"
+                    }`}
+                  >
+                    {count}
+                  </span>
+                </button>
+              );
+            })}
           </div>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[680px] text-left text-[13px]">
-            <thead>
-              <tr className="border-b border-white/10 text-[10px] uppercase tracking-[0.14em] text-white/35">
-                <th className="px-2 py-2 font-medium">Name</th>
-                <th className="px-2 py-2 font-medium">Group</th>
-                <th className="px-2 py-2 font-medium">Rate</th>
-                <th className="px-2 py-2 font-medium">Status</th>
-                <th className="px-2 py-2 font-medium text-right"> </th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((w) => {
-                const group = workspace.groups.find((g) => g.id === w.groupId);
-                return (
-                  <tr
-                    key={w.id}
-                    className="border-b border-white/5 last:border-0"
-                  >
-                    <td className="px-2 py-3">
-                      <p className="font-medium text-white">{w.alias}</p>
-                      <p className="text-[11px] text-white/35">
-                        {shortAddress(w.walletAddress)}
-                      </p>
-                    </td>
-                    <td className="px-2 py-3 text-white/70">
-                      {group?.name ?? "—"}
-                    </td>
-                    <td className="px-2 py-3 tabular text-white/80">
-                      {fmtUsd(w.monthlyUsd, 0)}/mo
-                    </td>
-                    <td className="px-2 py-3">
-                      <StatusPill status={w.status} />
-                    </td>
-                    <td className="px-2 py-3 text-right">
-                      <button
-                        type="button"
-                        className="text-[11px] text-white/40 hover:text-white"
-                        onClick={() =>
-                          setModal({ kind: "worker-edit", workerId: w.id })
-                        }
-                      >
-                        Edit
-                      </button>
-                    </td>
-                  </tr>
-                );
-              })}
-              {filtered.length === 0 ? (
-                <tr>
-                  <td
-                    colSpan={5}
-                    className="px-2 py-8 text-center text-[13px] text-white/35"
-                  >
-                    No recipients match these filters.
-                  </td>
-                </tr>
-              ) : null}
-            </tbody>
-          </table>
+        <div className="space-y-0 divide-y divide-white/[0.05] overflow-hidden rounded-2xl border border-white/[0.06]">
+          <button
+            type="button"
+            onClick={() => setModal("worker")}
+            className="flex w-full items-center gap-3 px-3.5 py-3.5 text-left transition-colors hover:bg-white/[0.04]"
+          >
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-dashed border-white/25 text-[18px] text-white/45">
+              +
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-[13px] font-medium text-white/85">Add person</p>
+              <p className="mt-0.5 text-[11px] text-white/35">
+                Create a substream on the payroll roster
+              </p>
+            </div>
+          </button>
+
+          {filtered.map((w) => {
+            const group = workspace.groups.find((g) => g.id === w.groupId);
+            return (
+              <button
+                key={w.id}
+                type="button"
+                onClick={() =>
+                  setModal({ kind: "worker-edit", workerId: w.id })
+                }
+                className="flex w-full items-center gap-3 px-3.5 py-3 text-left transition-colors hover:bg-white/[0.04]"
+              >
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/8 text-[12px] font-semibold text-white/80 ring-1 ring-white/10">
+                  {w.alias.slice(0, 1).toUpperCase()}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-[13px] font-medium text-white">
+                    {w.alias}
+                  </p>
+                  <p className="truncate text-[11px] text-white/35">
+                    {group?.name ?? "Ungrouped"} · {shortAddress(w.walletAddress)} ·{" "}
+                    {fmtUsd(w.monthlyUsd, 0)}/mo
+                  </p>
+                </div>
+                <StatusPill status={w.status} />
+              </button>
+            );
+          })}
+          {filtered.length === 0 ? (
+            <p className="px-3.5 py-8 text-center text-[13px] text-white/35">
+              No recipients match these filters.
+            </p>
+          ) : null}
         </div>
       </ProCard>
     </div>
