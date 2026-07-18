@@ -12,6 +12,10 @@ import {
   resolveRecipientOrThrow,
 } from "@/lib/use-resolve-recipient";
 import { isHexAddress, suinsBrand } from "@/lib/handle";
+import {
+  OnramperModal,
+  onramperConfigured,
+} from "@/components/wallet/OnramperWidget";
 
 type TransferMode = "wallet" | "crosschain" | "bank";
 type TransferStep = "menu" | TransferMode;
@@ -67,8 +71,8 @@ const MODES: {
         <path d="M12 4 3 8h18z" />
       </svg>
     ),
-    subtitle: "Withdraw to your bank account",
-    enabled: false,
+    subtitle: "Cash out USDC to your bank or card",
+    enabled: onramperConfigured,
   },
 ];
 
@@ -83,6 +87,7 @@ export function PhoneTransferModal({ open, onClose }: PhoneTransferModalProps) {
   const [coin, setCoin] = useState<TransferCoin>("USDC");
   const [amount, setAmount] = useState("");
   const [status, setStatus] = useState<string | null>(null);
+  const [sellOpen, setSellOpen] = useState(false);
 
   if (!open) return null;
 
@@ -183,7 +188,11 @@ export function PhoneTransferModal({ open, onClose }: PhoneTransferModalProps) {
                 key={m.id}
                 type="button"
                 disabled={!m.enabled}
-                onClick={() => m.enabled && setStep(m.id)}
+                onClick={() => {
+                  if (!m.enabled) return;
+                  if (m.id === "bank") setSellOpen(true);
+                  else setStep(m.id);
+                }}
                 className={`flex items-center gap-3 rounded-2xl border px-3 py-3 text-left ${
                   m.enabled
                     ? "border-black/12 bg-transparent text-[#111]"
@@ -295,26 +304,13 @@ export function PhoneTransferModal({ open, onClose }: PhoneTransferModalProps) {
           </div>
         )}
 
-        {step === "bank" && (
-          <div className="flex flex-col gap-4">
-            <div className="border-b border-black/8 pb-3">
-              <h2 className="text-[15px] font-semibold tracking-tight text-[#111]">
-                Bank offramp
-              </h2>
-              <p className="mt-1 text-[12px] leading-snug text-[#666]">
-                Bank withdrawal is not active yet.
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={onClose}
-              className="w-full rounded-xl border border-black/12 bg-white px-4 py-2.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-[#111]"
-            >
-              Cancel
-            </button>
-          </div>
-        )}
       </div>
+
+      <OnramperModal
+        open={sellOpen}
+        mode="sell"
+        onClose={() => setSellOpen(false)}
+      />
     </div>
   );
 }
