@@ -1,8 +1,5 @@
 "use client";
 
-import { useCurrentAccount } from "@mysten/dapp-kit";
-
-import { WalletButton } from "@/components/wallet/WalletButton";
 import { StreamLineMark } from "@/components/landing/StreamLineMark";
 import type { PhoneAppRoute } from "./types";
 
@@ -21,23 +18,6 @@ type PhoneLauncherProps = {
 };
 
 export function PhoneLauncher({ onOpen }: PhoneLauncherProps) {
-  const account = useCurrentAccount();
-
-  if (!account) {
-    return (
-      <div className="flex min-h-0 flex-1 flex-col items-center justify-center px-2 text-center">
-        <StreamLineMark size="lg" className="!h-11 !w-11" />
-        <p className="mt-5 text-[9px] font-semibold uppercase tracking-[0.2em] text-black/45">
-          StreamLine
-        </p>
-        <h2 className="mt-2 text-base font-bold leading-tight tracking-tight text-[#111]">
-          Connect wallet
-        </h2>
-        <WalletButton className="sl-glass-btn sl-glass-btn-primary mt-5 !px-4 !py-2 !text-[9px]" />
-      </div>
-    );
-  }
-
   return (
     <div className="flex min-h-0 flex-1 flex-col pt-8">
       <div className="grid w-full grid-cols-3 gap-4">

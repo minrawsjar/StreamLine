@@ -17,12 +17,21 @@ export function WalletButton({
   faucetAmount,
   variant = "default",
   profilePro = false,
+  label,
+  connectModal = "default",
+  containedModal = false,
 }: {
   className?: string;
   showFaucetInMenu?: boolean;
   faucetAmount?: number;
   variant?: "default" | "profile";
   profilePro?: boolean;
+  /** Override the disconnected CTA label (e.g. "Continue with Slush"). */
+  label?: string;
+  /** Connect modal look — Pro uses dark styling. */
+  connectModal?: "default" | "pro";
+  /** Keep the modal inside the phone / Pro shell instead of document.body. */
+  containedModal?: boolean;
 }) {
   const [mounted, setMounted] = useState(false);
   const [open, setOpen] = useState(false);
@@ -41,8 +50,10 @@ export function WalletButton({
         : "inline-flex shrink-0 items-center rounded-full border border-black/10 bg-white px-2.5 py-1 text-[8px] font-medium uppercase tracking-[0.12em] text-[#111] transition-colors hover:bg-[#f8f8f8]"
       : buttonClass;
 
+  const connectLabel = label ?? "connect wallet";
+
   if (!mounted) {
-    return <span className={connectClass}>connect</span>;
+    return <span className={connectClass}>{label ?? "connect"}</span>;
   }
 
   if (account) {
@@ -60,9 +71,14 @@ export function WalletButton({
   return (
     <>
       <button className={connectClass} onClick={() => setOpen(true)}>
-        connect wallet
+        {connectLabel}
       </button>
-      <ConnectModal open={open} onClose={() => setOpen(false)} />
+      <ConnectModal
+        open={open}
+        onClose={() => setOpen(false)}
+        variant={connectModal}
+        contained={containedModal}
+      />
     </>
   );
 }

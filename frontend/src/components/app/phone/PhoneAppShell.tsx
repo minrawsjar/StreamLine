@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useCurrentAccount } from "@mysten/dapp-kit";
 
 import { WalletButton } from "@/components/wallet/WalletButton";
 import { StreamLineMark } from "@/components/landing/StreamLineMark";
@@ -37,13 +38,21 @@ function readStoredRequest(): StreamRequestParams | null {
 }
 
 export function PhoneAppShell({ route, onNavigate }: PhoneAppShellProps) {
+  const account = useCurrentAccount();
   const isPro = route === "pro";
   const isScan = route === "scan";
   const isFulfill = route === "fulfill";
   const isRequest = route === "request";
   const isCreate = route === "create";
+  /** Full-bleed Pro onboarding — hide shell chrome until wallet is connected. */
+  const proOnboarding = isPro && !account;
   const inWorkspace =
-    route !== "launcher" && !isScan && !isFulfill && !isRequest && !isCreate;
+    route !== "launcher" &&
+    !isScan &&
+    !isFulfill &&
+    !isRequest &&
+    !isCreate &&
+    !proOnboarding;
   const [scanReturnRoute, setScanReturnRoute] = useState<PhoneAppRoute>("user");
   const [pendingRequest, setPendingRequestState] =
     useState<StreamRequestParams | null>(readStoredRequest);
@@ -75,6 +84,7 @@ export function PhoneAppShell({ route, onNavigate }: PhoneAppShellProps) {
 
   return (
     <>
+      {!proOnboarding && (
       <div className="flex shrink-0 items-center justify-between">
         {isScan ? (
           <button
@@ -160,10 +170,15 @@ export function PhoneAppShell({ route, onNavigate }: PhoneAppShellProps) {
           />
         </div>
       </div>
+      )}
 
       <div
         className={`flex min-h-0 flex-1 flex-col ${
-          isPro ? "relative mt-1.5 overflow-hidden" : "mt-2"
+          proOnboarding
+            ? "absolute inset-0 overflow-hidden isolate"
+            : isPro
+              ? "relative mt-1.5 overflow-hidden"
+              : "mt-2"
         }`}
       >
         {route === "launcher" && <PhoneLauncher onOpen={onNavigate} />}

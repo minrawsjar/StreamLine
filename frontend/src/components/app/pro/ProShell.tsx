@@ -5,10 +5,10 @@ import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 import { useCurrentAccount } from "@mysten/dapp-kit";
 
-import { WalletButton } from "@/components/wallet/WalletButton";
 import { usePhoneEmbedded } from "@/components/app/phone/PhoneEmbeddedContext";
 import { PhoneProWorkspace } from "./PhoneProWorkspace";
 import { ProActionModals } from "./modals/ProActionModals";
+import { ProOnboarding } from "./ProOnboarding";
 import { ProWorkspaceProvider } from "./ProWorkspaceContext";
 
 const NAV = [
@@ -22,28 +22,6 @@ function navActive(pathname: string | null, href: string, match: "exact" | "pref
   if (!pathname) return false;
   if (match === "exact") return pathname === href || pathname === `${href}/`;
   return pathname === href || pathname.startsWith(`${href}/`);
-}
-
-function ConnectGate({ embedded }: { embedded?: boolean }) {
-  if (embedded) {
-    return (
-      <div className="flex min-h-0 flex-1 flex-col items-center justify-center px-2 text-center font-[family-name:var(--font-inter)]">
-        <p className="text-[10px] text-white/40">Connect wallet above to continue</p>
-      </div>
-    );
-  }
-
-  return (
-    <div className="flex min-h-[calc(100dvh-57px)] flex-col items-center justify-center gap-6 px-6 text-center font-[family-name:var(--font-inter)]">
-      <p className="text-[11px] uppercase tracking-[0.24em] text-white/35">
-        StreamLine.pro
-      </p>
-      <h1 className="max-w-xl text-[clamp(24px,4vw,40px)] font-semibold leading-[1.05] tracking-[-0.02em] text-white">
-        Connect to open the payroll console.
-      </h1>
-      <WalletButton className="sl-glass-btn-dark sl-glass-btn-dark-primary !px-8 !py-3" />
-    </div>
-  );
 }
 
 function DesktopShell({ children }: { children: ReactNode }) {
@@ -109,7 +87,7 @@ function DesktopShell({ children }: { children: ReactNode }) {
 /** Desktop route wrapper — provider + sidebar around Next.js pages. */
 export function ProShell({ children }: { children: ReactNode }) {
   const account = useCurrentAccount();
-  if (!account) return <ConnectGate />;
+  if (!account) return <ProOnboarding />;
   return (
     <ProWorkspaceProvider>
       <DesktopShell>{children}</DesktopShell>
@@ -121,7 +99,7 @@ export function ProShell({ children }: { children: ReactNode }) {
 export function ProPhoneAppRoot() {
   const embedded = usePhoneEmbedded();
   const account = useCurrentAccount();
-  if (!account) return <ConnectGate embedded={!!embedded} />;
+  if (!account) return <ProOnboarding embedded={!!embedded} />;
   return (
     <ProWorkspaceProvider>
       <PhoneProWorkspace />

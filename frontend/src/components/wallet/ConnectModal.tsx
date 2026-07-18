@@ -10,20 +10,31 @@ import { filterConnectableSuiWallets } from "@/lib/sui-wallets";
 type Props = {
   open: boolean;
   onClose: () => void;
+  /** Dark Pro styling vs light landing modal. */
+  variant?: "default" | "pro";
+  /**
+   * Render inside the nearest positioned ancestor (phone screen / Pro shell)
+   * instead of portaling to document.body.
+   */
+  contained?: boolean;
 };
 
 /**
  * StreamLine's own connect modal — lists detected Sui wallets and connects via
- * dApp Kit. Sharp corners + mono to match the brutalist landing aesthetic.
- * Enoki zkLogin wallets (e.g. "Sign in with Google") appear here automatically
- * once registered (see RegisterEnokiWallets) when the public Enoki key + OAuth
- * client id are configured.
+ * dApp Kit. Default: sharp corners + cream (landing). Pro: dark glass inside
+ * the app / phone onboarding.
  */
-export function ConnectModal({ open, onClose }: Props) {
+export function ConnectModal({
+  open,
+  onClose,
+  variant = "default",
+  contained = false,
+}: Props) {
   const wallets = useWallets();
   const { mutate: connect, isPending } = useConnectWallet();
   const [error, setError] = useState<string | null>(null);
   const [pendingName, setPendingName] = useState<string | null>(null);
+  const pro = variant === "pro";
 
   useEffect(() => {
     if (!open) return;
@@ -58,46 +69,81 @@ export function ConnectModal({ open, onClose }: Props) {
     );
   };
 
-  if (typeof document === "undefined") return null;
-
-  // Portal to <body> so the modal escapes the header's backdrop-filter, which
-  // would otherwise become the containing block for this fixed element.
-  return createPortal(
+  const overlay = (
     <div
-      className="fixed inset-0 z-[300] flex items-center justify-center p-4"
-      data-sl-cursor="on-light"
+      className={
+        contained && pro
+          ? "absolute inset-0 z-40 flex items-center justify-center overflow-hidden px-4 font-[family-name:var(--font-inter)]"
+          : contained
+            ? "absolute inset-0 z-40 flex items-center justify-center overflow-hidden p-3 font-[family-name:var(--font-inter)]"
+            : "fixed inset-0 z-[300] flex items-center justify-center p-4"
+      }
+      data-sl-cursor={pro ? "on-dark" : "on-light"}
     >
       <button
         aria-label="Close"
-        className="absolute inset-0 bg-[#1d1c44]/70 backdrop-blur-sm"
+        className={`absolute inset-0 ${
+          pro
+            ? // Solid dim only — backdrop-blur paints outside the phone glass
+              "bg-[#050505]/88"
+            : "bg-[#1d1c44]/70 backdrop-blur-sm"
+        }`}
         onClick={onClose}
       />
 
-      <div className="relative z-10 w-full max-w-md border border-[#2b2a5e]/15 bg-[#f1efe9] shadow-2xl">
-        <div className="flex items-center justify-between border-b border-[#2b2a5e]/15 bg-[#2b2a5e] px-5 py-4 text-white">
-          <span className="text-[11px] uppercase tracking-[0.2em]">
-            Connect to StreamLine
+      <div
+        className={`relative z-10 w-full overflow-hidden ${
+          contained && pro
+            ? "max-w-[280px] rounded-[1.35rem] border border-white/10 bg-[#141414] shadow-[0_20px_50px_rgba(0,0,0,0.55)]"
+            : pro
+              ? "max-w-[340px] rounded-3xl border border-white/10 bg-[#121212] shadow-2xl"
+              : "max-w-md border border-[#2b2a5e]/15 bg-[#f1efe9] shadow-2xl"
+        }`}
+      >
+        <div
+          className={`flex items-center justify-between px-4 py-3.5 ${
+            pro
+              ? "border-b border-white/10"
+              : "border-b border-[#2b2a5e]/15 bg-[#2b2a5e] px-5 py-4 text-white"
+          }`}
+        >
+          <span
+            className={
+              pro
+                ? "text-[13px] font-medium tracking-tight text-white"
+                : "text-[11px] uppercase tracking-[0.2em]"
+            }
+          >
+            {pro ? "Connect wallet" : "Connect to StreamLine"}
           </span>
           <button
             onClick={onClose}
-            className="text-[18px] leading-none hover:opacity-60"
+            className={`leading-none transition-opacity hover:opacity-60 ${
+              pro ? "text-[22px] text-white/45" : "text-[18px]"
+            }`}
             aria-label="Close"
           >
             ×
           </button>
         </div>
 
-        <div className="flex flex-col gap-5 p-5">
+        <div className={`flex flex-col gap-3 ${pro ? "p-3.5 pb-4" : "gap-5 p-5"}`}>
           <div className="flex flex-col gap-2">
-            <p className="text-[10px] uppercase tracking-[0.18em] text-[#2b2a5e]/50">
-              Sui wallets
-            </p>
+            {!pro && (
+              <p className="text-[10px] uppercase tracking-[0.18em] text-[#2b2a5e]/50">
+                Sui wallets
+              </p>
+            )}
             {standardWallets.length === 0 ? (
               <a
                 href="https://slush.app"
                 target="_blank"
                 rel="noreferrer"
-                className="border border-dashed border-[#2b2a5e]/25 px-4 py-3 text-[12px] text-[#2b2a5e]/60 hover:border-[#5b54e6]"
+                className={
+                  pro
+                    ? "rounded-2xl border border-dashed border-white/15 px-4 py-3.5 text-[12px] text-white/55 transition-colors hover:border-[#fbbf24]/45 hover:text-white/80"
+                    : "border border-dashed border-[#2b2a5e]/25 px-4 py-3 text-[12px] text-[#2b2a5e]/60 hover:border-[#5b54e6]"
+                }
               >
                 No Sui wallet detected — install Slush →
               </a>
@@ -107,13 +153,21 @@ export function ConnectModal({ open, onClose }: Props) {
                   key={w.name}
                   disabled={isPending}
                   onClick={() => onConnect(w)}
-                  className="flex items-center gap-3 border border-[#2b2a5e]/20 bg-white px-4 py-3 text-left text-[13px] transition-colors hover:border-[#5b54e6] disabled:opacity-50"
+                  className={
+                    pro
+                      ? "flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.04] px-3.5 py-3 text-left text-[13px] text-white transition-colors hover:border-[#fbbf24]/40 hover:bg-white/[0.07] disabled:opacity-50"
+                      : "flex items-center gap-3 border border-[#2b2a5e]/20 bg-white px-4 py-3 text-left text-[13px] transition-colors hover:border-[#5b54e6] disabled:opacity-50"
+                  }
                 >
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={w.icon} alt="" className="h-5 w-5" />
+                  <img src={w.icon} alt="" className="h-5 w-5 rounded-md" />
                   <span className="font-medium">{w.name}</span>
                   {pendingName === w.name && (
-                    <span className="ml-auto text-[11px] text-[#2b2a5e]/50">
+                    <span
+                      className={`ml-auto text-[11px] ${
+                        pro ? "text-white/40" : "text-[#2b2a5e]/50"
+                      }`}
+                    >
                       …
                     </span>
                   )}
@@ -123,19 +177,34 @@ export function ConnectModal({ open, onClose }: Props) {
           </div>
 
           {error && (
-            <p className="border border-[#c0533a]/40 bg-[#c0533a]/10 px-3 py-2 text-[12px] text-[#c0533a]">
+            <p
+              className={
+                pro
+                  ? "rounded-xl border border-[#c0533a]/35 bg-[#c0533a]/15 px-3 py-2 text-[12px] text-[#f0a090]"
+                  : "border border-[#c0533a]/40 bg-[#c0533a]/10 px-3 py-2 text-[12px] text-[#c0533a]"
+              }
+            >
               {error}
             </p>
           )}
 
-          <p className="text-[11px] leading-relaxed text-[#2b2a5e]/50">
-            Use a Sui wallet such as <strong>Slush</strong> or{" "}
-            <strong>Phantom</strong> (with Sui enabled). Set your wallet to{" "}
-            <strong>Testnet</strong>.
-          </p>
+          {!pro && (
+            <p className="text-[11px] leading-relaxed text-[#2b2a5e]/50">
+              Use a Sui wallet such as <strong>Slush</strong> or{" "}
+              <strong>Phantom</strong> (with Sui enabled). Set your wallet to{" "}
+              <strong>Testnet</strong>.
+            </p>
+          )}
         </div>
       </div>
-    </div>,
-    document.body
+    </div>
   );
+
+  if (contained) return overlay;
+
+  if (typeof document === "undefined") return null;
+
+  // Portal to <body> so the modal escapes the header's backdrop-filter, which
+  // would otherwise become the containing block for this fixed element.
+  return createPortal(overlay, document.body);
 }

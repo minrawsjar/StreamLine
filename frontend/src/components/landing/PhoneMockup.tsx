@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, type ReactNode } from "react";
+import { useCurrentAccount } from "@mysten/dapp-kit";
 
 import { StreamLineMark } from "./StreamLineMark";
 import { PhoneAppShell } from "@/components/app/phone/PhoneAppShell";
@@ -287,11 +288,14 @@ export function PhoneMockup({
   onCloseApp,
   onLaunchApp,
 }: PhoneMockupProps) {
+  const account = useCurrentAccount();
   const inApp = phoneApp !== null;
   const isLaunchScene = scene === "launch" && !inApp;
   const isPro =
     phoneApp === "pro" || (!inApp && (theme === "pro" || scene === "pro"));
   const useDarkGlass = isPro;
+  /** Edge-to-edge Pro onboarding inside the phone glass. */
+  const proOnboarding = phoneApp === "pro" && !account;
 
   const shell = (
     <>
@@ -331,19 +335,31 @@ export function PhoneMockup({
 
         <div
           className={`relative w-full overflow-hidden rounded-[2.4rem] transition-colors duration-700 ${
-            useDarkGlass ? "bg-[#111]" : "bg-white"
+            proOnboarding
+              ? "bg-[#050505]"
+              : useDarkGlass
+                ? "bg-[#111]"
+                : "bg-white"
           }`}
           style={{ aspectRatio: SCREEN_ASPECT }}
         >
-          {useDarkGlass ? <ProWallpaper /> : <PhoneWallpaper />}
+          {!proOnboarding && (useDarkGlass ? <ProWallpaper /> : <PhoneWallpaper />)}
 
           <div
             className={`absolute inset-0 z-10 flex flex-col transition-all duration-[420ms] ease-out ${
-              inApp
-                ? "min-h-0 overflow-hidden px-4 pb-5 pt-12"
-                : "px-6 pb-8"
+              proOnboarding
+                ? "min-h-0 overflow-hidden isolate"
+                : inApp
+                  ? "min-h-0 overflow-hidden px-4 pb-5 pt-12"
+                  : "px-6 pb-8"
             } ${
-              isLaunchScene ? "justify-center pt-12" : inApp ? "" : "pt-14"
+              proOnboarding
+                ? ""
+                : isLaunchScene
+                  ? "justify-center pt-12"
+                  : inApp
+                    ? ""
+                    : "pt-14"
             } ${
               transitioning && !inApp
                 ? "scale-[0.97] opacity-0"
