@@ -5,6 +5,7 @@ import { useCurrentAccount } from "@mysten/dapp-kit";
 
 import { PhoneHomeView } from "./PhoneHomeView";
 import { PhoneTransferModal } from "./PhoneTransferModal";
+import { OnramperModal } from "@/components/wallet/OnramperWidget";
 import { UserOnboarding } from "./UserOnboarding";
 import { useNeedsHandleOnboarding } from "@/lib/use-handle-onboarding";
 import type { PhoneAppRoute } from "./types";
@@ -18,6 +19,7 @@ export function PhoneUserShell({ onNavigate }: PhoneUserShellProps) {
   const { needsStep } = useNeedsHandleOnboarding();
   const [showAllStreams, setShowAllStreams] = useState(false);
   const [transferOpen, setTransferOpen] = useState(false);
+  const [rampMode, setRampMode] = useState<"buy" | "sell" | null>(null);
 
   if (!account || needsStep) {
     return <UserOnboarding embedded />;
@@ -32,10 +34,17 @@ export function PhoneUserShell({ onNavigate }: PhoneUserShellProps) {
         onCreate={() => onNavigate("create")}
         onRequest={() => onNavigate("request")}
         onTransfer={() => setTransferOpen(true)}
+        onBuy={() => setRampMode("buy")}
+        onCashOut={() => setRampMode("sell")}
       />
       <PhoneTransferModal
         open={transferOpen}
         onClose={() => setTransferOpen(false)}
+      />
+      <OnramperModal
+        open={rampMode !== null}
+        mode={rampMode ?? "buy"}
+        onClose={() => setRampMode(null)}
       />
     </div>
   );

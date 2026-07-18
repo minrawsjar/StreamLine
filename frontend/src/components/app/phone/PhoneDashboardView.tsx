@@ -2,6 +2,8 @@
 
 import type { ReactNode } from "react";
 
+import { onramperConfigured } from "@/components/wallet/OnramperWidget";
+
 const SECTION_GAP = "mb-5";
 
 export const PHONE_QUICK_ACTIONS = [
@@ -33,6 +35,29 @@ export const PHONE_QUICK_ACTIONS = [
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
         <path d="M7 17 17 7" />
         <path d="M7 7h10v10" />
+      </svg>
+    ),
+  },
+  {
+    // On-ramp (fiat → USDC). Only shown when Onramper is configured.
+    id: "buy",
+    label: "Buy",
+    icon: (
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+        <rect x="2" y="5" width="20" height="14" rx="2" />
+        <path d="M2 10h20" />
+      </svg>
+    ),
+  },
+  {
+    // Off-ramp (USDC → fiat). Only shown when Onramper is configured.
+    id: "cashout",
+    label: "Cash out",
+    icon: (
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+        <path d="M12 3v12" />
+        <path d="m7 12 5 5 5-5" />
+        <path d="M4 21h16" />
       </svg>
     ),
   },
@@ -393,7 +418,9 @@ export function PhoneDashboardView({
 
       {/* Keep actions outside the scroll clip so soft lifts aren’t truncated. */}
       <div className={`relative z-10 mt-0.5 grid shrink-0 grid-cols-3 gap-2.5 px-1 ${SECTION_GAP}`}>
-        {PHONE_QUICK_ACTIONS.map((action) => (
+        {PHONE_QUICK_ACTIONS.filter(
+          (a) => (a.id !== "buy" && a.id !== "cashout") || onramperConfigured
+        ).map((action) => (
           <SoftLift key={action.id} tone="action">
             <button
               type="button"

@@ -16,7 +16,35 @@ import {
   suinsDomain,
   suinsConfigured,
 } from "./handle";
-import { isHandleTakenOnChain } from "./suins";
+
+/**
+ * Local cache of a claimed handle, keyed by address. SuiNS *leaf* subnames don't
+ * populate reverse resolution, so without this the app can't tell you already own
+ * a handle and re-prompts every load. Always forward-verify the cache on-chain
+ * before trusting it (a cache can go stale if the name is transferred/removed).
+ */
+const handleCacheKey = (a: string) => `sl-handle:${a.toLowerCase()}`;
+export function cacheOwnedHandle(address: string, bareHandle: string) {
+  if (typeof localStorage === "undefined") return;
+  try {
+    localStorage.setItem(handleCacheKey(address), bareHandle);
+  } catch {
+    /* private mode */
+  }
+}
+export function cachedBareHandle(address: string): string | null {
+  if (typeof localStorage === "undefined") return null;
+  try {
+    return localStorage.getItem(handleCacheKey(address));
+  } catch {
+    return null;
+  }
+}
+
+/** Full on-chain name for a bare handle, e.g. "swarnim" → "swarnim.streamline.sui". */
+export function fullHandleName(bareHandle: string): string {
+  return `${bareHandle}.${suinsDomain()}`;
+}
 
 /** Must match server CLAIM_PREFIX in /api/handle/claim. */
 export const CLAIM_MESSAGE_PREFIX = "streamline-claim-handle:";
@@ -60,7 +88,21 @@ export async function claimHandle(opts: {
     throw new Error(normalizeReasonMessage(parsed.reason));
   }
 
-  if (await isHandleTakenOnChain(opts.client, parsed.handle)) {
+  // If the name already exists, it's only a problem when it points at someone
+  // else. If it already resolves to *me* (claimed earlier, but leaf subnames don't
+  // reverse-resolve), treat it as owned — cache it and stop prompting.
+  const existing = await opts.client
+    .resolveNameServiceAddress({ name: fullHandleName(parsed.handle) })
+    .catch(() => null);
+  if (existing) {
+    if (existing.toLowerCase() === opts.address.toLowerCase()) {
+      cacheOwnedHandle(opts.address, parsed.handle);
+      return {
+        handle: parsed.handle,
+        displayName: formatHandle(parsed.handle),
+        status: "ACTIVE",
+      };
+    }
     throw new Error("That handle is already taken.");
   }
 
@@ -104,6 +146,7 @@ export async function claimHandle(opts: {
       "Handle is still provisioning. Wait a moment and try again."
     );
   }
+  cacheOwnedHandle(opts.address, json.handle ?? parsed.handle);
   return {
     handle: json.handle ?? parsed.handle,
     displayName: json.displayName ?? formatHandle(parsed.handle),

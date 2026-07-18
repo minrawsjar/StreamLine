@@ -17,7 +17,13 @@ import {
   useSignPersonalMessage,
 } from "@mysten/dapp-kit";
 
-import { claimHandle, fetchOwnedHandle } from "./claim-handle";
+import {
+  claimHandle,
+  fetchOwnedHandle,
+  cacheOwnedHandle,
+  cachedBareHandle,
+  fullHandleName,
+} from "./claim-handle";
 import {
   formatHandle,
   isStreamlineHandle,
@@ -74,6 +80,18 @@ function useMyHandleState(): MyHandleValue {
       if (fromChain && isStreamlineHandle(fromChain)) {
         setHandle(fromChain);
         return;
+      }
+      // Leaf subnames don't reverse-resolve; fall back to the local cache, but
+      // forward-verify it still points to us before trusting it.
+      const cachedBare = cachedBareHandle(account.address);
+      if (cachedBare) {
+        const target = await client
+          .resolveNameServiceAddress({ name: fullHandleName(cachedBare) })
+          .catch(() => null);
+        if (target && target.toLowerCase() === account.address.toLowerCase()) {
+          setHandle(formatHandle(cachedBare));
+          return;
+        }
       }
       const fromEnoki = await fetchOwnedHandle({
         address: account.address,
@@ -151,6 +169,7 @@ export function useMyHandle(): MyHandleValue {
 /** Debounced availability check for the claim form. */
 export function useHandleAvailability(raw: string) {
   const client = useSuiClient();
+  const account = useCurrentAccount();
   const [state, setState] = useState<{
     checking: boolean;
     available: boolean | null;
@@ -192,6 +211,24 @@ export function useHandleAvailability(raw: string) {
       try {
         const taken = await isHandleTakenOnChain(client, parsed.handle);
         if (cancelled) return;
+        // "Taken" by *you* isn't taken — leaf subnames don't reverse-resolve, so
+        // check the forward record and treat a self-owned name as claimable.
+        if (taken && account?.address) {
+          const target = await client
+            .resolveNameServiceAddress({ name: fullHandleName(parsed.handle) })
+            .catch(() => null);
+          if (cancelled) return;
+          if (target && target.toLowerCase() === account.address.toLowerCase()) {
+            cacheOwnedHandle(account.address, parsed.handle);
+            setState({
+              checking: false,
+              available: true,
+              message: `${formatHandle(parsed.handle)} is already yours ✓`,
+              handle: parsed.handle,
+            });
+            return;
+          }
+        }
         setState({
           checking: false,
           available: !taken,
@@ -215,7 +252,7 @@ export function useHandleAvailability(raw: string) {
       cancelled = true;
       window.clearTimeout(t);
     };
-  }, [raw, client]);
+  }, [raw, client, account?.address]);
 
   return state;
 }

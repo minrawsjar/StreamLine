@@ -24,6 +24,11 @@ export type OnrampMode = "buy" | "sell";
 const API_KEY = process.env.NEXT_PUBLIC_ONRAMPER_API_KEY?.trim() || "";
 const CRYPTO = process.env.NEXT_PUBLIC_ONRAMPER_CRYPTO?.trim() || "usdc_sui";
 
+// Sandbox keys (pk_test_…) only work against buy.onramper.dev; prod keys use .com.
+const WIDGET_HOST = API_KEY.startsWith("pk_test")
+  ? "buy.onramper.dev"
+  : "buy.onramper.com";
+
 /** Whether the Onramper key is configured (build-time NEXT_PUBLIC). */
 export const onramperConfigured = !!API_KEY;
 
@@ -43,7 +48,7 @@ function widgetUrl(mode: OnrampMode, address: string): string {
     p.set("sell_defaultCrypto", CRYPTO);
     p.set("sell_defaultFiat", "usd");
   }
-  return `https://buy.onramper.com/?${p.toString()}`;
+  return `https://${WIDGET_HOST}/?${p.toString()}`;
 }
 
 /** Full-screen modal hosting the Onramper iframe. Controlled. */
