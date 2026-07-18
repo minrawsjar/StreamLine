@@ -180,7 +180,7 @@ function WithdrawModal({ onClose }: { onClose: () => void }) {
 }
 
 function RebalanceModal({ onClose }: { onClose: () => void }) {
-  const { investTreasury, rebalance, totals, workspace, creating } =
+  const { investTreasury, divestTreasury, rebalance, totals, workspace, creating } =
     useProWorkspace();
   const [from, setFrom] = useState<ProPoolBucket>("idle");
   const [to, setTo] = useState<ProPoolBucket>("yield_vault");
@@ -399,6 +399,16 @@ function RebalanceModal({ onClose }: { onClose: () => void }) {
               ) {
                 try {
                   if (await investTreasury(clamped)) onClose();
+                } catch (e) {
+                  setErr(e instanceof Error ? e.message : String(e));
+                }
+                return;
+              }
+              // Yield → Liquid: real on-chain divest (redeems the whole vault
+              // position). The amount slider doesn't apply — divest is all-or-nothing.
+              if (from === "yield_vault" && to === "idle") {
+                try {
+                  if (await divestTreasury()) onClose();
                 } catch (e) {
                   setErr(e instanceof Error ? e.message : String(e));
                 }

@@ -27,6 +27,7 @@ import {
   buildTreasuryDeposit,
   buildTreasuryWithdraw,
   buildTreasuryDivestWithdraw,
+  buildTreasuryDivest,
   buildTreasuryInvest,
   buildSuspendPayroll,
   buildResumePayroll,
@@ -109,6 +110,8 @@ type ProWorkspaceContextValue = {
   withdrawTreasury: (amount: number) => Promise<boolean>;
   /** Move idle float into the yield vault on-chain. */
   investTreasury: (amount: number) => Promise<boolean>;
+  /** Redeem the whole yield-vault position back to liquid on-chain. */
+  divestTreasury: () => Promise<boolean>;
   /** True while a treasury/stream tx is in flight. */
   creating: boolean;
   fundPool: (amount: number) => void;
@@ -665,6 +668,35 @@ export function ProWorkspaceProvider({
     [workspace.treasuryId, runTreasuryTx, packageId, usdcType, address, yieldVaultId, mutate]
   );
 
+  // Redeem the entire yield-vault position back to liquid (the Yield → Liquid
+  // leg of Rebalance). treasury::divest is all-or-nothing on-chain.
+  const divestTreasury = useCallback(async (): Promise<boolean> => {
+    if (!workspace.treasuryId) throw new Error("Nothing invested to divest");
+    await runTreasuryTx(
+      buildTreasuryDivest({
+        packageId,
+        usdcType,
+        sender: address,
+        treasuryId: workspace.treasuryId,
+        vaultId: yieldVaultId,
+      }),
+      { kind: "rebalanced", label: "Redeemed yield vault into liquid", amount: 0 }
+    );
+    mutate((prev) => ({
+      ...prev,
+      investedPrincipal: 0,
+      pool: {
+        ...prev.pool,
+        allocation: {
+          ...prev.pool.allocation,
+          idle: prev.pool.allocation.idle + prev.pool.allocation.yield_vault,
+          yield_vault: 0,
+        },
+      },
+    }));
+    return true;
+  }, [workspace.treasuryId, runTreasuryTx, packageId, usdcType, address, yieldVaultId, mutate]);
+
   const fundPool = useCallback(
     (amount: number) => {
       if (amount <= 0) return;
@@ -985,6 +1017,7 @@ export function ProWorkspaceProvider({
     fundTreasury,
     withdrawTreasury,
     investTreasury,
+    divestTreasury,
     creating,
     fundPool,
     withdrawExcess,
