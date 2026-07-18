@@ -27,6 +27,52 @@ const CLOCK = "0x6";
 /** Route essentially all drips through the yield vault; payments draw from the pool. */
 export const DEFAULT_STREAM_YIELD_BPS = 9_999;
 
+export type CreateStreamFromTreasuryArgs = CreateStreamArgs & {
+  yieldBps: number;
+  treasuryId: string;
+  /** When set, calls `treasury::ensure_idle` first (divest if needed). */
+  vaultId?: string;
+};
+
+/**
+ * Hire from the org payroll pool: optionally ensure idle float, then
+ * `create_stream_from_treasury_v2` (stream starts dripping immediately).
+ */
+export function buildCreateStreamFromTreasuryV2(
+  a: CreateStreamFromTreasuryArgs
+): Transaction {
+  const tx = new Transaction();
+  tx.setSenderIfNotSet(a.sender);
+  if (a.vaultId) {
+    tx.moveCall({
+      target: `${a.packageId}::treasury::ensure_idle`,
+      typeArguments: [a.usdcType],
+      arguments: [
+        tx.object(a.treasuryId),
+        tx.object(a.vaultId),
+        tx.pure.u64(a.totalBase),
+        tx.object(CLOCK),
+      ],
+    });
+  }
+  tx.moveCall({
+    target: `${a.packageId}::stream::create_stream_from_treasury_v2`,
+    typeArguments: [a.usdcType],
+    arguments: [
+      tx.object(a.treasuryId),
+      tx.pure.address(a.freelancer),
+      tx.pure.vector("string", a.milestoneNames),
+      tx.pure.vector("u64", a.milestoneAmountsBase),
+      tx.pure.u64(a.durationMs),
+      tx.pure.u64(a.disputeWindowMs ?? DEFAULT_DISPUTE_WINDOW_MS),
+      tx.pure.bool(a.revocable ?? true),
+      tx.pure.u64(BigInt(a.yieldBps)),
+      tx.object(CLOCK),
+    ],
+  });
+  return tx;
+}
+
 // === Yield vault (Scallop-shaped) ===
 
 export type VaultRef = { packageId: string; usdcType: string; vaultId: string };
@@ -183,6 +229,45 @@ export function buildRaiseDispute(r: StreamRef): Transaction {
     target: `${r.packageId}::stream::raise_dispute`,
     typeArguments: [r.usdcType],
     arguments: [tx.object(r.streamId)],
+  });
+  return tx;
+}
+
+/** Org payroll hold (sender only) — settles accrued then freezes. */
+export function buildSuspendPayroll(r: StreamRef): Transaction {
+  const tx = new Transaction();
+  tx.moveCall({
+    target: `${r.packageId}::stream::suspend_payroll`,
+    typeArguments: [r.usdcType],
+    arguments: [tx.object(r.streamId), tx.object(CLOCK)],
+  });
+  return tx;
+}
+
+/** Org resumes a suspended payroll stream. */
+export function buildResumePayroll(r: StreamRef): Transaction {
+  const tx = new Transaction();
+  tx.moveCall({
+    target: `${r.packageId}::stream::resume_payroll`,
+    typeArguments: [r.usdcType],
+    arguments: [tx.object(r.streamId), tx.object(CLOCK)],
+  });
+  return tx;
+}
+
+/** Permanent stop; refund unearned balance to the payroll treasury. */
+export function buildStopPayroll(
+  r: StreamRef & { treasuryId: string }
+): Transaction {
+  const tx = new Transaction();
+  tx.moveCall({
+    target: `${r.packageId}::stream::stop_payroll`,
+    typeArguments: [r.usdcType],
+    arguments: [
+      tx.object(r.streamId),
+      tx.object(r.treasuryId),
+      tx.object(CLOCK),
+    ],
   });
   return tx;
 }

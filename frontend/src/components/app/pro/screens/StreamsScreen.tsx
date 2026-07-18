@@ -112,6 +112,10 @@ export function StreamsScreen() {
       <ProCard padding="sm">
         <div className="mb-3 flex items-center justify-between px-1.5 pt-1">
           <ProEyebrow>Live substreams</ProEyebrow>
+          <p className="mt-1 text-[12px] text-white/45">
+            Funded from the org treasury · pause / stop returns unearned capital
+            to the pool
+          </p>
           <span className="text-[11px] text-white/35">
             {workspace.workers.length} total
           </span>

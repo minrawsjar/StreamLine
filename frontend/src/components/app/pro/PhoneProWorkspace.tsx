@@ -1,12 +1,13 @@
 "use client";
 
-import { useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useCurrentAccount, useSuiClientQuery } from "@mysten/dapp-kit";
 
 import { useNetworkVariable } from "@/lib/networks";
 import { USDC_BASE } from "@/lib/stream-math";
 import { shortAddress } from "@/lib/format";
 import { useProWorkspace } from "./ProWorkspaceContext";
+import { onProAction } from "./pro-actions";
 import {
   YIELD_APY,
   bucketLabel,
@@ -14,35 +15,27 @@ import {
   groupCommitted,
   monthlyToPerSec,
 } from "./types";
+import {
+  OnramperModal,
+  onramperConfigured,
+  type OnrampMode,
+} from "@/components/wallet/OnramperWidget";
 import { ProActionModals } from "./modals/ProActionModals";
 import { StatusPill } from "./ui";
 import { ReportsScreen } from "./screens/ReportsScreen";
+import { ToolsScreen } from "./screens/ToolsScreen";
 
-type PhoneTab = "overview" | "streams" | "people" | "capital" | "reports";
+type PhoneTab = "overview" | "streams" | "people" | "treasury" | "tools" | "reports";
 
 export function PhoneProWorkspace() {
-  const { setModal } = useProWorkspace();
   const [tab, setTab] = useState<PhoneTab>("overview");
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
-  const [composeOpen, setComposeOpen] = useState(false);
 
-  const handlePlus = () => {
-    // Context-aware create: only Overview stays multimodal.
-    if (tab === "overview" || tab === "reports") {
-      setComposeOpen(true);
-      return;
-    }
-    if (tab === "people") {
-      setModal("worker");
-      return;
-    }
-    if (tab === "capital") {
-      setModal("fund");
-      return;
-    }
-    // streams → create a new substream
-    setModal("worker");
-  };
+  useEffect(() => {
+    return onProAction((action) => {
+      if (action === "compliance") setTab("reports");
+    });
+  }, []);
 
   return (
     <div className="relative flex min-h-0 flex-1 flex-col font-[family-name:var(--font-inter)]">
@@ -53,105 +46,52 @@ export function PhoneProWorkspace() {
             onToggle={(id) =>
               setExpanded((prev) => ({ ...prev, [id]: !prev[id] }))
             }
-            onOpenReports={() => setTab("reports")}
           />
         )}
         {tab === "streams" && <StreamsTab />}
         {tab === "people" && <PeopleTab />}
-        {tab === "capital" && <CapitalTab />}
-        {tab === "reports" && <ReportsTab />}
+        {tab === "treasury" && <TreasuryTab />}
+        {tab === "tools" && <ToolsScreen />}
+        {tab === "reports" && (
+          <ReportsTab onBack={() => setTab("overview")} />
+        )}
       </div>
 
-      <ProPhoneDock tab={tab} onTab={setTab} onCompose={handlePlus} />
-
-      {composeOpen ? (
-        <ComposeSheet
-          onClose={() => setComposeOpen(false)}
-          onPick={(action) => {
-            setComposeOpen(false);
-            if (action === "worker") {
-              setTab("people");
-              setModal("worker");
-            } else if (action === "group") {
-              setTab("people");
-              setModal("group");
-            } else if (action === "fund") {
-              setTab("capital");
-              setModal("fund");
-            }
-          }}
-        />
-      ) : null}
+      <ProPhoneDock tab={tab} onTab={setTab} />
 
       <ProActionModals />
     </div>
   );
 }
 
-/** Floating mobile dock: 4 destinations + center create. */
+/** Floating mobile dock: Overview · Treasury · Streams · People · Tools */
 function ProPhoneDock({
   tab,
   onTab,
-  onCompose,
 }: {
   tab: PhoneTab;
   onTab: (t: PhoneTab) => void;
-  onCompose: () => void;
 }) {
-  const left: { id: PhoneTab; label: string; icon: ReactNode }[] = [
+  const items: { id: PhoneTab; label: string; icon: ReactNode }[] = [
     { id: "overview", label: "Overview", icon: <IconOverview /> },
+    { id: "treasury", label: "Treasury", icon: <IconTreasury /> },
     { id: "streams", label: "Streams", icon: <IconStreams /> },
-  ];
-  const right: { id: PhoneTab; label: string; icon: ReactNode }[] = [
     { id: "people", label: "People", icon: <IconPeople /> },
-    { id: "capital", label: "Capital", icon: <IconCapital /> },
+    { id: "tools", label: "Tools", icon: <IconTools /> },
   ];
 
   return (
     <div className="relative z-20 shrink-0 px-1 pb-0.5 pt-3">
-      <div className="relative flex items-center justify-between rounded-[1.75rem] border border-white/[0.08] bg-[#171717]/96 px-1.5 py-1.5 shadow-[0_12px_36px_rgba(0,0,0,0.55)] backdrop-blur-xl">
-        <div className="flex flex-1 items-center justify-around">
-          {left.map((item) => (
-            <DockTab
-              key={item.id}
-              active={tab === item.id}
-              label={item.label}
-              icon={item.icon}
-              onClick={() => onTab(item.id)}
-            />
-          ))}
-        </div>
-
-        <div className="relative mx-0.5 flex w-[48px] shrink-0 items-center justify-center">
-          <button
-            type="button"
-            onClick={onCompose}
-            aria-label="Create"
-            className="absolute -top-3.5 flex h-[46px] w-[46px] items-center justify-center rounded-full bg-[#22c55e] text-white shadow-[0_8px_24px_rgba(34,197,94,0.4)] transition-transform active:scale-95"
-          >
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden>
-              <path
-                d="M12 5v14M5 12h14"
-                stroke="currentColor"
-                strokeWidth="2.4"
-                strokeLinecap="round"
-              />
-            </svg>
-          </button>
-          <span className="h-9 w-9" aria-hidden />
-        </div>
-
-        <div className="flex flex-1 items-center justify-around">
-          {right.map((item) => (
-            <DockTab
-              key={item.id}
-              active={tab === item.id}
-              label={item.label}
-              icon={item.icon}
-              onClick={() => onTab(item.id)}
-            />
-          ))}
-        </div>
+      <div className="relative flex items-center justify-around rounded-[1.75rem] border border-white/[0.08] bg-[#171717]/96 px-1.5 py-1.5 shadow-[0_12px_36px_rgba(0,0,0,0.55)] backdrop-blur-xl">
+        {items.map((item) => (
+          <DockTab
+            key={item.id}
+            active={tab === item.id}
+            label={item.label}
+            icon={item.icon}
+            onClick={() => onTab(item.id)}
+          />
+        ))}
       </div>
     </div>
   );
@@ -194,107 +134,17 @@ function DockTab({
   );
 }
 
-function ComposeSheet({
-  onClose,
-  onPick,
-}: {
-  onClose: () => void;
-  onPick: (action: "worker" | "group" | "fund") => void;
-}) {
+function IconTools() {
   return (
-    <div className="absolute inset-0 z-40 flex flex-col justify-end">
-      <button
-        type="button"
-        aria-label="Dismiss"
-        className="absolute inset-0 bg-black/55 backdrop-blur-[2px]"
-        onClick={onClose}
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden>
+      <path
+        d="M14.7 6.3a4 4 0 0 0-5.6 5.6L4 17l3 3 5.1-5.1a4 4 0 0 0 5.6-5.6l-2.5 2.5-2.5-2.5 2.5-2.5z"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
       />
-      <div className="relative mx-1 mb-1 rounded-[1.6rem] border border-white/[0.1] bg-[#151515] p-3.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.06),0_16px_40px_rgba(0,0,0,0.45)]">
-        <div className="mb-2.5 flex items-center justify-between px-0.5">
-          <div>
-            <p className="text-[8px] font-medium uppercase tracking-[0.18em] text-white/35">
-              Create
-            </p>
-            <p className="mt-0.5 text-[13px] font-semibold tracking-tight text-white">
-              Grow the payroll run
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-full border border-white/10 px-2 py-0.5 text-[9px] text-white/45"
-          >
-            Close
-          </button>
-        </div>
-
-        <div className="space-y-1.5">
-          <ComposeRow
-            title="Add recipient"
-            subtitle="New substream on the org pool"
-            onClick={() => onPick("worker")}
-          />
-          <ComposeRow
-            title="New stream group"
-            subtitle="Label a team — Engineering, Design…"
-            onClick={() => onPick("group")}
-          />
-          <ComposeRow
-            title="Fund & start"
-            subtitle="Deposit runway and activate pending"
-            accent
-            onClick={() => onPick("fund")}
-          />
-        </div>
-        <p className="mt-2.5 px-0.5 text-[9px] leading-snug text-white/30">
-          Allocate idle capital and withdraw excess on the Capital tab.
-        </p>
-      </div>
-    </div>
-  );
-}
-
-function ComposeRow({
-  title,
-  subtitle,
-  onClick,
-  accent,
-}: {
-  title: string;
-  subtitle: string;
-  onClick: () => void;
-  accent?: boolean;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`flex w-full items-center gap-3 rounded-xl border px-3 py-2.5 text-left transition-colors active:scale-[0.99] ${
-        accent
-          ? "border-white/20 bg-white text-[#0a0a0a]"
-          : "border-white/10 bg-white/[0.04] text-white hover:bg-white/[0.07]"
-      }`}
-    >
-      <span
-        className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[16px] font-light ${
-          accent ? "bg-[#0a0a0a]/8 text-white" : "bg-white/8 text-white/80"
-        }`}
-      >
-        +
-      </span>
-      <span className="min-w-0">
-        <span className="block text-[12px] font-semibold tracking-tight">
-          {title}
-        </span>
-        <span
-          className={`block text-[9px] leading-snug ${
-            accent ? "text-[#0a0a0a]/55" : "text-white/40"
-          }`}
-        >
-          {subtitle}
-        </span>
-      </span>
-    </button>
+    </svg>
   );
 }
 
@@ -345,7 +195,7 @@ function IconPeople() {
   );
 }
 
-function IconCapital() {
+function IconTreasury() {
   return (
     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden>
       <path
@@ -361,11 +211,9 @@ function IconCapital() {
 function OverviewTab({
   expanded,
   onToggle,
-  onOpenReports,
 }: {
   expanded: Record<string, boolean>;
   onToggle: (id: string) => void;
-  onOpenReports?: () => void;
 }) {
   const { workspace, totals, setModal } = useProWorkspace();
   const ungrouped = workspace.workers.filter((w) => !w.groupId);
@@ -392,7 +240,6 @@ function OverviewTab({
         ? 100
         : 0;
 
-  const greetName = workspace.orgName?.trim() || "Workspace";
   const periodLabel = new Date()
     .toLocaleDateString(undefined, { month: "short", year: "2-digit" })
     .toUpperCase();
@@ -459,85 +306,36 @@ function OverviewTab({
 
   return (
     <div className="flex flex-col gap-2.5 px-0.5 pb-1 pt-0.5">
-      {/* Payroll header */}
-      <header className="flex items-center justify-between gap-2 px-0.5">
-        <div className="flex min-w-0 items-center gap-2.5">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-[#22c55e]/80 to-[#166534] text-[12px] font-semibold text-white shadow-[0_4px_14px_rgba(34,197,94,0.25)]">
-            {greetName.slice(0, 1).toUpperCase()}
-          </div>
-          <div className="min-w-0">
-            <p className="truncate text-[13px] font-semibold tracking-tight text-white">
-              {greetName}
-            </p>
-            <p className="truncate text-[9px] text-white/40">
-              Payroll admin · {totals.active} live
-            </p>
-          </div>
-        </div>
-        <button
-          type="button"
-          aria-label="Reports"
-          className="sl-pro-icon-btn"
-          onClick={() => onOpenReports?.()}
-        >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden>
-            <path
-              d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"
-              stroke="currentColor"
-              strokeWidth="1.7"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-            <path
-              d="M14 2v6h6M8 13h8M8 17h5"
-              stroke="currentColor"
-              strokeWidth="1.7"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </svg>
-        </button>
-      </header>
-
-      {/* Balance + Fund */}
-      <div className="flex items-end justify-between gap-3 px-0.5">
-        <div className="min-w-0">
-          <p className="text-[9px] font-medium uppercase tracking-[0.14em] text-white/35">
-            Pool balance
-          </p>
-          <p className="mt-1 text-[1.85rem] font-semibold tabular leading-none tracking-tight text-white">
-            {fmtUsd(totals.displayTotal, totals.displayTotal % 1 ? 2 : 0)}
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={() => setModal("fund")}
-          className="inline-flex shrink-0 items-center gap-1 rounded-full bg-[#22c55e] px-3.5 py-2 text-[11px] font-semibold text-white shadow-[0_6px_18px_rgba(34,197,94,0.35)] transition-transform active:scale-[0.97]"
-        >
-          <span className="text-[13px] leading-none">+</span>
-          Fund
-        </button>
+      {/* Pool balance */}
+      <div className="px-0.5">
+        <p className="text-[9px] font-medium uppercase tracking-[0.14em] text-white/35">
+          Pool balance
+        </p>
+        <p className="mt-1 text-[1.85rem] font-semibold tabular leading-none tracking-tight text-white">
+          {fmtUsd(totals.displayTotal, totals.displayTotal % 1 ? 2 : 0)}
+        </p>
+        <p className="mt-1.5 text-[9px] text-white/35">
+          Manage funds on Treasury
+        </p>
       </div>
 
       {/* Finance hero — striped run chart */}
       <section className="sl-pro-card sl-pro-card--flush p-3.5">
-        <div className="flex items-center justify-between gap-2">
-          <p className="text-[10px] text-white/45">Total run</p>
-          <span className="sl-pro-chip !py-1 !text-[8px]">Live</span>
-        </div>
-
-        <div className="relative mt-1">
-          <div className="sl-pro-callout">
-            <p className="text-[13px] font-semibold tabular leading-none text-[#22c55e]">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-[10px] text-white/45">Total run</p>
+            <p className="mt-1.5 text-[1.15rem] font-semibold tabular leading-none text-[#22c55e]">
               {netPerSec >= 0 ? "+" : "−"}
               {coverPct}%
             </p>
-            <p className="mt-0.5 text-[8px] leading-snug text-white/40">
+            <p className="mt-1 text-[8px] leading-snug text-white/40">
               {netPerSec >= 0 ? "yield covering payroll" : "payroll ahead of yield"}
             </p>
-            <div className="sl-pro-callout-line" aria-hidden />
           </div>
+          <span className="sl-pro-chip shrink-0 !py-1 !text-[8px]">Live</span>
+        </div>
 
+        <div className="mt-3">
           <div className="sl-pro-bars">
             {bars.map((bar) => (
               <div
@@ -563,14 +361,14 @@ function OverviewTab({
                     aria-hidden
                   />
                 </div>
-                <span
-                  className={`sl-pro-bar-tag ${
-                    bar.hero ? "sl-pro-bar-tag--dark" : "sl-pro-bar-tag--light"
-                  }`}
-                >
-                  {bar.up ? "↗" : "↙"} {bar.label}
-                </span>
               </div>
+            ))}
+          </div>
+          <div className="mt-1.5 flex justify-between gap-1">
+            {bars.map((bar) => (
+              <p key={`lbl-${bar.key}`} className="sl-pro-bar-label flex-1">
+                {bar.up ? "↗" : "↙"} {bar.label}
+              </p>
             ))}
           </div>
         </div>
@@ -722,8 +520,8 @@ function OverviewTab({
             ))}
           </div>
 
-          <div className="sl-pro-donut-wrap shrink-0">
-            <svg viewBox="0 0 140 84" className="w-[7.25rem]" aria-hidden>
+          <div className="sl-pro-donut-wrap">
+            <svg viewBox="0 0 140 84" aria-hidden>
               <path
                 d="M16 78 A54 54 0 0 1 124 78"
                 fill="none"
@@ -746,11 +544,11 @@ function OverviewTab({
                 />
               ))}
             </svg>
-            <div className="pointer-events-none absolute inset-x-0 bottom-0 flex flex-col items-center pb-0.5">
+            <div className="sl-pro-donut-center">
               <p className="text-[7px] uppercase tracking-[0.14em] text-white/35">
                 Total
               </p>
-              <p className="text-[12px] font-semibold tabular leading-none text-white">
+              <p className="mt-0.5 text-[12px] font-semibold tabular leading-none text-white">
                 {compactUsd(totals.poolBalance)}
               </p>
             </div>
@@ -1128,14 +926,17 @@ function PeopleTab() {
   );
 }
 
-function ReportsTab() {
-  return <ReportsScreen />;
+function ReportsTab({ onBack }: { onBack: () => void }) {
+  return <ReportsScreen onBack={onBack} />;
 }
 
-function CapitalTab() {
+function TreasuryTab() {
   const { workspace, totals, setModal } = useProWorkspace();
+  const account = useCurrentAccount();
+  const [rampMode, setRampMode] = useState<OnrampMode | null>(null);
   const alloc = workspace.pool.allocation;
   const total = alloc.idle + alloc.yield_vault + alloc.reserve || 1;
+  const canRamp = onramperConfigured && !!account;
   const segments = [
     {
       key: "idle",
@@ -1166,7 +967,7 @@ function CapitalTab() {
         <div className="flex items-start justify-between gap-2">
           <div>
             <p className="text-[8px] font-medium uppercase tracking-[0.16em] text-white/40">
-              Capital
+              Treasury
             </p>
             <p className="mt-1.5 text-[1.45rem] font-semibold tabular leading-none text-white">
               {fmtUsd(totals.poolBalance)}
@@ -1222,23 +1023,56 @@ function CapitalTab() {
 
         <WalletBalanceRow />
 
-        <div className="mt-3 grid grid-cols-2 gap-1.5">
+        <div className="mt-4 flex flex-col gap-2">
           <button
             type="button"
-            onClick={() => setModal("withdraw")}
-            className="sl-glass-btn-dark !px-2 !py-2 !text-[9px]"
+            onClick={() => setModal("fund")}
+            className="flex w-full items-center justify-center rounded-2xl bg-[#22c55e] px-4 py-3.5 text-[13px] font-semibold tracking-tight text-white shadow-[0_8px_24px_rgba(34,197,94,0.35)] transition-transform active:scale-[0.98]"
           >
-            Withdraw
+            Fund
           </button>
-          <button
-            type="button"
-            onClick={() => setModal("invest")}
-            className="sl-glass-btn-dark sl-glass-btn-dark-primary !px-2 !py-2 !text-[9px]"
-          >
-            Allocate
-          </button>
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => setModal("withdraw")}
+              className="rounded-2xl border border-white/12 bg-white/[0.06] px-3 py-3.5 text-[13px] font-semibold tracking-tight text-white transition-colors active:bg-white/[0.1]"
+            >
+              Withdraw
+            </button>
+            <button
+              type="button"
+              onClick={() => setModal("invest")}
+              className="rounded-2xl border border-white/12 bg-white/[0.06] px-3 py-3.5 text-[13px] font-semibold tracking-tight text-white transition-colors active:bg-white/[0.1]"
+            >
+              Allocate
+            </button>
+          </div>
+          {canRamp ? (
+            <div className="grid grid-cols-2 gap-2 pt-0.5">
+              <button
+                type="button"
+                onClick={() => setRampMode("buy")}
+                className="rounded-xl border border-white/[0.08] bg-transparent px-2 py-2 text-[10px] font-medium text-white/50 transition-colors active:text-white/80"
+              >
+                Add funds
+              </button>
+              <button
+                type="button"
+                onClick={() => setRampMode("sell")}
+                className="rounded-xl border border-white/[0.08] bg-transparent px-2 py-2 text-[10px] font-medium text-white/50 transition-colors active:text-white/80"
+              >
+                Cash out
+              </button>
+            </div>
+          ) : null}
         </div>
       </section>
+
+      <OnramperModal
+        open={rampMode !== null}
+        mode={rampMode ?? "buy"}
+        onClose={() => setRampMode(null)}
+      />
     </div>
   );
 }

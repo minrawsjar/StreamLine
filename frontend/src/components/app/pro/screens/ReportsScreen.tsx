@@ -40,7 +40,7 @@ function daysAgoMs(days: number): number {
   return Date.now() - days * 86_400_000;
 }
 
-export function ReportsScreen() {
+export function ReportsScreen({ onBack }: { onBack?: () => void }) {
   const account = useCurrentAccount();
   const client = useSuiClient();
   const embedded = usePhoneEmbedded();
@@ -196,8 +196,31 @@ export function ReportsScreen() {
       }
     >
       <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <ProEyebrow>Compliance</ProEyebrow>
+        <div className="min-w-0">
+          {onBack && embedded ? (
+            <button
+              type="button"
+              onClick={onBack}
+              className="mb-2 inline-flex items-center gap-1.5 rounded-full border border-white/12 bg-white/[0.04] px-2.5 py-1 text-[10px] font-medium text-white/70 transition-colors hover:bg-white/[0.08] hover:text-white"
+            >
+              <svg
+                width="12"
+                height="12"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden
+              >
+                <path d="M15 18l-6-6 6-6" />
+              </svg>
+              Overview
+            </button>
+          ) : (
+            <ProEyebrow>Compliance</ProEyebrow>
+          )}
           <h1 className="mt-1 text-xl font-semibold tracking-tight text-white md:text-2xl">
             Reports & audit
           </h1>

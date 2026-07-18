@@ -190,7 +190,7 @@ pub async fn streams_needing_state_sync(pool: &PgPool) -> Result<Vec<String>> {
         // `paused` is included so a dispute resolved on-chain (→ dripping on
         // resume, or → done on split) gets re-read; otherwise the stream is
         // stuck showing PAUSED in the UI forever.
-        r#"SELECT id FROM streams WHERE state IN ('dripping', 'pending_review', 'locked', 'paused')
+        r#"SELECT id FROM streams WHERE state IN ('dripping', 'pending_review', 'locked', 'paused', 'suspended')
            AND state <> 'done' LIMIT 50"#,
     )
     .fetch_all(pool)
@@ -230,8 +230,14 @@ pub async fn apply_drip(
 }
 
 pub async fn set_paused(pool: &PgPool, stream_id: &str) -> Result<()> {
-    sqlx::query("UPDATE streams SET state='paused', updated_at=now() WHERE id=$1")
+    set_stream_status(pool, stream_id, "paused").await
+}
+
+/// Update only the `state` column (payroll suspend/resume/stop events).
+pub async fn set_stream_status(pool: &PgPool, stream_id: &str, state: &str) -> Result<()> {
+    sqlx::query("UPDATE streams SET state=$2, updated_at=now() WHERE id=$1")
         .bind(stream_id)
+        .bind(state)
         .execute(pool)
         .await?;
     Ok(())

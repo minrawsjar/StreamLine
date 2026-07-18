@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import type { ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
 import { useCurrentAccount } from "@mysten/dapp-kit";
 
 import { usePhoneEmbedded } from "@/components/app/phone/PhoneEmbeddedContext";
@@ -11,6 +11,7 @@ import { ProActionModals } from "./modals/ProActionModals";
 import { ProOnboarding } from "./ProOnboarding";
 import { ProWorkspaceProvider } from "./ProWorkspaceContext";
 import { useNeedsHandleOnboarding } from "@/lib/use-handle-onboarding";
+import { exitProDemoMode, useProDemoMode } from "@/lib/pro-demo-mode";
 
 const NAV = [
   { href: "/app/pro", label: "Overview", match: "exact" as const },
@@ -18,6 +19,7 @@ const NAV = [
   { href: "/app/pro/people", label: "People", match: "prefix" as const },
   { href: "/app/pro/treasury", label: "Treasury", match: "prefix" as const },
   { href: "/app/pro/reports", label: "Reports", match: "prefix" as const },
+  { href: "/app/pro/tools", label: "Tools", match: "prefix" as const },
 ];
 
 function navActive(pathname: string | null, href: string, match: "exact" | "prefix") {
@@ -90,6 +92,20 @@ function DesktopShell({ children }: { children: ReactNode }) {
 export function ProShell({ children }: { children: ReactNode }) {
   const account = useCurrentAccount();
   const { needsStep } = useNeedsHandleOnboarding();
+  const demo = useProDemoMode();
+
+  // Real wallet wins — drop explore-demo fixtures.
+  useEffect(() => {
+    if (account) exitProDemoMode();
+  }, [account]);
+
+  if (demo && !account) {
+    return (
+      <ProWorkspaceProvider demo>
+        <DesktopShell>{children}</DesktopShell>
+      </ProWorkspaceProvider>
+    );
+  }
   if (!account || needsStep) return <ProOnboarding />;
   return (
     <ProWorkspaceProvider>
@@ -103,6 +119,19 @@ export function ProPhoneAppRoot() {
   const embedded = usePhoneEmbedded();
   const account = useCurrentAccount();
   const { needsStep } = useNeedsHandleOnboarding();
+  const demo = useProDemoMode();
+
+  useEffect(() => {
+    if (account) exitProDemoMode();
+  }, [account]);
+
+  if (demo && !account) {
+    return (
+      <ProWorkspaceProvider demo>
+        <PhoneProWorkspace />
+      </ProWorkspaceProvider>
+    );
+  }
   if (!account || needsStep) return <ProOnboarding embedded={!!embedded} />;
   return (
     <ProWorkspaceProvider>

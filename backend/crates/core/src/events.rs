@@ -10,6 +10,9 @@ pub const EV_MILESTONE_RAISED: &str = "MilestoneRaised";
 pub const EV_MILESTONE_APPROVED: &str = "MilestoneApproved";
 pub const EV_DRIPPED: &str = "StreamDripped";
 pub const EV_PAUSED: &str = "StreamPaused";
+pub const EV_SUSPENDED: &str = "StreamSuspended";
+pub const EV_RESUMED: &str = "StreamResumed";
+pub const EV_STOPPED: &str = "StreamStopped";
 pub const EV_RESOLUTION_PROPOSED: &str = "ResolutionProposed";
 pub const EV_DISPUTE_RESOLVED: &str = "DisputeResolved";
 
@@ -54,6 +57,23 @@ pub struct StreamPaused {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StreamSuspended {
+    pub stream_id: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StreamResumed {
+    pub stream_id: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StreamStopped {
+    pub stream_id: String,
+    pub freelancer_paid: u64,
+    pub refunded: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ResolutionProposed {
     pub stream_id: String,
     pub proposer: String,
@@ -78,6 +98,9 @@ pub enum StreamEvent {
     MilestoneApproved(MilestoneApproved),
     Dripped(StreamDripped),
     Paused(StreamPaused),
+    Suspended(StreamSuspended),
+    Resumed(StreamResumed),
+    Stopped(StreamStopped),
     ResolutionProposed(ResolutionProposed),
     DisputeResolved(DisputeResolved),
 }
@@ -91,6 +114,9 @@ impl StreamEvent {
             StreamEvent::MilestoneApproved(e) => &e.stream_id,
             StreamEvent::Dripped(e) => &e.stream_id,
             StreamEvent::Paused(e) => &e.stream_id,
+            StreamEvent::Suspended(e) => &e.stream_id,
+            StreamEvent::Resumed(e) => &e.stream_id,
+            StreamEvent::Stopped(e) => &e.stream_id,
             StreamEvent::ResolutionProposed(e) => &e.stream_id,
             StreamEvent::DisputeResolved(e) => &e.stream_id,
         }

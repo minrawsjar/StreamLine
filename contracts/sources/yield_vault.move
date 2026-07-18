@@ -1,5 +1,6 @@
-/// StreamLine — Scallop-shaped yield vault (testnet stand-in).
+/// StreamLine — native yield adapter (Scallop-shaped; testnet stand-in).
 ///
+/// This is the default approved adapter in `protocol_registry` (`native_vault`).
 /// Scallop is mainnet-only, so on testnet we mirror its lending interface with a
 /// minimal interest-bearing vault. Scallop's `mint(version, market, coin, clock)
 /// -> Coin<MarketCoin<T>>` / `redeem(...) -> Coin<T>` maps to our
@@ -7,7 +8,7 @@
 /// share receipt, watch it accrue, redeem for principal + interest. Yield comes
 /// from a continuously-compounding index (`apr_bps`), paid out of a pre-funded
 /// reserve buffer. On mainnet these calls swap 1:1 for `scallop_protocol::mint`/
-/// `redeem`; the StreamLine yield split leg routes here either way.
+/// `redeem` behind a dedicated adapter package registered in `protocol_registry`.
 module streamline::yield_vault;
 
 use sui::balance::{Self, Balance};

@@ -48,6 +48,7 @@ export function AccountMenu({
   variant = "default",
   profilePro = false,
   onExportActivity,
+  onCompliance,
 }: {
   className?: string;
   showFaucet?: boolean;
@@ -56,6 +57,8 @@ export function AccountMenu({
   profilePro?: boolean;
   /** Opens in-phone export flow (User app). */
   onExportActivity?: () => void;
+  /** Opens Pro compliance / reports. */
+  onCompliance?: () => void;
 }) {
   const account = useCurrentAccount();
   const { currentWallet } = useCurrentWallet();
@@ -497,3 +500,109 @@ export function AccountMenu({
     </div>
   );
 }
+
+/** Profile icon menu while exploring Pro demo (no wallet). */
+export function DemoProfileMenu({
+  profilePro = true,
+  onExitDemo,
+  onSignIn,
+}: {
+  profilePro?: boolean;
+  onExitDemo: () => void;
+  onSignIn?: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const dark = profilePro;
+
+  useEffect(() => {
+    const onClick = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    window.addEventListener("mousedown", onClick);
+    return () => window.removeEventListener("mousedown", onClick);
+  }, []);
+
+  return (
+    <div
+      className="relative"
+      ref={ref}
+      data-sl-cursor={profilePro ? "on-dark" : "on-light"}
+    >
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className={profileIconButtonClass(profilePro)}
+        aria-label="Demo profile"
+        aria-expanded={open}
+      >
+        <ProfileIcon />
+      </button>
+
+      {open ? (
+        <div
+          className={`absolute right-0 z-50 mt-2 w-[220px] overflow-hidden rounded-2xl border shadow-xl ${
+            dark
+              ? "border-white/10 bg-[#141414] text-white"
+              : "border-black/10 bg-white text-[#111]"
+          }`}
+        >
+          <div className="px-3 py-3">
+            <p
+              className={`text-[8px] font-medium uppercase tracking-[0.16em] ${
+                dark ? "text-white/40" : "text-[#888]"
+              }`}
+            >
+              Demo
+            </p>
+            <p
+              className={`mt-1 text-[13px] font-semibold tracking-tight ${
+                dark ? "text-white" : "text-[#111]"
+              }`}
+            >
+              Sample payroll
+            </p>
+            <p
+              className={`mt-0.5 text-[10px] leading-snug ${
+                dark ? "text-white/40" : "text-[#888]"
+              }`}
+            >
+              Explore without a wallet. Sign in anytime to start fresh.
+            </p>
+          </div>
+          <div
+            className={`flex flex-col gap-2 border-t px-3 py-3 ${
+              dark ? "border-white/8" : "border-black/6"
+            }`}
+          >
+            {onSignIn ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setOpen(false);
+                  onSignIn();
+                }}
+                className={profileBtnSecondary(dark)}
+              >
+                Sign in
+              </button>
+            ) : null}
+            <button
+              type="button"
+              onClick={() => {
+                setOpen(false);
+                onExitDemo();
+              }}
+              className={profileBtnPrimary(dark)}
+            >
+              Exit demo
+            </button>
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+

@@ -36,7 +36,7 @@ export type ProWorker = {
   startedAt?: number;
   pausedAt?: number;
   totalPausedMs?: number;
-  /** On-chain stream id once funded via `create_stream_v2` (undefined = local only). */
+  /** On-chain stream id once funded from treasury (undefined = local only). */
   streamId?: string;
 };
 
@@ -48,6 +48,7 @@ export function streamStateToWorkerStatus(
     case "dripping":
       return "dripping";
     case "paused":
+    case "suspended":
       return "paused";
     case "done":
       return "stopped";

@@ -9,6 +9,11 @@ import type { StreamRequestParams } from "@/lib/request-link";
 import { useNeedsHandleOnboarding } from "@/lib/use-handle-onboarding";
 import { ScanIconButton } from "./PhoneHeaderActions";
 import { ProTitleWithDemo } from "@/components/app/pro/ProHeaderExtras";
+import {
+  enterProDemoMode,
+  exitProDemoMode,
+  useProDemoMode,
+} from "@/lib/pro-demo-mode";
 import { PhoneLauncher } from "./PhoneLauncher";
 import { PhoneUserApp } from "./PhoneUserApp";
 import { PhoneProApp } from "./PhoneProApp";
@@ -42,13 +47,14 @@ function readStoredRequest(): StreamRequestParams | null {
 export function PhoneAppShell({ route, onNavigate }: PhoneAppShellProps) {
   const account = useCurrentAccount();
   const { needsStep } = useNeedsHandleOnboarding();
+  const proDemo = useProDemoMode();
   const isPro = route === "pro";
   const isScan = route === "scan";
   const isFulfill = route === "fulfill";
   const isRequest = route === "request";
   const isCreate = route === "create";
   /** Full-bleed onboarding — hide shell chrome until wallet + name step done. */
-  const proOnboarding = isPro && (!account || needsStep);
+  const proOnboarding = isPro && !proDemo && (!account || needsStep);
   const userOnboarding = route === "user" && (!account || needsStep);
   const appOnboarding = proOnboarding || userOnboarding;
   const inWorkspace =
@@ -163,7 +169,15 @@ export function PhoneAppShell({ route, onNavigate }: PhoneAppShellProps) {
             </span>
           </div>
         )}
-        {!appOnboarding && route !== "launcher" && (
+        {appOnboarding && isPro && !account ? (
+          <button
+            type="button"
+            onClick={() => enterProDemoMode()}
+            className="shrink-0 text-[11px] font-medium tracking-tight text-white/45 transition-colors hover:text-white/80"
+          >
+            Explore demo
+          </button>
+        ) : !appOnboarding && route !== "launcher" ? (
           <div className="flex shrink-0 items-center gap-1.5">
             {!isPro && !isScan && !isFulfill && !isRequest && !isCreate && (
               <ScanIconButton onClick={openScan} />
@@ -173,12 +187,19 @@ export function PhoneAppShell({ route, onNavigate }: PhoneAppShellProps) {
               showFaucetInMenu
               faucetAmount={isPro ? 10000 : 1000}
               profilePro={isPro}
+              connectModal={isPro ? "pro" : "default"}
+              containedModal
               onExportActivity={
                 !isPro ? () => setExportOpen(true) : undefined
               }
+              onExitDemo={
+                isPro && proDemo && !account
+                  ? () => exitProDemoMode()
+                  : undefined
+              }
             />
           </div>
-        )}
+        ) : null}
       </div>
 
       <div

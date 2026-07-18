@@ -1,5 +1,13 @@
 "use client";
 
+import { useState } from "react";
+import { useCurrentAccount } from "@mysten/dapp-kit";
+
+import {
+  OnramperModal,
+  onramperConfigured,
+  type OnrampMode,
+} from "@/components/wallet/OnramperWidget";
 import { useProWorkspace } from "../ProWorkspaceContext";
 import { YIELD_APY, bucketLabel, fmtUsd } from "../types";
 import {
@@ -11,9 +19,12 @@ import {
 
 export function TreasuryScreen() {
   const { workspace, totals, setModal, resetDemo } = useProWorkspace();
+  const account = useCurrentAccount();
+  const [rampMode, setRampMode] = useState<OnrampMode | null>(null);
   const alloc = workspace.pool.allocation;
   const invested = alloc.yield_vault + alloc.reserve;
   const apyHint = `${(YIELD_APY * 100).toFixed(0)}% APR on yield vault`;
+  const canRamp = onramperConfigured && !!account;
 
   return (
     <div className="space-y-6">
@@ -24,28 +35,59 @@ export function TreasuryScreen() {
             Idle capital & yield
           </h1>
           <p className="mt-1 max-w-xl text-[13px] text-white/45">
-            Unclaimed payroll float can sit liquid for claims or ride in
-            StreamLine’s yield vault. Coverage floor stays reserved for drip
+            Fund the pool, on/off-ramp fiat, withdraw to the org wallet, or
+            allocate idle float. Coverage floor stays reserved for drip
             liquidity.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
           <button
             type="button"
+            className="sl-glass-btn-dark sl-glass-btn-dark-primary !px-4 !py-2 !text-[11px]"
+            onClick={() => setModal("fund")}
+          >
+            Fund pool
+          </button>
+          {canRamp ? (
+            <>
+              <button
+                type="button"
+                className="sl-glass-btn-dark !px-4 !py-2 !text-[11px]"
+                onClick={() => setRampMode("buy")}
+              >
+                Add funds
+              </button>
+              <button
+                type="button"
+                className="sl-glass-btn-dark !px-4 !py-2 !text-[11px]"
+                onClick={() => setRampMode("sell")}
+              >
+                Cash out
+              </button>
+            </>
+          ) : null}
+          <button
+            type="button"
             className="sl-glass-btn-dark !px-4 !py-2 !text-[11px]"
             onClick={() => setModal("withdraw")}
           >
-            Withdraw excess
+            Withdraw
           </button>
           <button
             type="button"
-            className="sl-glass-btn-dark sl-glass-btn-dark-primary !px-4 !py-2 !text-[11px]"
+            className="sl-glass-btn-dark !px-4 !py-2 !text-[11px]"
             onClick={() => setModal("invest")}
           >
-            Allocate capital
+            Allocate
           </button>
         </div>
       </div>
+
+      <OnramperModal
+        open={rampMode !== null}
+        mode={rampMode ?? "buy"}
+        onClose={() => setRampMode(null)}
+      />
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <ProStat

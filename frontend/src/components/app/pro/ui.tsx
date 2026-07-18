@@ -64,13 +64,16 @@ export function ProStat({
   hint?: string;
   accent?: boolean;
 }) {
+  const embedded = usePhoneEmbedded();
   return (
     <ProCard padding="sm">
-      <ProEyebrow>{label}</ProEyebrow>
+      <ProEyebrow className={embedded ? "!tracking-[0.12em]" : ""}>
+        {label}
+      </ProEyebrow>
       <p
-        className={`mt-2.5 text-[1.45rem] font-semibold tabular tracking-tight ${
-          accent ? "text-[#1d9e75]" : "text-white"
-        }`}
+        className={`mt-2 font-semibold tabular tracking-tight ${
+          embedded ? "text-[1.05rem] leading-tight" : "mt-2.5 text-[1.45rem]"
+        } ${accent ? "text-[#1d9e75]" : "text-white"}`}
       >
         {value}
       </p>

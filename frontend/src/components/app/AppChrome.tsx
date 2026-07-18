@@ -10,6 +10,7 @@ import { OnramperButton } from "@/components/wallet/OnramperWidget";
 import { TokenBalance } from "@/components/wallet/TokenBalance";
 import { StreamLineMark } from "@/components/landing/StreamLineMark";
 import { ProActionButtons, ProTitleWithDemo } from "@/components/app/pro/ProHeaderExtras";
+import { exitProDemoMode, useProDemoMode } from "@/lib/pro-demo-mode";
 
 export function AppChrome({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -17,6 +18,7 @@ export function AppChrome({ children }: { children: React.ReactNode }) {
   const { network } = useSuiClientContext();
   const isLauncher = pathname === "/app" || pathname === "/app/";
   const isPro = pathname?.startsWith("/app/pro");
+  const proDemo = useProDemoMode();
 
   return (
     <div
@@ -71,10 +73,20 @@ export function AppChrome({ children }: { children: React.ReactNode }) {
           <WalletButton
             showFaucetInMenu
             faucetAmount={isPro ? 10000 : 1000}
+            profilePro={isPro}
+            variant={isPro && proDemo && !account ? "profile" : "default"}
+            connectModal={isPro ? "pro" : "default"}
+            onExitDemo={
+              isPro && proDemo && !account
+                ? () => exitProDemoMode()
+                : undefined
+            }
             className={
-              isPro
+              isPro && !(proDemo && !account)
                 ? "sl-glass-btn-dark !px-4 !py-2 !text-[10px]"
-                : "inline-flex items-center rounded-full border border-[#2b2a5e]/15 bg-white px-4 py-2 text-[10px] uppercase tracking-[0.12em] text-[#2b2a5e] transition-colors hover:bg-[#f7f7fb]"
+                : isPro
+                  ? undefined
+                  : "inline-flex items-center rounded-full border border-[#2b2a5e]/15 bg-white px-4 py-2 text-[10px] uppercase tracking-[0.12em] text-[#2b2a5e] transition-colors hover:bg-[#f7f7fb]"
             }
           />
         </div>

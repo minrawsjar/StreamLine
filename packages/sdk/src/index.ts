@@ -52,9 +52,11 @@ export {
 export {
   buildCreateStream,
   buildCreateStreamV2,
+  buildCreateStreamFromTreasuryV2,
   DEFAULT_DISPUTE_WINDOW_MS,
   findCreatedStreamId,
   type CreateStreamArgs,
+  type CreateStreamFromTreasuryArgs,
 } from "./tx/create-stream.js";
 
 export {

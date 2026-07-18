@@ -1,4 +1,9 @@
-export type ProHeaderAction = "fund" | "withdraw" | "invest" | "analytics";
+export type ProHeaderAction =
+  | "fund"
+  | "withdraw"
+  | "invest"
+  | "analytics"
+  | "compliance";
 
 const EVENT = "sl-pro-action";
 

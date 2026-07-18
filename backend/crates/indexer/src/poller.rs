@@ -35,6 +35,7 @@ fn state_label(code: u64) -> &'static str {
         2 => "dripping",
         3 => "paused",
         4 => "done",
+        5 => "suspended",
         _ => "locked",
     }
 }
@@ -301,6 +302,77 @@ async fn process_event(
             state.publish(LiveUpdate::State {
                 stream_id: id,
                 state: "paused".into(),
+            });
+        }
+        EV_SUSPENDED => {
+            let id = id_field(j, "stream_id");
+            db::set_stream_status(&state.pool, &id, "suspended").await?;
+            let (sender, freelancer) = parties(state, &id).await;
+            audit(
+                state,
+                "payroll_suspended",
+                "stream",
+                &id,
+                &sender,
+                &freelancer,
+                0,
+                0,
+                json!({}),
+                now,
+                digest,
+            )
+            .await?;
+            state.publish(LiveUpdate::State {
+                stream_id: id,
+                state: "suspended".into(),
+            });
+        }
+        EV_RESUMED => {
+            let id = id_field(j, "stream_id");
+            db::set_stream_status(&state.pool, &id, "dripping").await?;
+            let (sender, freelancer) = parties(state, &id).await;
+            audit(
+                state,
+                "payroll_resumed",
+                "stream",
+                &id,
+                &sender,
+                &freelancer,
+                0,
+                0,
+                json!({}),
+                now,
+                digest,
+            )
+            .await?;
+            state.publish(LiveUpdate::State {
+                stream_id: id,
+                state: "dripping".into(),
+            });
+        }
+        EV_STOPPED => {
+            let id = id_field(j, "stream_id");
+            let paid = u64_field(j, "freelancer_paid");
+            let refunded = u64_field(j, "refunded");
+            db::set_stream_status(&state.pool, &id, "done").await?;
+            let (sender, freelancer) = parties(state, &id).await;
+            audit(
+                state,
+                "payroll_stopped",
+                "stream",
+                &id,
+                &sender,
+                &freelancer,
+                paid as i64,
+                refunded as i64,
+                json!({ "freelancer_paid": paid, "refunded": refunded }),
+                now,
+                digest,
+            )
+            .await?;
+            state.publish(LiveUpdate::State {
+                stream_id: id,
+                state: "done".into(),
             });
         }
         EV_RESOLUTION_PROPOSED => {

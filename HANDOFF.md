@@ -320,3 +320,36 @@ no side channel:
   needs a human + wallet. If `fullProve` ever hangs in-browser, switch `prove` to the
   split `wtns.calculate`+`groth16.prove` path (as the node test scripts do).
 - Optional "pool yield" readout from `invested_value` (Phase 3) in the panel.
+
+---
+
+## 11. Payroll pool (Treasury → worker streams) — 2026-07-18
+
+Verdict vs Sweem: **don't** copy `StreamPool` table-of-employees. **Do** make
+Treasury the capital pool and fund per-worker `Stream` legs from it.
+
+### On-chain (`contracts/sources/`)
+- `stream::create_stream_from_treasury_v2` — withdraw from treasury, lock into a
+  stream that **starts DRIPPING**, tags stream with treasury id (DF).
+- `stream::suspend_payroll` / `resume_payroll` / `stop_payroll` (+ `stop_stream`
+  for wallet-funded). Suspend settles accrued first; stop refunds remainder to
+  treasury. Distinct from dispute `STATE_PAUSED` (mutual resolve).
+- Confidential twins: `create_confidential_stream_from_treasury_v2`,
+  `conf_suspend_payroll` / `conf_resume_payroll` /
+  `conf_refund_remainder_to_treasury` (unwrap proof — privacy preserved).
+- `treasury::ensure_idle` — divest yield if hire needs more liquid float.
+- `protocol_registry` — allow-list for yield adapters; `yield_vault` remains the
+  native/testnet adapter (`native_vault`). Real Scallop/Navi adapters = mainnet
+  follow-up behind the same registry.
+- Test: `contracts/tests/payroll_pool_tests.move` (needs `sui` CLI).
+
+### Frontend / SDK / indexer
+- Pro hire: `buildCreateStreamFromTreasuryV2` (ensure_idle + create).
+- Pause/resume/stop call on-chain when `worker.streamId` is set.
+- Enoki allowlist updated for new entry fns.
+- Indexer: `StreamSuspended` / `StreamResumed` / `StreamStopped`; state code `5`.
+
+### Deploy note
+Package upgrade required before Pro hire-from-treasury works on testnet. After
+upgrade, refresh `published-at`, `TESTNET_PACKAGE`, Enoki allowlist on the
+sponsor, and re-deploy indexer.

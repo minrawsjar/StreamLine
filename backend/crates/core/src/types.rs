@@ -11,7 +11,8 @@ pub const USDC_BASE: u64 = 1_000_000;
 /// it; at the old 0.01 USDC floor, gas rivalled the amount being streamed.
 pub const MIN_DRIP_BASE: u64 = 1_000_000;
 
-/// On-chain stream state machine (LOCKED → PENDING → DRIPPING → PAUSED → DONE).
+/// On-chain stream state machine
+/// (LOCKED → PENDING → DRIPPING → PAUSED/SUSPENDED → DONE).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum StreamState {
@@ -20,6 +21,8 @@ pub enum StreamState {
     Dripping,
     Paused,
     Done,
+    /// Org payroll hold (sender can resume alone).
+    Suspended,
 }
 
 impl StreamState {
@@ -30,6 +33,7 @@ impl StreamState {
             StreamState::Dripping => "dripping",
             StreamState::Paused => "paused",
             StreamState::Done => "done",
+            StreamState::Suspended => "suspended",
         }
     }
 
@@ -40,6 +44,7 @@ impl StreamState {
             2 => Some(StreamState::Dripping),
             3 => Some(StreamState::Paused),
             4 => Some(StreamState::Done),
+            5 => Some(StreamState::Suspended),
             _ => None,
         }
     }

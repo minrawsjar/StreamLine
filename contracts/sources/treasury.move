@@ -1,14 +1,16 @@
-/// StreamLine — org treasury (the "Pro pool").
+/// StreamLine — org treasury (the payroll pool).
 ///
 /// A per-org float of coin `T`: deposit idle USDC, withdraw it, or park it in the
-/// `yield_vault` to earn while unclaimed. One shared object per org; anyone may
-/// top it up (`deposit`), but only the owner may `withdraw` / `invest` / `divest`.
-/// The invested position is held as a single `VaultReceipt<T>` — `invest`
-/// consolidates any prior position so we never accumulate receipts.
+/// native `yield_vault` adapter to earn while unallocated. One shared object per
+/// org; anyone may top it up (`deposit`), but only the owner may `withdraw` /
+/// `invest` / `divest`. The invested position is held as a single
+/// `VaultReceipt<T>` — `invest` consolidates any prior position so we never
+/// accumulate receipts.
 ///
-/// ponytail: treasury holds the yield-earning float only; worker streams are
-/// still funded from the org wallet. Add `create_stream_from_treasury` in
-/// `stream.move` if you want substreams to draw straight from the pool.
+/// Payroll model: **Treasury = capital pool**, worker legs are normal `Stream`s
+/// funded via `stream::create_stream_from_treasury_v2` (and the confidential
+/// twin). `ensure_idle` pulls invested yield back when a hire needs more float
+/// than currently liquid.
 module streamline::treasury;
 
 use sui::balance::{Self, Balance};
@@ -112,6 +114,25 @@ public fun divest<T>(
     let amount = back.value();
     t.idle.join(back.into_balance());
     event::emit(Divested { treasury_id: object::id(t), amount });
+}
+
+/// Make sure at least `amount` sits in idle float, divesting the yield position
+/// if needed. Used before payroll hires so a single PTB can fund a stream from
+/// the pool even when capital is earning.
+public fun ensure_idle<T>(
+    t: &mut Treasury<T>,
+    vault: &mut YieldVault<T>,
+    amount: u64,
+    clock: &Clock,
+    ctx: &mut TxContext,
+) {
+    assert!(ctx.sender() == t.owner, ENotOwner);
+    assert!(amount > 0, EZeroAmount);
+    if (t.idle.value() >= amount) return;
+    if (t.invested.is_some()) {
+        divest(t, vault, clock, ctx);
+    };
+    assert!(t.idle.value() >= amount, EInsufficientIdle);
 }
 
 // === Views ===

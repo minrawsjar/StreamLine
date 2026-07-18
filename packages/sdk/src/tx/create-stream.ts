@@ -69,6 +69,52 @@ export function buildCreateStreamV2(
   return tx;
 }
 
+export type CreateStreamFromTreasuryArgs = CreateStreamArgs & {
+  yieldBps: number;
+  treasuryId: string;
+  /** When set, calls `treasury::ensure_idle` first (divest if needed). */
+  vaultId?: string;
+};
+
+/**
+ * Hire from the org payroll pool: optionally ensure idle float, then
+ * `create_stream_from_treasury_v2` (stream starts dripping immediately).
+ */
+export function buildCreateStreamFromTreasuryV2(
+  a: CreateStreamFromTreasuryArgs
+): Transaction {
+  const tx = new Transaction();
+  tx.setSenderIfNotSet(a.sender);
+  if (a.vaultId) {
+    tx.moveCall({
+      target: `${a.packageId}::treasury::ensure_idle`,
+      typeArguments: [a.usdcType],
+      arguments: [
+        tx.object(a.treasuryId),
+        tx.object(a.vaultId),
+        tx.pure.u64(a.totalBase),
+        tx.object(CLOCK),
+      ],
+    });
+  }
+  tx.moveCall({
+    target: `${a.packageId}::stream::create_stream_from_treasury_v2`,
+    typeArguments: [a.usdcType],
+    arguments: [
+      tx.object(a.treasuryId),
+      tx.pure.address(a.freelancer),
+      tx.pure.vector("string", a.milestoneNames),
+      tx.pure.vector("u64", a.milestoneAmountsBase),
+      tx.pure.u64(a.durationMs),
+      tx.pure.u64(a.disputeWindowMs ?? DEFAULT_DISPUTE_WINDOW_MS),
+      tx.pure.bool(a.revocable ?? true),
+      tx.pure.u64(BigInt(a.yieldBps)),
+      tx.object(CLOCK),
+    ],
+  });
+  return tx;
+}
+
 /** Find a created `Stream<T>` object id from transaction effects. */
 export function findCreatedStreamId(
   objectChanges:

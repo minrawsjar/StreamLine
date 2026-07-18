@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useCurrentAccount } from "@mysten/dapp-kit";
 
 import { ConnectModal } from "./ConnectModal";
-import { AccountMenu } from "./AccountMenu";
+import { AccountMenu, DemoProfileMenu } from "./AccountMenu";
 
 /**
  * StreamLine wallet entry point. Shows the connected account menu when a
@@ -21,6 +21,8 @@ export function WalletButton({
   connectModal = "default",
   containedModal = false,
   onExportActivity,
+  onCompliance,
+  onExitDemo,
 }: {
   className?: string;
   showFaucetInMenu?: boolean;
@@ -34,6 +36,9 @@ export function WalletButton({
   /** Keep the modal inside the phone / Pro shell instead of document.body. */
   containedModal?: boolean;
   onExportActivity?: () => void;
+  onCompliance?: () => void;
+  /** Pro explore-demo: show profile menu with Exit demo instead of Connect. */
+  onExitDemo?: () => void;
 }) {
   const [mounted, setMounted] = useState(false);
   const [open, setOpen] = useState(false);
@@ -67,7 +72,26 @@ export function WalletButton({
         variant={variant}
         profilePro={profilePro}
         onExportActivity={onExportActivity}
+        onCompliance={onCompliance}
       />
+    );
+  }
+
+  if (onExitDemo) {
+    return (
+      <>
+        <DemoProfileMenu
+          profilePro={profilePro || variant === "profile"}
+          onExitDemo={onExitDemo}
+          onSignIn={() => setOpen(true)}
+        />
+        <ConnectModal
+          open={open}
+          onClose={() => setOpen(false)}
+          variant={connectModal}
+          contained={containedModal}
+        />
+      </>
     );
   }
 

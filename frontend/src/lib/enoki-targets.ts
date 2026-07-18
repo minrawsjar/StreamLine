@@ -8,22 +8,32 @@ import { PACKAGE_IDS, TEST_USDC, type NetworkName } from "./constants";
 const STREAM_FUNCTIONS = [
   "create_stream",
   "create_stream_v2",
+  "create_stream_from_treasury_v2",
   "drip_with_yield",
   "raise_completion",
   "approve_milestone",
   "cancel",
+  "cancel_to_treasury",
   "drip",
   "raise_dispute",
+  "suspend_payroll",
+  "resume_payroll",
+  "stop_payroll",
+  "stop_stream",
   "propose_resolution",
   "accept_resolution",
   "set_splits",
   // Confidential streaming (amounts hidden, Groth16-verified on-chain).
   "create_confidential_stream",
   "create_confidential_stream_v2",
+  "create_confidential_stream_from_treasury_v2",
   "confidential_drip",
   "confidential_drip_v2",
   "claim",
   "confidential_dispute",
+  "conf_suspend_payroll",
+  "conf_resume_payroll",
+  "conf_refund_remainder_to_treasury",
   "conf_propose_resolution",
   "conf_accept_resolution",
   "conf_raise_completion",
@@ -51,6 +61,12 @@ export function allowedMoveCallTargets(network: NetworkName): string[] {
     targets.push(`${pkg}::treasury::withdraw`);
     targets.push(`${pkg}::treasury::invest`);
     targets.push(`${pkg}::treasury::divest`);
+    targets.push(`${pkg}::treasury::ensure_idle`);
+    // Yield adapter allow-list (native vault today; more adapters on mainnet).
+    targets.push(`${pkg}::protocol_registry::create`);
+    targets.push(`${pkg}::protocol_registry::approve_native`);
+    targets.push(`${pkg}::protocol_registry::approve`);
+    targets.push(`${pkg}::protocol_registry::revoke`);
     // Lazy confidential stream (gasless create/settle/claim).
     targets.push(`${pkg}::lazy_stream::create`);
     targets.push(`${pkg}::lazy_stream::settle`);

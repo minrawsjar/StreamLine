@@ -14,15 +14,20 @@ use sui::clock::Clock;
 use sui::coin::{Self, Coin};
 use sui::dynamic_field as df;
 use sui::event;
+use sui::option::{Self, Option};
 use streamline::confidential_balance;
+use streamline::treasury::{Self as treasury, Treasury};
 use streamline::yield_vault::{Self, YieldVault};
 
 // === State machine ===
 const STATE_LOCKED: u8 = 0;
 const STATE_PENDING_REVIEW: u8 = 1;
 const STATE_DRIPPING: u8 = 2;
+/// Mutual dispute — resume only via propose/accept_resolution.
 const STATE_PAUSED: u8 = 3;
 const STATE_DONE: u8 = 4;
+/// Org payroll hold — sender can resume alone (distinct from dispute PAUSED).
+const STATE_SUSPENDED: u8 = 5;
 
 /// Gasless floor: 0.01 USDC = 10_000 base units (6 decimals).
 const MIN_DRIP: u64 = 10_000;
@@ -30,6 +35,11 @@ const MIN_DRIP: u64 = 10_000;
 const BPS_DENOM: u64 = 10_000;
 /// Keeper tip: 1 bps of each settled amount.
 const TIP_BPS: u64 = 1;
+
+/// Dynamic-field keys (layout-compatible upgrades).
+const PROPOSAL_KEY: vector<u8> = b"dispute_proposal";
+/// Payroll streams funded from a treasury refund here on stop.
+const TREASURY_KEY: vector<u8> = b"payroll_treasury";
 
 // === Errors ===
 const EWrongState: u64 = 0;
@@ -40,6 +50,7 @@ const EBadDuration: u64 = 4;
 const ENoMilestones: u64 = 5;
 const ENotDue: u64 = 6;
 const ENoAccess: u64 = 7;
+const EWrongTreasury: u64 = 8;
 
 // === Objects ===
 
@@ -118,6 +129,20 @@ public struct StreamDripped has copy, drop {
 
 public struct StreamPaused has copy, drop {
     stream_id: ID,
+}
+
+public struct StreamSuspended has copy, drop {
+    stream_id: ID,
+}
+
+public struct StreamResumed has copy, drop {
+    stream_id: ID,
+}
+
+public struct StreamStopped has copy, drop {
+    stream_id: ID,
+    freelancer_paid: u64,
+    refunded: u64,
 }
 
 /// A proposed way out of a PAUSED dispute. Mutual resolve: one party proposes,
@@ -296,6 +321,82 @@ public fun create_stream_v2<T>(
         splits,
     };
     let stream_id = object::id(&stream);
+    event::emit(StreamCreated { stream_id, sender, freelancer, total, n_milestones: n });
+    let cap = StreamCap { id: object::new(ctx), stream_id, revocable };
+    transfer::public_transfer(cap, sender);
+    transfer::share_object(stream);
+}
+
+/// Fund a worker stream straight from the org treasury (payroll pool → leg).
+/// Pulls `sum(milestone_amounts)` from idle float, locks it into a normal
+/// `create_stream_v2` stream, and tags the stream with the treasury id so
+/// `stop_payroll` / `cancel_to_treasury` refund unearned capital to the pool.
+/// Call `treasury::ensure_idle` in the same PTB first if capital is invested.
+#[allow(lint(self_transfer))]
+public fun create_stream_from_treasury_v2<T>(
+    treasury_obj: &mut Treasury<T>,
+    freelancer: address,
+    milestone_names: vector<String>,
+    milestone_amounts: vector<u64>,
+    duration_ms: u64,
+    dispute_window_ms: u64,
+    revocable: bool,
+    yield_bps: u64,
+    clock: &Clock,
+    ctx: &mut TxContext,
+) {
+    assert!(duration_ms > 0, EBadDuration);
+    assert!(yield_bps < BPS_DENOM, EBadSplits);
+    let n = milestone_amounts.length();
+    assert!(n > 0 && milestone_names.length() == n, ENoMilestones);
+
+    let mut milestones: vector<Milestone> = vector[];
+    let mut total = 0;
+    let mut i = 0;
+    while (i < n) {
+        let amount = milestone_amounts[i];
+        assert!(amount >= MIN_DRIP, EMilestoneTooSmall);
+        total = total + amount;
+        milestones.push_back(Milestone { name: milestone_names[i], amount });
+        i = i + 1;
+    };
+
+    let payment = treasury::withdraw(treasury_obj, total, ctx);
+    let drip_interval_ms =
+        ceil_div((MIN_DRIP as u128) * (duration_ms as u128), total as u128);
+    let sender = ctx.sender();
+    let now = clock.timestamp_ms();
+
+    let mut splits: vector<SplitLeg> = vector[];
+    if (yield_bps == 0) {
+        splits.push_back(SplitLeg { destination: freelancer, weight_bps: BPS_DENOM, yield_flag: false });
+    } else {
+        splits.push_back(SplitLeg {
+            destination: freelancer, weight_bps: BPS_DENOM - yield_bps, yield_flag: false,
+        });
+        splits.push_back(SplitLeg { destination: freelancer, weight_bps: yield_bps, yield_flag: true });
+    };
+
+    let mut stream = Stream<T> {
+        id: object::new(ctx),
+        sender,
+        freelancer,
+        balance: payment.into_balance(),
+        total,
+        // Payroll legs accrue immediately (no milestone raise gate).
+        state: STATE_DRIPPING,
+        milestones,
+        current_milestone: 0,
+        milestone_paid: 0,
+        duration_ms,
+        drip_interval_ms,
+        last_drip_ms: now,
+        review_deadline_ms: 0,
+        dispute_window_ms,
+        splits,
+    };
+    let stream_id = object::id(&stream);
+    df::add(&mut stream.id, TREASURY_KEY, object::id(treasury_obj));
     event::emit(StreamCreated { stream_id, sender, freelancer, total, n_milestones: n });
     let cap = StreamCap { id: object::new(ctx), stream_id, revocable };
     transfer::public_transfer(cap, sender);
@@ -521,6 +622,114 @@ public fun raise_dispute<T>(stream: &mut Stream<T>, ctx: &TxContext) {
     event::emit(StreamPaused { stream_id: object::id(stream) });
 }
 
+/// Org payroll hold (sender only). Settles accrued earnings first, then freezes
+/// so suspended time does not accrue. Resume does not need counterparty consent
+/// (unlike dispute `STATE_PAUSED`).
+public fun suspend_payroll<T>(
+    stream: &mut Stream<T>,
+    clock: &Clock,
+    ctx: &mut TxContext,
+) {
+    assert!(ctx.sender() == stream.sender, ENotAuthorized);
+    assert!(
+        stream.state == STATE_PENDING_REVIEW || stream.state == STATE_DRIPPING,
+        EWrongState,
+    );
+    if (stream.state == STATE_DRIPPING) {
+        settle_accrued_to_freelancer(stream, clock, ctx);
+    };
+    // Fully settled during the accrual flush — nothing left to hold.
+    if (stream.state == STATE_DONE) {
+        event::emit(StreamSuspended { stream_id: object::id(stream) });
+        return
+    };
+    stream.state = STATE_SUSPENDED;
+    event::emit(StreamSuspended { stream_id: object::id(stream) });
+}
+
+/// Org resumes a suspended payroll stream (sender only).
+public fun resume_payroll<T>(stream: &mut Stream<T>, clock: &Clock, ctx: &TxContext) {
+    assert!(ctx.sender() == stream.sender, ENotAuthorized);
+    assert!(stream.state == STATE_SUSPENDED, EWrongState);
+    stream.state = STATE_DRIPPING;
+    stream.last_drip_ms = clock.timestamp_ms();
+    stream.review_deadline_ms = 0;
+    event::emit(StreamResumed { stream_id: object::id(stream) });
+}
+
+/// Permanent stop for a treasury-funded stream: settle accrued to the worker,
+/// refund the rest to the payroll pool. Worker keeps everything already paid.
+public fun stop_payroll<T>(
+    stream: &mut Stream<T>,
+    treasury_obj: &mut Treasury<T>,
+    clock: &Clock,
+    ctx: &mut TxContext,
+) {
+    assert!(ctx.sender() == stream.sender, ENotAuthorized);
+    assert!(
+        stream.state == STATE_LOCKED
+            || stream.state == STATE_PENDING_REVIEW
+            || stream.state == STATE_DRIPPING
+            || stream.state == STATE_SUSPENDED,
+        EWrongState,
+    );
+    assert!(df::exists(&stream.id, TREASURY_KEY), EWrongTreasury);
+    let tid: ID = *df::borrow(&stream.id, TREASURY_KEY);
+    assert!(tid == object::id(treasury_obj), EWrongTreasury);
+
+    let mut paid = 0;
+    if (stream.state == STATE_DRIPPING) {
+        paid = settle_accrued_to_freelancer(stream, clock, ctx);
+    };
+
+    let refunded = stream.balance.value();
+    if (refunded > 0) {
+        let part = stream.balance.split(refunded);
+        treasury::deposit(treasury_obj, coin::from_balance(part, ctx));
+    };
+    stream.state = STATE_DONE;
+    event::emit(StreamStopped {
+        stream_id: object::id(stream),
+        freelancer_paid: paid,
+        refunded,
+    });
+}
+
+/// Permanent stop for a wallet-funded stream: settle accrued, refund remainder
+/// to the sender wallet.
+public fun stop_stream<T>(
+    stream: &mut Stream<T>,
+    clock: &Clock,
+    ctx: &mut TxContext,
+) {
+    assert!(ctx.sender() == stream.sender, ENotAuthorized);
+    assert!(
+        stream.state == STATE_LOCKED
+            || stream.state == STATE_PENDING_REVIEW
+            || stream.state == STATE_DRIPPING
+            || stream.state == STATE_SUSPENDED,
+        EWrongState,
+    );
+    assert!(!df::exists(&stream.id, TREASURY_KEY), EWrongTreasury);
+
+    let mut paid = 0;
+    if (stream.state == STATE_DRIPPING) {
+        paid = settle_accrued_to_freelancer(stream, clock, ctx);
+    };
+
+    let refunded = stream.balance.value();
+    if (refunded > 0) {
+        let part = stream.balance.split(refunded);
+        transfer::public_transfer(coin::from_balance(part, ctx), stream.sender);
+    };
+    stream.state = STATE_DONE;
+    event::emit(StreamStopped {
+        stream_id: object::id(stream),
+        freelancer_paid: paid,
+        refunded,
+    });
+}
+
 /// Client cancels a revocable stream and reclaims the unstreamed balance.
 public fun cancel<T>(cap: StreamCap, stream: &mut Stream<T>, ctx: &mut TxContext) {
     assert!(cap.stream_id == object::id(stream), ENotAuthorized);
@@ -535,9 +744,30 @@ public fun cancel<T>(cap: StreamCap, stream: &mut Stream<T>, ctx: &mut TxContext
     id.delete();
 }
 
-// === Dispute resolution (mutual) ===
+/// Like `cancel`, but refunds unstreamed balance into the payroll treasury that
+/// originally funded the stream.
+public fun cancel_to_treasury<T>(
+    cap: StreamCap,
+    stream: &mut Stream<T>,
+    treasury_obj: &mut Treasury<T>,
+    ctx: &mut TxContext,
+) {
+    assert!(cap.stream_id == object::id(stream), ENotAuthorized);
+    assert!(cap.revocable, ENotAuthorized);
+    assert!(df::exists(&stream.id, TREASURY_KEY), EWrongTreasury);
+    let tid: ID = *df::borrow(&stream.id, TREASURY_KEY);
+    assert!(tid == object::id(treasury_obj), EWrongTreasury);
+    let amount = stream.balance.value();
+    if (amount > 0) {
+        let refund = stream.balance.split(amount);
+        treasury::deposit(treasury_obj, coin::from_balance(refund, ctx));
+    };
+    stream.state = STATE_DONE;
+    let StreamCap { id, stream_id: _, revocable: _ } = cap;
+    id.delete();
+}
 
-const PROPOSAL_KEY: vector<u8> = b"dispute_proposal";
+// === Dispute resolution (mutual) ===
 
 /// Propose how to end a dispute on a PAUSED stream — either resume it, or split
 /// the remaining locked balance (`freelancer_bps` to the freelancer, the rest
@@ -624,6 +854,16 @@ public fun state<T>(s: &Stream<T>): u8 { s.state }
 
 public fun is_dripping<T>(s: &Stream<T>): bool { s.state == STATE_DRIPPING }
 
+public fun is_suspended<T>(s: &Stream<T>): bool { s.state == STATE_SUSPENDED }
+
+public fun payroll_treasury_id<T>(s: &Stream<T>): Option<ID> {
+    if (df::exists(&s.id, TREASURY_KEY)) {
+        option::some(*df::borrow(&s.id, TREASURY_KEY))
+    } else {
+        option::none()
+    }
+}
+
 public fun remaining<T>(s: &Stream<T>): u64 { s.balance.value() }
 
 public fun current_milestone<T>(s: &Stream<T>): u64 { s.current_milestone }
@@ -641,6 +881,55 @@ fun ceil_div(a: u128, b: u128): u64 {
 /// `amount * bps / 10_000`, computed in u128 to avoid overflow.
 fun mul_bps(amount: u64, bps: u64): u64 {
     (((amount as u128) * (bps as u128) / (BPS_DENOM as u128)) as u64)
+}
+
+/// Pay accrued-since-last-drip to the freelancer (no keeper tip). Used by
+/// suspend/stop so earned time is never clawed back. Caps at milestone remainder
+/// and locked balance. Returns 0 when nothing ≥ MIN_DRIP is due.
+fun settle_accrued_to_freelancer<T>(
+    stream: &mut Stream<T>,
+    clock: &Clock,
+    ctx: &mut TxContext,
+): u64 {
+    if (stream.state != STATE_DRIPPING) return 0;
+    if (stream.current_milestone >= stream.milestones.length()) return 0;
+
+    let now = clock.timestamp_ms();
+    let elapsed = now - stream.last_drip_ms;
+    let accrued =
+        (((stream.total as u128) * (elapsed as u128)) / (stream.duration_ms as u128)) as u64;
+    let milestone_amount = stream.milestones[stream.current_milestone].amount;
+    let milestone_remaining = milestone_amount - stream.milestone_paid;
+    let mut pay = accrued;
+    if (pay > milestone_remaining) pay = milestone_remaining;
+    let bal = stream.balance.value();
+    if (pay > bal) pay = bal;
+    if (pay < MIN_DRIP) {
+        // Still advance watermark so suspend doesn't leave a dangling accrual.
+        stream.last_drip_ms = now;
+        return 0
+    };
+
+    let part = stream.balance.split(pay);
+    transfer::public_transfer(coin::from_balance(part, ctx), stream.freelancer);
+    stream.milestone_paid = stream.milestone_paid + pay;
+    stream.last_drip_ms = now;
+    event::emit(StreamDripped {
+        stream_id: object::id(stream),
+        amount: pay,
+        timestamp_ms: now,
+    });
+
+    if (stream.milestone_paid >= milestone_amount) {
+        stream.milestone_paid = 0;
+        stream.current_milestone = stream.current_milestone + 1;
+        if (stream.current_milestone >= stream.milestones.length()) {
+            stream.state = STATE_DONE;
+        } else {
+            stream.state = STATE_LOCKED;
+        };
+    };
+    pay
 }
 
 // === Confidential streaming (amounts hidden via Groth16) ===
@@ -724,6 +1013,7 @@ public fun create_confidential_stream<T>(
         earned_commitment,
         dispute_window_ms,
         vector[],
+        option::none(),
         ctx,
     );
 }
@@ -753,6 +1043,37 @@ public fun create_confidential_stream_v2<T>(
         earned_commitment,
         dispute_window_ms,
         encrypted_secrets,
+        option::none(),
+        ctx,
+    );
+}
+
+/// Privacy-preserving payroll hire: fund a confidential stream from the org
+/// treasury. Amount stays hidden (wrap proof); capital still leaves the pool.
+#[allow(lint(self_transfer))]
+public fun create_confidential_stream_from_treasury_v2<T>(
+    treasury_obj: &mut Treasury<T>,
+    amount: u64,
+    freelancer: address,
+    n_milestones: u64,
+    remaining_commitment: vector<u8>,
+    wrap_proof: vector<u8>,
+    earned_commitment: vector<u8>,
+    dispute_window_ms: u64,
+    encrypted_secrets: vector<u8>,
+    ctx: &mut TxContext,
+) {
+    let payment = treasury::withdraw(treasury_obj, amount, ctx);
+    new_confidential_stream(
+        payment,
+        freelancer,
+        n_milestones,
+        remaining_commitment,
+        wrap_proof,
+        earned_commitment,
+        dispute_window_ms,
+        encrypted_secrets,
+        option::some(object::id(treasury_obj)),
         ctx,
     );
 }
@@ -767,6 +1088,7 @@ fun new_confidential_stream<T>(
     earned_commitment: vector<u8>,
     dispute_window_ms: u64,
     encrypted_secrets: vector<u8>,
+    treasury_id: Option<ID>,
     ctx: &mut TxContext,
 ) {
     assert!(n_milestones > 0, ENoMilestones);
@@ -788,6 +1110,11 @@ fun new_confidential_stream<T>(
     };
     if (encrypted_secrets.length() > 0) {
         set_secrets(&mut stream, encrypted_secrets);
+    };
+    if (option::is_some(&treasury_id)) {
+        df::add(&mut stream.id, TREASURY_KEY, option::destroy_some(treasury_id));
+    } else {
+        option::destroy_none(treasury_id);
     };
     let stream_id = object::id(&stream);
     event::emit(ConfStreamCreated { stream_id, sender, freelancer, n_milestones });
@@ -986,6 +1313,59 @@ public fun confidential_dispute<T>(stream: &mut ConfidentialStream<T>, ctx: &TxC
     assert!(stream.state == STATE_DRIPPING, EWrongState);
     stream.state = STATE_PAUSED;
     event::emit(StreamPaused { stream_id: object::id(stream) });
+}
+
+/// Org payroll hold on a confidential stream (sender only). Drips freeze;
+/// freelancer can still `claim` already-earned (hidden) balances.
+public fun conf_suspend_payroll<T>(stream: &mut ConfidentialStream<T>, ctx: &TxContext) {
+    assert!(ctx.sender() == stream.sender, ENotAuthorized);
+    assert!(
+        stream.state == STATE_DRIPPING || stream.state == STATE_PENDING_REVIEW,
+        EWrongState,
+    );
+    stream.state = STATE_SUSPENDED;
+    event::emit(StreamSuspended { stream_id: object::id(stream) });
+}
+
+/// Org resumes a suspended confidential payroll stream.
+public fun conf_resume_payroll<T>(stream: &mut ConfidentialStream<T>, ctx: &TxContext) {
+    assert!(ctx.sender() == stream.sender, ENotAuthorized);
+    assert!(stream.state == STATE_SUSPENDED, EWrongState);
+    stream.state = STATE_DRIPPING;
+    set_review_deadline(stream, 0);
+    event::emit(StreamResumed { stream_id: object::id(stream) });
+}
+
+/// After a confidential suspend/stop intent: refund unearned remainder to the
+/// payroll treasury. Requires an unwrap proof of `remaining_commitment` so the
+/// amount stays private until this cash-out. Freelancer should `claim` earned
+/// first; this only burns the remaining commitment.
+public fun conf_refund_remainder_to_treasury<T>(
+    stream: &mut ConfidentialStream<T>,
+    treasury_obj: &mut Treasury<T>,
+    amount: u64,
+    unwrap_proof: vector<u8>,
+    reset_commitment: vector<u8>,
+    ctx: &mut TxContext,
+) {
+    assert!(ctx.sender() == stream.sender, ENotAuthorized);
+    assert!(stream.state == STATE_SUSPENDED, EWrongState);
+    assert!(df::exists(&stream.id, TREASURY_KEY), EWrongTreasury);
+    let tid: ID = *df::borrow(&stream.id, TREASURY_KEY);
+    assert!(tid == object::id(treasury_obj), EWrongTreasury);
+    confidential_balance::verify_unwrap(stream.remaining_commitment, amount, unwrap_proof);
+    assert!(stream.reserve.value() >= amount, ENotDue);
+    stream.remaining_commitment = reset_commitment;
+    let part = stream.reserve.split(amount);
+    treasury::deposit(treasury_obj, coin::from_balance(part, ctx));
+    if (stream.reserve.value() == 0) {
+        stream.state = STATE_DONE;
+    };
+    event::emit(StreamStopped {
+        stream_id: object::id(stream),
+        freelancer_paid: 0,
+        refunded: amount,
+    });
 }
 
 /// Propose a mutual resolution for a PAUSED confidential stream. A split divides

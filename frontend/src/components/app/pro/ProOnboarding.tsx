@@ -8,6 +8,7 @@ import { OnboardingConnectActions } from "@/components/wallet/OnboardingConnectA
 import { OnboardingChooseName } from "@/components/app/OnboardingChooseName";
 import { useNeedsHandleOnboarding } from "@/lib/use-handle-onboarding";
 import { useStickyAccount } from "@/lib/use-sticky-account";
+import { enterProDemoMode } from "@/lib/pro-demo-mode";
 
 type Step = 0 | 1 | 2 | 3;
 
@@ -72,6 +73,7 @@ function OnboardingFrame({
   backdrop,
   actions,
   overlay,
+  topRight,
   children,
 }: {
   shell: string;
@@ -79,6 +81,8 @@ function OnboardingFrame({
   actions: ReactNode;
   /** Portaled UI that must fill the phone shell (e.g. connect sheet). */
   overlay?: ReactNode;
+  /** Desktop-only corner control (phone uses shell header). */
+  topRight?: ReactNode;
   children: ReactNode;
 }) {
   return (
@@ -87,6 +91,9 @@ function OnboardingFrame({
       data-sl-cursor="on-dark"
     >
       {backdrop}
+      {topRight ? (
+        <div className="absolute right-5 top-[18px] z-20 md:right-6">{topRight}</div>
+      ) : null}
       <div className="relative z-10 flex min-h-0 flex-1 flex-col px-1 pb-2 pt-2 sm:px-2 sm:pb-3 sm:pt-3">
         <div className="flex min-h-0 flex-1 flex-col justify-end">{children}</div>
         {actions ? <div className="mt-7 shrink-0 sm:mt-8">{actions}</div> : null}
@@ -270,6 +277,17 @@ export function ProOnboarding({ embedded = false }: ProOnboardingProps) {
     <OnboardingFrame
       shell={shell}
       backdrop={<WaveBackdrop variant="scale" />}
+      topRight={
+        embedded ? undefined : (
+          <button
+            type="button"
+            onClick={() => enterProDemoMode()}
+            className="text-[12px] font-medium tracking-tight text-white/45 transition-colors hover:text-white/80"
+          >
+            Explore demo
+          </button>
+        )
+      }
       overlay={
         <ConnectModal
           open={connectOpen}

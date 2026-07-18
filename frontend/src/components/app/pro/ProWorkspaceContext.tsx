@@ -22,12 +22,15 @@ import { useStreams, type StreamRecord } from "@/lib/indexer";
 import { useGaslessExecute } from "@/lib/use-gasless";
 import { useNetworkVariable } from "@/lib/networks";
 import {
-  buildCreateStreamV2,
+  buildCreateStreamFromTreasuryV2,
   buildOpenTreasury,
   buildTreasuryDeposit,
   buildTreasuryWithdraw,
   buildTreasuryDivestWithdraw,
   buildTreasuryInvest,
+  buildSuspendPayroll,
+  buildResumePayroll,
+  buildStopPayroll,
   DEFAULT_STREAM_YIELD_BPS,
 } from "@/lib/streamline-tx";
 import { findCreatedTreasury, useTreasuryState } from "@/lib/treasury";
@@ -71,6 +74,8 @@ type ModalKind =
 
 type ProWorkspaceContextValue = {
   address: string;
+  /** True when browsing seeded sample payroll without a wallet. */
+  isDemo: boolean;
   workspace: ProWorkspace;
   hydrated: boolean;
   tick: number;
@@ -95,8 +100,8 @@ type ProWorkspaceContextValue = {
     status?: ProWorkerStatus;
   }) => void;
   deleteWorker: (workerId: string) => void;
-  setWorkerStatus: (workerId: string, status: ProWorkerStatus) => void;
-  /** Lock the worker's budget on-chain (`create_stream_v2`) and record the stream id. */
+  setWorkerStatus: (workerId: string, status: ProWorkerStatus) => Promise<boolean>;
+  /** Lock the worker's budget from the treasury pool and record the stream id. */
   createWorkerStream: (workerId: string) => Promise<boolean>;
   /** Deposit USDC into the on-chain treasury (opens one on first use). */
   fundTreasury: (amount: number) => Promise<boolean>;
@@ -127,25 +132,37 @@ type ProWorkspaceContextValue = {
 
 const ProWorkspaceContext = createContext<ProWorkspaceContextValue | null>(null);
 
-export function ProWorkspaceProvider({ children }: { children: ReactNode }) {
+export function ProWorkspaceProvider({
+  children,
+  demo = false,
+}: {
+  children: ReactNode;
+  /** Explore-demo mode: seeded sample payroll, no wallet required. */
+  demo?: boolean;
+}) {
   const account = useCurrentAccount();
   const address = account?.address ?? "";
-  const [workspace, setWorkspace] = useState<ProWorkspace>(() => ({
-    version: 2,
-    orgName: "",
-    groups: [],
-    workers: [],
-    pool: {
-      token: "USDC",
-      funded: 0,
-      streamed: 0,
-      allocation: { ...EMPTY_ALLOCATION },
-      coverageWeeks: 2,
-    },
-    activity: [],
-    yieldEarned: 0,
-    updatedAt: 0,
-  }));
+  const isDemo = demo && !address;
+  const [workspace, setWorkspace] = useState<ProWorkspace>(() =>
+    isDemo
+      ? seedWorkspace()
+      : {
+          version: 2,
+          orgName: "",
+          groups: [],
+          workers: [],
+          pool: {
+            token: "USDC",
+            funded: 0,
+            streamed: 0,
+            allocation: { ...EMPTY_ALLOCATION },
+            coverageWeeks: 2,
+          },
+          activity: [],
+          yieldEarned: 0,
+          updatedAt: 0,
+        }
+  );
   const [hydrated, setHydrated] = useState(false);
   const [tick, setTick] = useState(0);
   const [modal, setModal] = useState<ModalKind>(null);
@@ -164,24 +181,30 @@ export function ProWorkspaceProvider({ children }: { children: ReactNode }) {
   const { data: treasury, dataUpdatedAt: treasuryUpdatedAt } = useTreasuryState(suiClient, {
     packageId,
     usdcType,
-    treasuryId: workspace.treasuryId,
+    treasuryId: isDemo ? undefined : workspace.treasuryId,
     vaultId: yieldVaultId,
     sender: address,
   });
 
   useEffect(() => {
+    if (isDemo) {
+      setWorkspace(seedWorkspace());
+      setHydrated(true);
+      return;
+    }
     if (!address) {
       setHydrated(true);
       return;
     }
+    // Real login: persisted workspace or empty — never auto-seed mock payroll.
     setWorkspace(loadProWorkspace(address));
     setHydrated(true);
-  }, [address]);
+  }, [address, isDemo]);
 
   useEffect(() => {
-    if (!hydrated || !address) return;
+    if (!hydrated || !address || isDemo) return;
     saveProWorkspace(address, workspace);
-  }, [workspace, address, hydrated]);
+  }, [workspace, address, hydrated, isDemo]);
 
   useEffect(() => {
     const id = window.setInterval(() => {
@@ -199,10 +222,10 @@ export function ProWorkspaceProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
-  // Accrue simulated yield on vault allocation each second — demo only. Once a
-  // real treasury exists, yield comes from the on-chain vault (workspaceView).
+  // Accrue simulated yield on vault allocation each second — demo / pre-treasury only.
   useEffect(() => {
-    if (!hydrated || !address || workspace.treasuryId) return;
+    if (!hydrated || workspace.treasuryId) return;
+    if (!isDemo && !address) return;
     const vault = workspace.pool.allocation.yield_vault;
     if (vault <= 0) return;
     const perSec = vault * (YIELD_APY / 365 / 24 / 3600);
@@ -212,7 +235,7 @@ export function ProWorkspaceProvider({ children }: { children: ReactNode }) {
     }));
     // Only tick-driven; intentionally omit workspace from deps.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tick, hydrated, address]);
+  }, [tick, hydrated, address, isDemo]);
 
   const mutate = useCallback((fn: (prev: ProWorkspace) => ProWorkspace) => {
     setWorkspace((prev) => fn(prev));
@@ -323,104 +346,107 @@ export function ProWorkspaceProvider({ children }: { children: ReactNode }) {
   );
 
   const setWorkerStatus = useCallback(
-    (workerId: string, status: ProWorkerStatus) => {
-      mutate((prev) => {
-        const worker = prev.workers.find((w) => w.id === workerId);
-        if (!worker) return prev;
-        const now = Date.now();
-        const nextWorkers = prev.workers.map((w) => {
-          if (w.id !== workerId) return w;
-          if (status === "paused" || status === "stopped") {
-            return { ...w, status, pausedAt: now };
-          }
-          if (status === "dripping") {
-            const pauseSpan =
-              w.pausedAt && (w.status === "paused" || w.status === "stopped")
-                ? now - w.pausedAt
-                : 0;
-            const resumed: ProWorker = {
-              ...w,
-              status: "dripping",
-              pausedAt: undefined,
-              startedAt: w.startedAt ?? now,
-              totalPausedMs: (w.totalPausedMs ?? 0) + pauseSpan,
-            };
-            return resumed;
-          }
-          return { ...w, status };
-        });
-        const kind =
-          status === "paused"
-            ? ("paused" as const)
-            : status === "dripping"
-              ? ("resumed" as const)
-              : status === "stopped"
-                ? ("stopped" as const)
-                : ("paused" as const);
-        return pushActivity(
-          { ...prev, workers: nextWorkers },
-          {
-            kind,
-            label: `${status === "dripping" ? "Resumed" : status === "paused" ? "Paused" : "Stopped"} ${worker.alias}`,
-          }
-        );
-      });
-    },
-    [mutate]
-  );
-
-  const createWorkerStream = useCallback(
-    async (workerId: string): Promise<boolean> => {
-      if (!address) return false;
+    async (workerId: string, status: ProWorkerStatus): Promise<boolean> => {
       const worker = workspace.workers.find((w) => w.id === workerId);
       if (!worker) return false;
-      if (worker.streamId) return true; // already funded on-chain
-      if (!packageId || packageId === "0x0") return false;
-      const budget = worker.budget > 0 ? worker.budget : worker.monthlyUsd;
-      if (budget <= 0) return false;
 
-      const totalBase = toBaseUnits(budget);
-      const tx = buildCreateStreamV2({
+      // Demo / local-only workers: UI state only.
+      if (isDemo || !worker.streamId || !packageId || packageId === "0x0") {
+        mutate((prev) => {
+          const now = Date.now();
+          const nextWorkers = prev.workers.map((w) => {
+            if (w.id !== workerId) return w;
+            if (status === "paused" || status === "stopped") {
+              return { ...w, status, pausedAt: now };
+            }
+            if (status === "dripping") {
+              const pauseSpan =
+                w.pausedAt && (w.status === "paused" || w.status === "stopped")
+                  ? now - w.pausedAt
+                  : 0;
+              return {
+                ...w,
+                status: "dripping" as const,
+                pausedAt: undefined,
+                startedAt: w.startedAt ?? now,
+                totalPausedMs: (w.totalPausedMs ?? 0) + pauseSpan,
+              };
+            }
+            return { ...w, status };
+          });
+          return pushActivity(
+            { ...prev, workers: nextWorkers },
+            {
+              kind:
+                status === "paused"
+                  ? "paused"
+                  : status === "dripping"
+                    ? "resumed"
+                    : "stopped",
+              label: `${status === "dripping" ? "Resumed" : status === "paused" ? "Paused" : "Stopped"} ${worker.alias}`,
+            }
+          );
+        });
+        return true;
+      }
+
+      const ref = {
         packageId,
         usdcType,
-        sender: address,
-        freelancer: worker.walletAddress,
-        // Single milestone = full budget; the keeper drips it continuously.
-        milestoneNames: [`${worker.alias} payroll`],
-        milestoneAmountsBase: [totalBase],
-        totalBase,
-        durationMs: CADENCE_DURATION_MS[worker.cadence],
-        yieldBps: DEFAULT_STREAM_YIELD_BPS,
-      });
+        streamId: worker.streamId,
+      };
+      let tx;
+      if (status === "paused") {
+        tx = buildSuspendPayroll(ref);
+      } else if (status === "dripping") {
+        tx = buildResumePayroll(ref);
+      } else if (status === "stopped") {
+        const tid = workspace.treasuryId;
+        if (!tid) return false;
+        tx = buildStopPayroll({ ...ref, treasuryId: tid });
+      } else {
+        return false;
+      }
 
       let ok = false;
       await execute(tx, {
         onSuccess: () => {
           ok = true;
-          // streamId is bound by the read overlay once the indexer sees it
-          // (matched by freelancer === walletAddress).
-          mutate((prev) =>
-            pushActivity(
-              {
-                ...prev,
-                workers: prev.workers.map((w) =>
-                  w.id === workerId
-                    ? {
-                        ...w,
-                        status: "dripping" as const,
-                        startedAt: Date.now(),
-                        budget,
-                      }
-                    : w
-                ),
-              },
-              {
-                kind: "resumed",
-                label: `Locked ${worker.alias}'s stream on-chain`,
-                amount: budget,
+          const now = Date.now();
+          mutate((prev) => {
+            const nextWorkers = prev.workers.map((w) => {
+              if (w.id !== workerId) return w;
+              if (status === "paused" || status === "stopped") {
+                return { ...w, status, pausedAt: now };
               }
-            )
-          );
+              if (status === "dripping") {
+                const pauseSpan =
+                  w.pausedAt && (w.status === "paused" || w.status === "stopped")
+                    ? now - w.pausedAt
+                    : 0;
+                return {
+                  ...w,
+                  status: "dripping" as const,
+                  pausedAt: undefined,
+                  startedAt: w.startedAt ?? now,
+                  totalPausedMs: (w.totalPausedMs ?? 0) + pauseSpan,
+                };
+              }
+              return { ...w, status };
+            });
+            return pushActivity(
+              { ...prev, workers: nextWorkers },
+              {
+                kind:
+                  status === "paused"
+                    ? "paused"
+                    : status === "dripping"
+                      ? "resumed"
+                      : "stopped",
+                label: `${status === "dripping" ? "Resumed" : status === "paused" ? "Paused" : "Stopped"} ${worker.alias}`,
+              }
+            );
+          });
         },
         onError: () => {
           ok = false;
@@ -428,7 +454,15 @@ export function ProWorkspaceProvider({ children }: { children: ReactNode }) {
       });
       return ok;
     },
-    [address, workspace.workers, packageId, usdcType, execute, mutate]
+    [
+      workspace.workers,
+      workspace.treasuryId,
+      isDemo,
+      packageId,
+      usdcType,
+      execute,
+      mutate,
+    ]
   );
 
   // Ensure the org has an on-chain treasury, opening one on first use.
@@ -457,6 +491,86 @@ export function ProWorkspaceProvider({ children }: { children: ReactNode }) {
     mutate((prev) => ({ ...prev, treasuryId: id }));
     return id;
   }, [address, packageId, usdcType, workspace.treasuryId, execute, suiClient, mutate]);
+
+  const createWorkerStream = useCallback(
+    async (workerId: string): Promise<boolean> => {
+      if (!address) return false;
+      const worker = workspace.workers.find((w) => w.id === workerId);
+      if (!worker) return false;
+      if (worker.streamId) return true;
+      if (!packageId || packageId === "0x0") return false;
+      const budget = worker.budget > 0 ? worker.budget : worker.monthlyUsd;
+      if (budget <= 0) return false;
+
+      let tid: string | null = null;
+      try {
+        tid = await ensureTreasury();
+      } catch {
+        return false;
+      }
+      if (!tid) return false;
+
+      const totalBase = toBaseUnits(budget);
+      const vaultId =
+        yieldVaultId && yieldVaultId !== "0x0" ? yieldVaultId : undefined;
+      const tx = buildCreateStreamFromTreasuryV2({
+        packageId,
+        usdcType,
+        sender: address,
+        freelancer: worker.walletAddress,
+        treasuryId: tid,
+        vaultId,
+        milestoneNames: [`${worker.alias} payroll`],
+        milestoneAmountsBase: [totalBase],
+        totalBase,
+        durationMs: CADENCE_DURATION_MS[worker.cadence],
+        yieldBps: DEFAULT_STREAM_YIELD_BPS,
+      });
+
+      let ok = false;
+      await execute(tx, {
+        onSuccess: () => {
+          ok = true;
+          mutate((prev) =>
+            pushActivity(
+              {
+                ...prev,
+                workers: prev.workers.map((w) =>
+                  w.id === workerId
+                    ? {
+                        ...w,
+                        status: "dripping" as const,
+                        startedAt: Date.now(),
+                        budget,
+                      }
+                    : w
+                ),
+              },
+              {
+                kind: "resumed",
+                label: `Hired ${worker.alias} from treasury`,
+                amount: budget,
+              }
+            )
+          );
+        },
+        onError: () => {
+          ok = false;
+        },
+      });
+      return ok;
+    },
+    [
+      address,
+      workspace.workers,
+      packageId,
+      usdcType,
+      yieldVaultId,
+      execute,
+      mutate,
+      ensureTreasury,
+    ]
+  );
 
   // Run a treasury tx, mutating on success and throwing the real error on
   // failure (so the modal can show it instead of silently no-op'ing).
@@ -722,9 +836,8 @@ export function ProWorkspaceProvider({ children }: { children: ReactNode }) {
   );
 
   const resetDemo = useCallback(() => {
-    if (!address) return;
     setWorkspace(seedWorkspace());
-  }, [address]);
+  }, []);
 
   // Read overlay: fold real on-chain stream state onto the local workspace.
   // Workers bind to their stream by explicit streamId, else by freelancer
@@ -855,6 +968,7 @@ export function ProWorkspaceProvider({ children }: { children: ReactNode }) {
 
   const value: ProWorkspaceContextValue = {
     address,
+    isDemo,
     workspace: workspaceView,
     hydrated,
     tick,
