@@ -7,10 +7,11 @@ import { useNetworkVariable } from "@/lib/networks";
 import { useGaslessExecute } from "@/lib/use-gasless";
 import { formatUsd, toBaseUnits } from "@/lib/stream-math";
 import {
-  buildCreateStreamV2,
+  buildCreateStreamV3,
   splitMilestoneAmounts,
   DEFAULT_DISPUTE_WINDOW_MS,
 } from "@/lib/streamline-tx";
+import { resolveRecipientOrThrow } from "@/lib/use-resolve-recipient";
 import {
   buildCreateConfidentialStreamV2,
   commit,
@@ -149,17 +150,31 @@ export function useCreateStreamFromRequest() {
       }
 
       const totalBase = toBaseUnits(amount);
-      // Contract asserts yield_bps < 10000 (EBadSplits) — needs a nonzero cash
-      // leg, so 100% yield must clamp to 9999.
-      const yieldBps = Math.min(
-        9_999,
-        Math.round(
-          splits
-            .filter((s) => s.yield)
-            .reduce((a, s) => a + (Number(s.pct) || 0), 0) * 100
-        )
-      );
-      const tx = buildCreateStreamV2({
+      // Resolve each split's destination: blank → the recipient's own wallet,
+      // 0x… → as-is, name/@handle → SuiNS. Each drip routes by weight (bps).
+      setStatus("Resolving payout destinations…");
+      let destinations: string[];
+      try {
+        destinations = [];
+        for (const s of splits) {
+          const a = s.address.trim();
+          if (!a) destinations.push(freelancer);
+          else if (/^0x[0-9a-fA-F]{64}$/.test(a)) destinations.push(a);
+          else destinations.push((await resolveRecipientOrThrow(client, a)).address);
+        }
+      } catch (e) {
+        setStatus(
+          e instanceof Error ? e.message : "Could not resolve a destination."
+        );
+        return false;
+      }
+      // Weights must sum to exactly 10000 (validate already checks 100%);
+      // absorb rounding drift into the last leg.
+      const weightsBps = splits.map((s) => Math.round((Number(s.pct) || 0) * 100));
+      weightsBps[weightsBps.length - 1] +=
+        10_000 - weightsBps.reduce((x, y) => x + y, 0);
+      const yieldFlags = splits.map((s) => s.yield);
+      const tx = buildCreateStreamV3({
         packageId,
         usdcType,
         sender: account.address,
@@ -168,7 +183,9 @@ export function useCreateStreamFromRequest() {
         milestoneAmountsBase: splitMilestoneAmounts(totalBase, milestones.length),
         totalBase,
         durationMs,
-        yieldBps,
+        destinations,
+        weightsBps,
+        yieldFlags,
       });
       setStatus("Awaiting wallet signature…");
       let success = false;

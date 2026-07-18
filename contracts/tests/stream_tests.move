@@ -11,6 +11,8 @@ use sui::test_scenario as ts;
 const CLIENT: address = @0xC1;
 const FREELANCER: address = @0xF1;
 const KEEPER: address = @0xCA11;
+const ALICE: address = @0xA11CE;
+const BOB: address = @0xB0B;
 
 // 0.01 USDC floor in base units.
 const MIN_DRIP: u64 = 10_000;
@@ -68,6 +70,71 @@ fun full_milestone_flow() {
         // ~half the total paid out (milestone 0 = 100 units)
         assert!(stream::remaining(&s) <= 100 * MIN_DRIP, 4);
         ts::return_shared(s);
+    };
+
+    clock::destroy_for_testing(clk);
+    ts::end(sc);
+}
+
+/// create_stream_v3: an explicit multi-destination split routes each drip to the
+/// right address by weight. Two cash legs (60/40) to distinct wallets.
+#[test]
+fun v3_splits_route_to_addresses() {
+    let mut sc = ts::begin(CLIENT);
+    let mut clk = clock::create_for_testing(ts::ctx(&mut sc));
+    let total = 100 * MIN_DRIP; // one milestone
+
+    {
+        let pay = coin::mint_for_testing<SUI>(total, ts::ctx(&mut sc));
+        stream::create_stream_v3<SUI>(
+            pay,
+            FREELANCER,
+            vector[string::utf8(b"M1")],
+            vector[total],
+            1_000,
+            1_000,
+            true,
+            vector[ALICE, BOB],
+            vector[6_000, 4_000],
+            vector[false, false],
+            &clk,
+            ts::ctx(&mut sc),
+        );
+    };
+
+    ts::next_tx(&mut sc, FREELANCER);
+    {
+        let mut s = ts::take_shared<Stream<SUI>>(&sc);
+        stream::raise_completion<SUI>(&mut s, &clk, ts::ctx(&mut sc));
+        ts::return_shared(s);
+    };
+    ts::next_tx(&mut sc, CLIENT);
+    {
+        let cap = ts::take_from_sender<StreamCap>(&sc);
+        let mut s = ts::take_shared<Stream<SUI>>(&sc);
+        stream::approve_milestone<SUI>(&cap, &mut s, &clk);
+        ts::return_shared(s);
+        ts::return_to_sender(&sc, cap);
+    };
+
+    clk.increment_for_testing(1_000);
+    ts::next_tx(&mut sc, KEEPER);
+    {
+        let mut s = ts::take_shared<Stream<SUI>>(&sc);
+        stream::drip<SUI>(&mut s, &clk, ts::ctx(&mut sc));
+        ts::return_shared(s);
+    };
+
+    // pay = 1_000_000; tip = 100; distributable = 999_900.
+    // ALICE 60% = 599_940; BOB = remainder 399_960.
+    ts::next_tx(&mut sc, CLIENT);
+    {
+        let a = ts::take_from_address<coin::Coin<SUI>>(&sc, ALICE);
+        let b = ts::take_from_address<coin::Coin<SUI>>(&sc, BOB);
+        assert!(coin::value(&a) == 599_940, 10);
+        assert!(coin::value(&b) == 399_960, 11);
+        ts::return_to_address(ALICE, a);
+        ts::return_to_address(BOB, b);
     };
 
     clock::destroy_for_testing(clk);

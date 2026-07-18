@@ -52,6 +52,7 @@ export {
 export {
   buildCreateStream,
   buildCreateStreamV2,
+  buildCreateStreamV3,
   buildCreateStreamFromTreasuryV2,
   DEFAULT_DISPUTE_WINDOW_MS,
   findCreatedStreamId,

@@ -69,6 +69,41 @@ export function buildCreateStreamV2(
   return tx;
 }
 
+/**
+ * Like `buildCreateStreamV2` but the caller sets the full payout split up front:
+ * each `destinations[i]` gets `weightsBps[i]` of every drip, routed to the yield
+ * vault when `yieldFlags[i]`. Weights must sum to 10000. Lets a payer honor a
+ * recipient's requested multi-wallet split at funding time.
+ */
+export function buildCreateStreamV3(
+  a: CreateStreamArgs & {
+    destinations: string[];
+    weightsBps: number[];
+    yieldFlags: boolean[];
+  }
+): Transaction {
+  const tx = new Transaction();
+  tx.setSenderIfNotSet(a.sender);
+  tx.moveCall({
+    target: `${a.packageId}::stream::create_stream_v3`,
+    typeArguments: [a.usdcType],
+    arguments: [
+      coinWithBalance({ type: a.usdcType, balance: a.totalBase }),
+      tx.pure.address(a.freelancer),
+      tx.pure.vector("string", a.milestoneNames),
+      tx.pure.vector("u64", a.milestoneAmountsBase),
+      tx.pure.u64(a.durationMs),
+      tx.pure.u64(a.disputeWindowMs ?? DEFAULT_DISPUTE_WINDOW_MS),
+      tx.pure.bool(a.revocable ?? true),
+      tx.pure.vector("address", a.destinations),
+      tx.pure.vector("u64", a.weightsBps.map((w) => BigInt(w))),
+      tx.pure.vector("bool", a.yieldFlags),
+      tx.object(CLOCK),
+    ],
+  });
+  return tx;
+}
+
 export type CreateStreamFromTreasuryArgs = CreateStreamArgs & {
   yieldBps: number;
   treasuryId: string;

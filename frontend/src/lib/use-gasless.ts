@@ -30,6 +30,12 @@ type Handlers = {
   onSettled?: () => void;
 };
 
+type ExecuteOpts = {
+  /** Extra addresses this tx sends objects to (e.g. a transfer recipient), so
+   *  the Enoki sponsor allow-lists them. Sender is always allowed. */
+  allowedRecipients?: string[];
+};
+
 /** Whether the server has an Enoki sponsor key configured (cached). */
 export function useSponsorshipEnabled() {
   return useQuery({
@@ -57,7 +63,7 @@ export function useGaslessExecute() {
   const [isPending, setIsPending] = useState(false);
 
   const execute = useCallback(
-    async (tx: Transaction, handlers: Handlers = {}) => {
+    async (tx: Transaction, handlers: Handlers = {}, opts: ExecuteOpts = {}) => {
       if (!account) {
         handlers.onError?.(new Error("No wallet connected"));
         handlers.onSettled?.();
@@ -83,7 +89,8 @@ export function useGaslessExecute() {
             account.address,
             network as NetworkName,
             client,
-            signTransaction
+            signTransaction,
+            opts.allowedRecipients
           );
           handlers.onSuccess?.({ digest });
         } else {
@@ -108,7 +115,8 @@ async function runSponsored(
   sender: string,
   network: NetworkName,
   client: ReturnType<typeof useSuiClient>,
-  signTransaction: ReturnType<typeof useSignTransaction>["mutateAsync"]
+  signTransaction: ReturnType<typeof useSignTransaction>["mutateAsync"],
+  allowedRecipients?: string[]
 ): Promise<string> {
   tx.setSenderIfNotSet(sender);
   const kindBytes = await tx.build({ client, onlyTransactionKind: true });
@@ -120,6 +128,7 @@ async function runSponsored(
       network,
       sender,
       transactionKindBytes: toBase64(kindBytes),
+      allowedRecipients,
     }),
   });
   if (!sponsorRes.ok) {

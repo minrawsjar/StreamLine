@@ -28,7 +28,16 @@ type SponsorBody = {
   sender?: string;
   /** base64 transaction *kind* bytes (built with onlyTransactionKind: true). */
   transactionKindBytes?: string;
+  /**
+   * Extra addresses this sponsored tx may send objects to — e.g. a wallet
+   * transfer's chosen recipient. The sender is always allowed. Validated to
+   * real Sui addresses and capped so a client can't widen the allow-list
+   * arbitrarily (only gas is ever at risk here — the user still signs).
+   */
+  allowedRecipients?: string[];
 };
+
+const SUI_ADDR = /^0x[0-9a-fA-F]{64}$/;
 
 export async function POST(req: Request) {
   const key = apiKey();
@@ -43,13 +52,20 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "invalid_json" }, { status: 400 });
   }
 
-  const { network, sender, transactionKindBytes } = body;
+  const { network, sender, transactionKindBytes, allowedRecipients } = body;
   if (!network || !sender || !transactionKindBytes) {
     return NextResponse.json(
       { error: "missing_fields", required: ["network", "sender", "transactionKindBytes"] },
       { status: 400 }
     );
   }
+
+  // Sender is always allowed; extra recipients must be real Sui addresses and
+  // are capped so a client can't turn the sponsor into an open relay.
+  const recipients = Array.isArray(allowedRecipients)
+    ? allowedRecipients.filter((a) => typeof a === "string" && SUI_ADDR.test(a)).slice(0, 8)
+    : [];
+  const allowedAddresses = Array.from(new Set([sender, ...recipients]));
 
   const res = await fetch(`${ENOKI_API}/transaction-blocks/sponsor`, {
     method: "POST",
@@ -61,8 +77,9 @@ export async function POST(req: Request) {
       network,
       sender,
       transactionBlockKindBytes: transactionKindBytes,
-      // Defence in depth: only sponsor this sender's StreamLine calls.
-      allowedAddresses: [sender],
+      // Defence in depth: only sponsor this sender's StreamLine calls, sending
+      // objects to the sender plus any explicitly-declared transfer recipients.
+      allowedAddresses,
       allowedMoveCallTargets: allowedMoveCallTargets(network),
     }),
   });

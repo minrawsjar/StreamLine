@@ -11,7 +11,7 @@ export type StreamRequestParams = {
   useMilestones: boolean;
   milestones: string[];
   useSplitConfig: boolean;
-  splits: { label: string; pct: number; yield: boolean }[];
+  splits: { label: string; address: string; pct: number; yield: boolean }[];
   note?: string;
 };
 
@@ -48,7 +48,7 @@ export function resolveStreamRequest(
       request.useSplitConfig && request.splits.length > 0
         ? request.splits.map((s) => ({
             label: s.label,
-            address: "",
+            address: s.address ?? "",
             pct: s.pct,
             yield: s.yield,
           }))
@@ -81,10 +81,11 @@ function parseSplits(raw: string | null): StreamRequestParams["splits"] {
   return raw
     .split("|")
     .map((part) => {
-      const [labelEnc, pctRaw, yieldRaw] = part.split(":");
+      const [labelEnc, pctRaw, yieldRaw, addrEnc] = part.split(":");
       if (!labelEnc || pctRaw === undefined) return null;
       return {
         label: decodeURIComponent(labelEnc),
+        address: addrEnc ? decodeURIComponent(addrEnc) : "",
         pct: Number(pctRaw) || 0,
         yield: yieldRaw === "1",
       };

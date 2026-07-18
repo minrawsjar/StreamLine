@@ -8,6 +8,7 @@ import { PACKAGE_IDS, TEST_USDC, type NetworkName } from "./constants";
 const STREAM_FUNCTIONS = [
   "create_stream",
   "create_stream_v2",
+  "create_stream_v3",
   "create_stream_from_treasury_v2",
   "drip_with_yield",
   "raise_completion",

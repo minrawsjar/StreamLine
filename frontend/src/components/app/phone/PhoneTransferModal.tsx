@@ -198,13 +198,18 @@ export function PhoneTransferModal({ open, onClose }: PhoneTransferModalProps) {
       }
 
       setStatus("Awaiting wallet signature…");
-      await execute(tx, {
-        onSuccess: ({ digest }) => {
-          setStatus(`Transfer sent. Digest ${digest}`);
-          setAmount("");
+      await execute(
+        tx,
+        {
+          onSuccess: ({ digest }) => {
+            setStatus(`Transfer sent. Digest ${digest}`);
+            setAmount("");
+          },
+          onError: (e) => setStatus(e.message),
         },
-        onError: (e) => setStatus(e.message),
-      });
+        // Let the sponsor allow-list this transfer's recipient.
+        { allowedRecipients: [to] }
+      );
     } catch (e) {
       setStatus(e instanceof Error ? e.message : String(e));
     }

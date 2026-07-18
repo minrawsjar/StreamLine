@@ -327,6 +327,89 @@ public fun create_stream_v2<T>(
     transfer::share_object(stream);
 }
 
+/// Like `create_stream_v2`, but the caller supplies the full payout split up
+/// front: `destinations[i]` receives `weights_bps[i]` of each drip, routed to
+/// the yield vault when `yield_flags[i]` is set. Weights must sum to 10000. This
+/// lets a payer honor a recipient's requested multi-destination split at funding
+/// time — the recipient can't call `set_splits` before the stream exists.
+#[allow(lint(self_transfer))]
+public fun create_stream_v3<T>(
+    payment: Coin<T>,
+    freelancer: address,
+    milestone_names: vector<String>,
+    milestone_amounts: vector<u64>,
+    duration_ms: u64,
+    dispute_window_ms: u64,
+    revocable: bool,
+    destinations: vector<address>,
+    weights_bps: vector<u64>,
+    yield_flags: vector<bool>,
+    clock: &Clock,
+    ctx: &mut TxContext,
+) {
+    assert!(duration_ms > 0, EBadDuration);
+    let n = milestone_amounts.length();
+    assert!(n > 0 && milestone_names.length() == n, ENoMilestones);
+    let d = destinations.length();
+    assert!(d > 0 && weights_bps.length() == d && yield_flags.length() == d, EBadSplits);
+
+    let total = payment.value();
+    let mut milestones: vector<Milestone> = vector[];
+    let mut sum = 0;
+    let mut i = 0;
+    while (i < n) {
+        let amount = milestone_amounts[i];
+        assert!(amount >= MIN_DRIP, EMilestoneTooSmall);
+        sum = sum + amount;
+        milestones.push_back(Milestone { name: milestone_names[i], amount });
+        i = i + 1;
+    };
+    assert!(sum == total, EBadSplits);
+
+    let mut splits: vector<SplitLeg> = vector[];
+    let mut wsum = 0;
+    let mut j = 0;
+    while (j < d) {
+        let w = weights_bps[j];
+        wsum = wsum + w;
+        splits.push_back(SplitLeg {
+            destination: destinations[j],
+            weight_bps: w,
+            yield_flag: yield_flags[j],
+        });
+        j = j + 1;
+    };
+    assert!(wsum == BPS_DENOM, EBadSplits);
+
+    let drip_interval_ms =
+        ceil_div((MIN_DRIP as u128) * (duration_ms as u128), total as u128);
+    let sender = ctx.sender();
+    let now = clock.timestamp_ms();
+
+    let stream = Stream<T> {
+        id: object::new(ctx),
+        sender,
+        freelancer,
+        balance: payment.into_balance(),
+        total,
+        state: STATE_LOCKED,
+        milestones,
+        current_milestone: 0,
+        milestone_paid: 0,
+        duration_ms,
+        drip_interval_ms,
+        last_drip_ms: now,
+        review_deadline_ms: 0,
+        dispute_window_ms,
+        splits,
+    };
+    let stream_id = object::id(&stream);
+    event::emit(StreamCreated { stream_id, sender, freelancer, total, n_milestones: n });
+    let cap = StreamCap { id: object::new(ctx), stream_id, revocable };
+    transfer::public_transfer(cap, sender);
+    transfer::share_object(stream);
+}
+
 /// Fund a worker stream straight from the org treasury (payroll pool → leg).
 /// Pulls `sum(milestone_amounts)` from idle float, locks it into a normal
 /// `create_stream_v2` stream, and tags the stream with the treasury id so

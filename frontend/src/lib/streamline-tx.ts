@@ -3,6 +3,7 @@ import { Transaction, coinWithBalance } from "@mysten/sui/transactions";
 import {
   buildCreateStream,
   buildCreateStreamV2,
+  buildCreateStreamV3,
   DEFAULT_DISPUTE_WINDOW_MS,
   splitMilestoneAmounts,
   type CreateStreamArgs,
@@ -11,6 +12,7 @@ import {
 export {
   buildCreateStream,
   buildCreateStreamV2,
+  buildCreateStreamV3,
   DEFAULT_DISPUTE_WINDOW_MS,
   splitMilestoneAmounts,
   type CreateStreamArgs,

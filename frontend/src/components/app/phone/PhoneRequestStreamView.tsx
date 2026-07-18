@@ -20,10 +20,12 @@ type PhoneRequestStreamViewProps = {
   onClose: () => void;
 };
 
-type SplitRow = { label: string; pct: number; yield: boolean };
+type SplitRow = { label: string; address: string; pct: number; yield: boolean };
 type RequestStep = 1 | 2 | 3;
 
-const DEFAULT_SPLITS: SplitRow[] = [{ label: "Wallet", pct: 100, yield: false }];
+const DEFAULT_SPLITS: SplitRow[] = [
+  { label: "Your wallet", address: "", pct: 100, yield: false },
+];
 
 const STEP_TITLES: Record<RequestStep, string> = {
   1: "Request a stream",
@@ -89,7 +91,10 @@ export function PhoneRequestStreamView({ onClose }: PhoneRequestStreamViewProps)
       params.set(
         "splits",
         splits
-          .map((s) => `${encodeURIComponent(s.label)}:${s.pct}:${s.yield ? 1 : 0}`)
+          .map(
+            (s) =>
+              `${encodeURIComponent(s.label)}:${s.pct}:${s.yield ? 1 : 0}:${encodeURIComponent(s.address)}`
+          )
           .join("|")
       );
     }
@@ -337,9 +342,14 @@ export function PhoneRequestStreamView({ onClose }: PhoneRequestStreamViewProps)
               {splits.map((row, i) => (
                 <div key={i} className="flex items-center gap-1.5">
                   <input
-                    value={row.label}
-                    onChange={(e) => updateSplit(i, { label: e.target.value })}
-                    placeholder="Wallet"
+                    value={row.address}
+                    onChange={(e) =>
+                      updateSplit(i, {
+                        address: e.target.value,
+                        label: e.target.value.trim() || "Your wallet",
+                      })
+                    }
+                    placeholder="0x… or name@handle · blank = you"
                     className="min-w-0 flex-1 rounded-xl border border-black/15 bg-white/80 px-3 py-2 text-[12px] outline-none backdrop-blur-sm focus:border-[#5b54e6]"
                   />
                   <div className="flex shrink-0 items-center gap-0.5">
@@ -381,7 +391,10 @@ export function PhoneRequestStreamView({ onClose }: PhoneRequestStreamViewProps)
               <button
                 type="button"
                 onClick={() =>
-                  setSplits((s) => [...s, { label: "Destination", pct: 0, yield: false }])
+                  setSplits((s) => [
+                    ...s,
+                    { label: "Destination", address: "", pct: 0, yield: false },
+                  ])
                 }
                 className="self-start rounded-lg border border-black/15 bg-white/60 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-[#444] backdrop-blur-sm"
               >

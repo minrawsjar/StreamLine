@@ -1,9 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useId, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Html5Qrcode } from "html5-qrcode";
 
 import { parseStreamRequestLink, type StreamRequestParams } from "@/lib/request-link";
+import { parseGiftCardUrl } from "@/lib/giftcard";
 import { PhoneField, phoneInputClass } from "./PhoneFormParts";
 
 type PhoneScanViewProps = {
@@ -12,6 +14,7 @@ type PhoneScanViewProps = {
 };
 
 export function PhoneScanView({ onResult, onCancel }: PhoneScanViewProps) {
+  const router = useRouter();
   const scannerId = useId().replace(/:/g, "");
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const [manualLink, setManualLink] = useState("");
@@ -34,18 +37,36 @@ export function PhoneScanView({ onResult, onCancel }: PhoneScanViewProps) {
     }
   }, []);
 
+  // Accept both link kinds: a stream-funding request (handled in-app) or a
+  // gift-card claim link (its own /g/… route → navigate there). Returns false
+  // if the text is neither.
+  const routeLink = useCallback(
+    (text: string): boolean => {
+      const gift = parseGiftCardUrl(text);
+      if (gift) {
+        void stopScanner();
+        setError(null);
+        const u = new URL(text.trim());
+        router.push(u.pathname + u.search);
+        return true;
+      }
+      const parsed = parseStreamRequestLink(text);
+      if (parsed) {
+        void stopScanner();
+        setError(null);
+        onResult(parsed);
+        return true;
+      }
+      return false;
+    },
+    [onResult, router, stopScanner]
+  );
+
   const handleDecoded = useCallback(
     (text: string) => {
-      const parsed = parseStreamRequestLink(text);
-      if (!parsed) {
-        setError("Not a valid StreamLine request link.");
-        return;
-      }
-      void stopScanner();
-      setError(null);
-      onResult(parsed);
+      if (!routeLink(text)) setError("Not a valid StreamLine link.");
     },
-    [onResult, stopScanner]
+    [routeLink]
   );
 
   useEffect(() => {
@@ -80,14 +101,9 @@ export function PhoneScanView({ onResult, onCancel }: PhoneScanViewProps) {
   }, [scannerId, handleDecoded, stopScanner]);
 
   const onManualSubmit = () => {
-    const parsed = parseStreamRequestLink(manualLink);
-    if (!parsed) {
-      setError("Paste a full StreamLine request link.");
-      return;
+    if (!routeLink(manualLink)) {
+      setError("Paste a StreamLine request or gift-card link.");
     }
-    setError(null);
-    void stopScanner();
-    onResult(parsed);
   };
 
   return (
@@ -98,7 +114,7 @@ export function PhoneScanView({ onResult, onCancel }: PhoneScanViewProps) {
             Scan request
           </h2>
           <p className="mt-1 text-[12px] leading-snug text-[#666]">
-            Point at a QR code or paste the link to fund a stream.
+            Point at a QR code or paste a link to fund a stream or open a gift card.
           </p>
         </div>
 

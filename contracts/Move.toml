@@ -2,9 +2,9 @@
 name = "streamline"
 edition = "2024.beta"
 version = "0.1.0"
-# Republished 2026-07-19 (old UpgradeCap was unreachable). New UpgradeCap is
-# keeper-owned, so future upgrades work. Fresh publish → original == latest.
-published-at = "0x597f34fee3b246cbabdb8b8133c4b5e7aa5a15899e74df40acf61080b776a794"
+# Upgraded 2026-07-19 (added create_stream_v3). `published-at` = latest version
+# (upgrade from), the [addresses] streamline = ORIGINAL package (type origin).
+published-at = "0x350a5dfabed5304b50f779a788973b2dddb0e8a0ebe15320775217c71ee0f9ff"
 
 # The Sui / MoveStdlib framework dependencies are managed automatically by the
 # Sui CLI, pinned to the active environment's framework version.

@@ -9,8 +9,11 @@ function env(name: string): string | undefined {
   return v || undefined;
 }
 
+// Latest package version (move-call target). Upgraded 2026-07-19 to add
+// create_stream_v3. Type origin stays 0x597f34fe… (ORIGINAL_PACKAGE_IDS), so
+// object types + the indexer are unaffected.
 const TESTNET_PACKAGE =
-  "0x597f34fee3b246cbabdb8b8133c4b5e7aa5a15899e74df40acf61080b776a794";
+  "0x350a5dfabed5304b50f779a788973b2dddb0e8a0ebe15320775217c71ee0f9ff";
 
 export const PACKAGE_IDS = {
   mainnet:
