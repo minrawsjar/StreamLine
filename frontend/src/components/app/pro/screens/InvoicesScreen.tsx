@@ -17,7 +17,7 @@ import {
 } from "@/lib/pro-invoices";
 import { useProWorkspace } from "../ProWorkspaceContext";
 import { fmtUsd } from "../types";
-import { ProEyebrow } from "../ui";
+import { ProEyebrow, ProStat } from "../ui";
 
 function newInvoiceIdLocal(): string {
   return `inv_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
@@ -25,7 +25,7 @@ function newInvoiceIdLocal(): string {
 
 type View = "list" | "create" | "detail";
 
-export function InvoicesScreen({ onBack }: { onBack?: () => void }) {
+export function InvoicesScreen() {
   const embedded = usePhoneEmbedded();
   const account = useCurrentAccount();
   const { workspace, isDemo, nowMs } = useProWorkspace();
@@ -320,48 +320,26 @@ export function InvoicesScreen({ onBack }: { onBack?: () => void }) {
         </div>
       ) : null}
 
-      <section
-        className={`sl-pro-card sl-pro-card--flush ${
-          embedded ? "p-3.5" : "p-5"
-        }`}
-      >
-        <div className="mb-3 flex items-center justify-between">
-          <p className="text-[8px] font-medium uppercase tracking-[0.16em] text-white/40">
-            Invoices
-          </p>
-          <div className="flex items-center gap-1.5">
-            <span className="sl-pro-chip !px-2 !py-1 !text-[8px]">
-              {isDemo ? "Demo" : "On-chain pay"}
-            </span>
-            {onBack ? (
-              <button
-                type="button"
-                onClick={onBack}
-                className="rounded-full border border-white/10 px-2 py-0.5 text-[9px] text-white/45"
-              >
-                Tools
-              </button>
-            ) : null}
-          </div>
-        </div>
+      {/* Stats — one block, three cards */}
+      <div className={`grid grid-cols-3 ${embedded ? "gap-1.5" : "gap-3"}`}>
+        <ProStat label="Bills" value={String(totals.count)} />
+        <ProStat
+          label="Open"
+          value={fmtUsd(totals.outstanding, totals.outstanding % 1 ? 2 : 0)}
+        />
+        <ProStat
+          label="Paid"
+          value={fmtUsd(totals.paid, totals.paid % 1 ? 2 : 0)}
+          accent
+        />
+      </div>
 
-        <div className="grid grid-cols-3 gap-1.5">
-          <StatTile label="Bills" value={String(totals.count)} />
-          <StatTile
-            label="Open"
-            value={fmtUsd(totals.outstanding, totals.outstanding % 1 ? 2 : 0)}
-          />
-          <StatTile
-            label="Paid"
-            value={fmtUsd(totals.paid, totals.paid % 1 ? 2 : 0)}
-          />
-        </div>
-
+      <div>
         <button
           type="button"
           onClick={() => setView("create")}
           disabled={!canCreate && !isDemo}
-          className="mt-3.5 flex w-full items-center justify-center gap-2 rounded-2xl bg-[#22c55e] px-4 py-3.5 text-[14px] font-semibold tracking-tight text-white shadow-[0_8px_24px_rgba(34,197,94,0.35)] transition-transform active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-35 disabled:shadow-none"
+          className="flex w-full items-center justify-center gap-2 rounded-2xl bg-[#22c55e] px-4 py-3.5 text-[14px] font-semibold tracking-tight text-white shadow-[0_8px_24px_rgba(34,197,94,0.35)] transition-transform active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-35 disabled:shadow-none"
         >
           <span className="text-[18px] leading-none">+</span>
           {canCreate || isDemo ? "New invoice" : "Connect to create"}
@@ -371,8 +349,9 @@ export function InvoicesScreen({ onBack }: { onBack?: () => void }) {
             ? "Explore-demo sample bills. Sign in for invoices paid to your wallet."
             : "Creating a bill is local. Paying the share link sends real USDC to you."}
         </p>
-      </section>
+      </div>
 
+      {/* All invoices */}
       <section
         className={`sl-pro-card sl-pro-card--flush ${
           embedded ? "p-3.5" : "p-5"
@@ -452,19 +431,6 @@ function Header({ title }: { title: string }) {
       <h1 className="mt-2 text-[clamp(26px,3.5vw,36px)] font-semibold tracking-tight text-white">
         {title}
       </h1>
-    </div>
-  );
-}
-
-function StatTile({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-xl bg-white/[0.04] px-2.5 py-2.5">
-      <p className="text-[8px] font-medium uppercase tracking-[0.12em] text-white/35">
-        {label}
-      </p>
-      <p className="mt-1 text-[13px] font-semibold tabular leading-none text-white">
-        {value}
-      </p>
     </div>
   );
 }

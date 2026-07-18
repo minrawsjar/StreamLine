@@ -23,15 +23,27 @@ export function ToolsScreen() {
   };
 
   if (panel === "pos") {
-    return <PosScreen onBack={() => setPanel("hub")} />;
+    return (
+      <ToolSubpanel onBack={() => setPanel("hub")}>
+        <PosScreen />
+      </ToolSubpanel>
+    );
   }
 
   if (panel === "invoices") {
-    return <InvoicesScreen onBack={() => setPanel("hub")} />;
+    return (
+      <ToolSubpanel onBack={() => setPanel("hub")}>
+        <InvoicesScreen />
+      </ToolSubpanel>
+    );
   }
 
   if (panel === "subscriptions") {
-    return <SubscriptionsScreen onBack={() => setPanel("hub")} />;
+    return (
+      <ToolSubpanel onBack={() => setPanel("hub")}>
+        <SubscriptionsScreen />
+      </ToolSubpanel>
+    );
   }
 
   const shell = embedded
@@ -69,7 +81,6 @@ export function ToolsScreen() {
           embedded={embedded}
           title="POS"
           description="Payment QR codes — create, track uses and accumulated USDC."
-          accent
           icon={
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden>
               <rect
@@ -163,26 +174,46 @@ export function ToolsScreen() {
   );
 }
 
+function ToolSubpanel({
+  onBack,
+  children,
+}: {
+  onBack: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <div className="flex flex-col gap-2">
+      <button
+        type="button"
+        onClick={onBack}
+        className="self-start px-0.5 text-[11px] text-white/40 transition-colors hover:text-white/70"
+        aria-label="Back"
+      >
+        ←
+      </button>
+      {children}
+    </div>
+  );
+}
+
 function ToolCard({
   embedded,
   title,
   description,
   icon,
   onClick,
-  accent,
 }: {
   embedded: boolean;
   title: string;
   description: string;
   icon: ReactNode;
   onClick: () => void;
-  accent?: boolean;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className={`sl-pro-tool-card ${accent ? "sl-pro-tool-card--accent" : ""} ${
+      className={`sl-pro-tool-card ${
         embedded ? "px-3.5 py-3.5" : "px-5 py-5"
       }`}
     >

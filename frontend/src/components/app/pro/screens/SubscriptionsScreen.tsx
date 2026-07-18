@@ -20,7 +20,7 @@ import {
 } from "@/lib/pro-subscriptions";
 import { useProWorkspace } from "../ProWorkspaceContext";
 import { fmtUsd } from "../types";
-import { ProEyebrow } from "../ui";
+import { ProEyebrow, ProStat } from "../ui";
 
 type View = "list" | "create" | "detail";
 
@@ -31,7 +31,7 @@ const DURATION_PRESETS: { label: string; value: number; unit: DurationUnit }[] =
   { label: "90 days", value: 90, unit: "days" },
 ];
 
-export function SubscriptionsScreen({ onBack }: { onBack?: () => void }) {
+export function SubscriptionsScreen() {
   const embedded = usePhoneEmbedded();
   const account = useCurrentAccount();
   const { workspace, isDemo } = useProWorkspace();
@@ -72,10 +72,10 @@ export function SubscriptionsScreen({ onBack }: { onBack?: () => void }) {
     const live = subs.filter((s) => s.status === "open" || s.status === "active");
     const mrr = live.reduce((a, s) => {
       const days =
-        s.durationUnit === "months"
-          ? s.durationValue * 30
-          : s.durationUnit === "weeks"
-            ? s.durationValue * 7
+        s.durationUnit === "weeks"
+          ? s.durationValue * 7
+          : s.durationUnit === "hours"
+            ? s.durationValue / 24
             : s.durationValue;
       return a + (days > 0 ? (s.amountUsd * 30) / days : 0);
     }, 0);
@@ -376,45 +376,23 @@ export function SubscriptionsScreen({ onBack }: { onBack?: () => void }) {
         </div>
       ) : null}
 
-      <section
-        className={`sl-pro-card sl-pro-card--flush ${
-          embedded ? "p-3.5" : "p-5"
-        }`}
-      >
-        <div className="mb-3 flex items-center justify-between">
-          <p className="text-[8px] font-medium uppercase tracking-[0.16em] text-white/40">
-            Subscriptions
-          </p>
-          <div className="flex items-center gap-1.5">
-            <span className="sl-pro-chip !px-2 !py-1 !text-[8px]">
-              {isDemo ? "Demo" : "On-chain stream"}
-            </span>
-            {onBack ? (
-              <button
-                type="button"
-                onClick={onBack}
-                className="rounded-full border border-white/10 px-2 py-0.5 text-[9px] text-white/45"
-              >
-                Tools
-              </button>
-            ) : null}
-          </div>
-        </div>
+      {/* Stats — one block, three cards */}
+      <div className={`grid grid-cols-3 ${embedded ? "gap-1.5" : "gap-3"}`}>
+        <ProStat label="Plans" value={String(totals.count)} />
+        <ProStat label="Live" value={String(totals.live)} />
+        <ProStat
+          label="~MRR"
+          value={fmtUsd(totals.mrr, totals.mrr % 1 ? 0 : 0)}
+          accent
+        />
+      </div>
 
-        <div className="grid grid-cols-3 gap-1.5">
-          <StatTile label="Plans" value={String(totals.count)} />
-          <StatTile label="Live" value={String(totals.live)} />
-          <StatTile
-            label="~MRR"
-            value={fmtUsd(totals.mrr, totals.mrr % 1 ? 0 : 0)}
-          />
-        </div>
-
+      <div>
         <button
           type="button"
           onClick={() => setView("create")}
           disabled={!canCreate && !isDemo}
-          className="mt-3.5 flex w-full items-center justify-center gap-2 rounded-2xl bg-[#22c55e] px-4 py-3.5 text-[14px] font-semibold tracking-tight text-white shadow-[0_8px_24px_rgba(34,197,94,0.35)] transition-transform active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-35 disabled:shadow-none"
+          className="flex w-full items-center justify-center gap-2 rounded-2xl bg-[#22c55e] px-4 py-3.5 text-[14px] font-semibold tracking-tight text-white shadow-[0_8px_24px_rgba(34,197,94,0.35)] transition-transform active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-35 disabled:shadow-none"
         >
           <span className="text-[18px] leading-none">+</span>
           {canCreate || isDemo ? "New subscription" : "Connect to create"}
@@ -424,7 +402,7 @@ export function SubscriptionsScreen({ onBack }: { onBack?: () => void }) {
             ? "Explore-demo sample plans. Sign in so subscribe links pay your wallet."
             : "Creating a plan is a share link. The stream is created on-chain when the customer subscribes."}
         </p>
-      </section>
+      </div>
 
       <section
         className={`sl-pro-card sl-pro-card--flush ${
@@ -499,19 +477,6 @@ function Header({ title }: { title: string }) {
       <h1 className="mt-2 text-[clamp(26px,3.5vw,36px)] font-semibold tracking-tight text-white">
         {title}
       </h1>
-    </div>
-  );
-}
-
-function StatTile({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-xl bg-white/[0.04] px-2.5 py-2.5">
-      <p className="text-[8px] font-medium uppercase tracking-[0.12em] text-white/35">
-        {label}
-      </p>
-      <p className="mt-1 text-[13px] font-semibold tabular leading-none text-white">
-        {value}
-      </p>
     </div>
   );
 }

@@ -6,7 +6,7 @@ import { QRCodeSVG } from "qrcode.react";
 import { usePhoneEmbedded } from "@/components/app/phone/PhoneEmbeddedContext";
 import { useProWorkspace } from "../ProWorkspaceContext";
 import { fmtUsd } from "../types";
-import { ProEyebrow } from "../ui";
+import { ProEyebrow, ProStat } from "../ui";
 
 type PaymentQr = {
   id: string;
@@ -64,7 +64,7 @@ function orgSlug(name: string): string {
   );
 }
 
-export function PosScreen({ onBack }: { onBack?: () => void }) {
+export function PosScreen() {
   const embedded = usePhoneEmbedded();
   const { workspace } = useProWorkspace();
   const slug = orgSlug(workspace.orgName);
@@ -322,48 +322,27 @@ export function PosScreen({ onBack }: { onBack?: () => void }) {
         </div>
       ) : null}
 
-      <section
-        className={`sl-pro-card sl-pro-card--flush ${
-          embedded ? "p-3.5" : "p-5"
-        }`}
+      {/* Stats — one block, three cards */}
+      <div className={`grid grid-cols-3 ${embedded ? "gap-1.5" : "gap-3"}`}>
+        <ProStat label="Codes" value={String(totals.count)} />
+        <ProStat label="Uses" value={String(totals.uses)} />
+        <ProStat
+          label="Taken"
+          value={fmtUsd(totals.accumulated, totals.accumulated % 1 ? 2 : 0)}
+          accent
+        />
+      </div>
+
+      <button
+        type="button"
+        onClick={openCreate}
+        className="flex w-full items-center justify-center gap-2 rounded-2xl bg-[#22c55e] px-4 py-3.5 text-[14px] font-semibold tracking-tight text-white shadow-[0_8px_24px_rgba(34,197,94,0.35)] transition-transform active:scale-[0.98]"
       >
-        <div className="mb-3 flex items-center justify-between">
-          <p className="text-[8px] font-medium uppercase tracking-[0.16em] text-white/40">
-            POS
-          </p>
-          <div className="flex items-center gap-1.5">
-            <span className="sl-pro-chip !px-2 !py-1 !text-[8px]">USDC</span>
-            {onBack ? (
-              <button
-                type="button"
-                onClick={onBack}
-                className="rounded-full border border-white/10 px-2 py-0.5 text-[9px] text-white/45"
-              >
-                Tools
-              </button>
-            ) : null}
-          </div>
-        </div>
+        <span className="text-[18px] leading-none">+</span>
+        Create payment QR
+      </button>
 
-        <div className="grid grid-cols-3 gap-1.5">
-          <StatTile label="Codes" value={String(totals.count)} />
-          <StatTile label="Uses" value={String(totals.uses)} />
-          <StatTile
-            label="Taken"
-            value={fmtUsd(totals.accumulated, totals.accumulated % 1 ? 2 : 0)}
-          />
-        </div>
-
-        <button
-          type="button"
-          onClick={openCreate}
-          className="mt-3.5 flex w-full items-center justify-center gap-2 rounded-2xl bg-[#22c55e] px-4 py-3.5 text-[14px] font-semibold tracking-tight text-white shadow-[0_8px_24px_rgba(34,197,94,0.35)] transition-transform active:scale-[0.98]"
-        >
-          <span className="text-[18px] leading-none">+</span>
-          Create payment QR
-        </button>
-      </section>
-
+      {/* All QRs */}
       <section
         className={`sl-pro-card sl-pro-card--flush ${
           embedded ? "p-3.5" : "p-5"
@@ -371,7 +350,7 @@ export function PosScreen({ onBack }: { onBack?: () => void }) {
       >
         <div className="flex items-center justify-between">
           <p className="text-[8px] font-medium uppercase tracking-[0.16em] text-white/40">
-            Your QRs
+            All payment QRs
           </p>
           <span className="text-[9px] text-white/35">
             {totals.active} active
