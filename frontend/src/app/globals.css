@@ -1526,3 +1526,15 @@ body {
 }
 .sl-vault input::placeholder,
 .sl-vault textarea::placeholder { color: rgb(255 255 255 / 0.3) !important; }
+
+/* Kill every violet (#6c5ce7) inside the vault — fully monochrome to match Pro.
+ * Solid violet buttons become white pills with dark text; tints, borders, text
+ * and the relayer checkbox go neutral. */
+.sl-vault [class*="bg-[#6c5ce7]"]:not([class*="bg-[#6c5ce7]/"]) {
+  background-color: #ffffff !important;
+  color: #0a0a0a !important;
+}
+.sl-vault [class*="bg-[#6c5ce7]/"] { background-color: rgb(255 255 255 / 0.04) !important; }
+.sl-vault [class*="text-[#6c5ce7]"] { color: rgb(255 255 255 / 0.75) !important; }
+.sl-vault [class*="border-[#6c5ce7]"] { border-color: rgb(255 255 255 / 0.14) !important; }
+.sl-vault [class*="accent-[#6c5ce7]"] { accent-color: #e5e5e5 !important; }
