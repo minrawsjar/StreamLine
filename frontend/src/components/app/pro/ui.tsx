@@ -153,7 +153,7 @@ export function ProModal({
         onClick={onClose}
       />
       <div
-        className={`relative max-h-[92%] w-full overflow-y-auto border border-white/[0.1] bg-[#121212] shadow-2xl ${
+        className={`sl-scrollbar-hidden relative max-h-[92%] w-full overflow-y-auto border border-white/[0.1] bg-[#121212] shadow-2xl ${
           embedded
             ? "rounded-[1.35rem] p-3.5"
             : "rounded-[1.75rem] p-5"
