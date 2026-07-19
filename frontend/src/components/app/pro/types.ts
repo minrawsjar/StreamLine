@@ -116,7 +116,9 @@ export const EMPTY_ALLOCATION: ProPoolAllocation = {
   reserve: 0,
 };
 
-export const YIELD_APY = 0.03;
+// Matches the on-chain yield vault's apr_bps (800 = 8%). Projections and the
+// interpolated yield tick use this, so it must track the real vault rate.
+export const YIELD_APY = 0.08;
 
 export function newId(prefix = "id") {
   return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;

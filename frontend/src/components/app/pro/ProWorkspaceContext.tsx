@@ -887,8 +887,11 @@ export function ProWorkspaceProvider({
 
     // 2) Build roster rows from any remaining on-chain streams (real data,
     // no local worker yet). Alias/group can be edited and will persist locally.
+    // Skip completed streams (state `done` → "stopped") — a finished payroll
+    // isn't an active roster member, and old test streams shouldn't pile up here.
     for (const s of streams) {
       if (claimed.has(s.id)) continue;
+      if (streamStateToWorkerStatus(s.state) === "stopped") continue;
       claimed.add(s.id);
       const total = s.total / USDC_BASE;
       workers.push({
