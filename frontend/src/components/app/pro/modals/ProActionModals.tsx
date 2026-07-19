@@ -91,7 +91,7 @@ function FundModal({ onClose }: { onClose: () => void }) {
   return (
     <ProModal
       title="Fund payroll pool"
-      subtitle="Lock USDC into the shared run. Pending substreams start dripping after this deposit."
+      subtitle="Lock USDC into the shared run. Pending people still need an individual Start to begin streaming."
       onClose={onClose}
     >
       <div className="space-y-4">
@@ -257,24 +257,6 @@ function RebalanceModal({ onClose }: { onClose: () => void }) {
       name: "StreamLine vault",
       detail: "Native adapter · ~3% APR testnet",
       available: true,
-    },
-    {
-      id: "scallop",
-      name: "Scallop",
-      detail: "Lending · mainnet adapter soon",
-      available: false,
-    },
-    {
-      id: "navi",
-      name: "Navi",
-      detail: "Lending · mainnet adapter soon",
-      available: false,
-    },
-    {
-      id: "suilend",
-      name: "Suilend",
-      detail: "Lending · mainnet adapter soon",
-      available: false,
     },
   ] as const;
 

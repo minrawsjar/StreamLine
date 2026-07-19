@@ -101,6 +101,7 @@ export function StreamActions({
   creating,
   onStatus,
   onStart,
+  onSettle,
   onApprove,
   onCancel,
   onDelete,
@@ -109,12 +110,27 @@ export function StreamActions({
   creating: boolean;
   onStatus: (id: string, status: ProWorkerStatus) => void;
   onStart: (id: string) => void;
+  onSettle: (id: string) => void;
   onApprove: (streamId: string) => void;
   onCancel: (streamId: string, alias: string) => void;
   onDelete: (id: string, alias: string) => void;
 }) {
   return (
     <div className="flex items-center justify-end gap-1">
+      {worker.engagementId ? (
+        <button
+          type="button"
+          title="Pay the worker the amount vested so far (settle_vested)"
+          disabled={creating}
+          onClick={(e) => {
+            e.stopPropagation();
+            onSettle(worker.id);
+          }}
+          className="inline-flex h-7 items-center rounded-full bg-white px-2.5 text-[10px] font-semibold text-[#0a0a0a] transition-opacity hover:opacity-90 disabled:opacity-40"
+        >
+          Pay vested
+        </button>
+      ) : null}
       {worker.status === "dripping" ? (
         <ActionIconBtn
           label="Pause"
@@ -176,6 +192,7 @@ export function StreamsScreen() {
     setModal,
     setWorkerStatus,
     createWorkerStream,
+    settleVested,
     approveStream,
     cancelStream,
     creating,
@@ -199,7 +216,11 @@ export function StreamsScreen() {
   );
 
   const removeWorker = (id: string, alias: string) => {
-    if (window.confirm(`Remove ${alias} from the payroll run?`)) {
+    const w = workspace.workers.find((x) => x.id === id);
+    const msg = w?.engagementId
+      ? `Remove ${alias} from the roster? The locked funds stay in your Shielded vault — reclaim them via Private vault → Unshield.`
+      : `Remove ${alias} from the payroll run?`;
+    if (window.confirm(msg)) {
       deleteWorker(id);
     }
   };
@@ -363,6 +384,7 @@ export function StreamsScreen() {
                   creating={creating}
                   onStatus={setWorkerStatus}
                   onStart={createWorkerStream}
+                  onSettle={settleVested}
                   onApprove={approveStream}
                   onCancel={cancelOnChain}
                   onDelete={removeWorker}
@@ -372,8 +394,9 @@ export function StreamsScreen() {
           })}
         </div>
         <p className="mt-3 px-2 text-[11px] text-white/30">
-          Claims are employee-side — recipients pull accrued pay themselves. Org
-          controls are pause, resume, and stop.
+          Private hires vest continuously — hit <span className="text-white/50">Pay vested</span> to
+          release the earned slice to the worker, who then Scans it in. Public hires use
+          pause / resume / stop.
         </p>
       </ProCard>
     </div>

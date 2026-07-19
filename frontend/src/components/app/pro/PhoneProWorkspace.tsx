@@ -677,6 +677,7 @@ function StreamsTab() {
     setModal,
     setWorkerStatus,
     createWorkerStream,
+    settleVested,
     approveStream,
     cancelStream,
     creating,
@@ -792,6 +793,7 @@ function StreamsTab() {
                   creating={creating}
                   onStatus={setWorkerStatus}
                   onStart={createWorkerStream}
+                  onSettle={settleVested}
                   onApprove={approveStream}
                   onCancel={(streamId, alias) => {
                     if (
@@ -803,7 +805,10 @@ function StreamsTab() {
                     }
                   }}
                   onDelete={(id, alias) => {
-                    if (window.confirm(`Remove ${alias} from the run?`)) {
+                    const msg = w.engagementId
+                      ? `Remove ${alias} from the roster? The locked funds stay in your Shielded vault — reclaim them via Tools → Private vault → Unshield.`
+                      : `Remove ${alias} from the run?`;
+                    if (window.confirm(msg)) {
                       deleteWorker(id);
                     }
                   }}

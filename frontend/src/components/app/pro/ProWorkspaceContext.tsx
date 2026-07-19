@@ -56,12 +56,17 @@ import {
 } from "@/lib/treasury";
 import {
   prepareOpenEngagement,
+  prepareSettleVested,
   findCreatedEngagement,
 } from "@/lib/private-stream";
 import { proveSplitAfterDeposit } from "@/lib/overfund-split";
 import { buildSpend } from "@/lib/shielded";
-import { getSpendKey, addNote } from "@/lib/shielded-store";
-import { addEngagement } from "@/lib/private-engagement-store";
+import { getSpendKey, addNote, markSpent } from "@/lib/shielded-store";
+import {
+  addEngagement,
+  loadEngagements,
+  updateEngagement,
+} from "@/lib/private-engagement-store";
 import {
   usePrivacyRelayer,
   relaySubmit,
@@ -139,6 +144,8 @@ type ProWorkspaceContextValue = {
   setWorkerStatus: (workerId: string, status: ProWorkerStatus) => Promise<boolean>;
   /** Lock the worker's budget and open private engagement or public treasury stream. */
   createWorkerStream: (workerId: string) => Promise<boolean>;
+  /** Pay the vested slice of a private engagement to the worker (settle_vested). */
+  settleVested: (workerId: string) => Promise<boolean>;
   /** Decrypt Seal-sealed roster (org wallet personal message). */
   unlockRoster: () => Promise<boolean>;
   rosterUnlocking: boolean;
@@ -499,6 +506,118 @@ export function ProWorkspaceProvider({
       }));
     },
     [mutate]
+  );
+
+  // Pay the vested slice of a private engagement to the worker (real
+  // `private_stream::settle_vested`). Publishes the worker's encrypted note so
+  // they can "Scan for incoming" and claim; rolls the employer's funding note
+  // forward to the change note. This is the real private payment leg.
+  const settleVested = useCallback(
+    async (workerId: string): Promise<boolean> => {
+      const worker = workspace.workers.find((w) => w.id === workerId);
+      if (!worker || !worker.engagementId) return false;
+      if (!address || !packageId || packageId === "0x0") return false;
+      if (!poolId || poolId === "0x0") {
+        window.alert("Shielded pool not configured on this network.");
+        return false;
+      }
+      const eng = loadEngagements(address).find(
+        (e) => e.engagementId === worker.engagementId
+      );
+      if (!eng) {
+        window.alert(
+          `No local engagement opening for ${worker.alias} in this browser — settle must run where the hire was opened.`
+        );
+        return false;
+      }
+      if (!eng.workerShielded?.startsWith("sl1")) {
+        window.alert(
+          `${worker.alias} has no private (sl1) pay-to address, so there's no one to settle to. Re-hire with an sl1 recipient.`
+        );
+        return false;
+      }
+      try {
+        const prepared = await prepareSettleVested({
+          packageId,
+          coinType: eng.coinType,
+          poolId,
+          engagementId: eng.engagementId,
+          client: suiClient,
+          sk: getSpendKey(address),
+          rhoIn: BigInt(eng.fundingRho),
+          valueIn: BigInt(eng.fundingValue),
+          rate: BigInt(eng.rate),
+          start: BigInt(eng.start),
+          cap: BigInt(eng.cap),
+          rParams: BigInt(eng.rParams),
+          paramsCommitment: BigInt(eng.paramsCommitment),
+          payBase: BigInt(eng.cap), // pay everything vested so far; clamped internally
+          workerShielded: eng.workerShielded,
+        });
+
+        let ok = false;
+        let settleErr: Error | null = null;
+        await execute(prepared.tx, {
+          onSuccess: () => {
+            ok = true;
+          },
+          onError: (e) => {
+            settleErr = e;
+          },
+        });
+        if (settleErr) throw settleErr;
+        if (!ok) return false;
+
+        // Employer's funding note is now the change note (cm2 / rho2, value v2).
+        markSpent(address, eng.fundingCm);
+        if (prepared.v2 > 0n) {
+          addNote(address, {
+            commitment: prepared.cm2.toString(),
+            value: prepared.v2.toString(),
+            rho: prepared.rho2.toString(),
+            spent: false,
+            createdAt: Date.now(),
+          });
+        }
+        updateEngagement(address, eng.engagementId, {
+          fundingCm: prepared.cm2.toString(),
+          fundingRho: prepared.rho2.toString(),
+          fundingValue: prepared.v2.toString(),
+        });
+
+        const paidUsd = Number(prepared.v1) / Number(USDC_BASE);
+        mutate((prev) =>
+          pushActivity(
+            {
+              ...prev,
+              workers: prev.workers.map((w) =>
+                w.id === workerId
+                  ? {
+                      ...w,
+                      status: "dripping" as const,
+                      startedAt: w.startedAt ?? Date.now(),
+                    }
+                  : w
+              ),
+            },
+            {
+              kind: "resumed",
+              label: `Paid ${worker.alias} $${paidUsd.toFixed(2)} vested — they can now Scan for incoming`,
+              amount: paidUsd,
+            }
+          )
+        );
+        return true;
+      } catch (e) {
+        window.alert(
+          `Couldn't settle ${worker.alias}: ${
+            e instanceof Error ? e.message : String(e)
+          }`
+        );
+        return false;
+      }
+    },
+    [address, workspace.workers, poolId, packageId, suiClient, execute, mutate]
   );
 
   const setWorkerStatus = useCallback(
@@ -1400,6 +1519,7 @@ export function ProWorkspaceProvider({
     deleteWorker,
     setWorkerStatus,
     createWorkerStream,
+    settleVested,
     unlockRoster,
     rosterUnlocking,
     approveStream,

@@ -298,6 +298,12 @@ export async function prepareSettleVested(p: {
   proof: Uint8Array;
   workerCiphertext: Uint8Array;
   paramsCommitment: bigint;
+  /** Amount actually paid to the worker this settle (base units). */
+  v1: bigint;
+  /** Employer's remaining funding note value after this settle (base units). */
+  v2: bigint;
+  /** Total vested so far on the schedule (base units). */
+  vested: bigint;
 }> {
   const commitments = await fetchCommitments(p.client, p.packageId);
   const cmIn = await noteCommit(p.valueIn, await pk(p.sk), p.rhoIn);
@@ -378,6 +384,9 @@ export async function prepareSettleVested(p: {
     proof: proof.proof,
     workerCiphertext,
     paramsCommitment: p.paramsCommitment,
+    v1,
+    v2,
+    vested,
   };
 }
 
