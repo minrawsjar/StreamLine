@@ -65,8 +65,6 @@ import { addEngagement } from "@/lib/private-engagement-store";
 import {
   usePrivacyRelayer,
   relaySubmit,
-  buildFundRelayerTx,
-  waitForRelayerBalance,
 } from "@/lib/privacy-relayer";
 import { SHIELDED_POOL, type NetworkName } from "@/lib/constants";
 import { USDC_BASE, toBaseUnits } from "@/lib/stream-math";
@@ -707,57 +705,20 @@ export function ProWorkspaceProvider({
             recipientShielded: shielded,
           });
 
+          // Funding open is user-signed (Enoki-sponsored gas). The relayer is
+          // never asked to fund principal — that path was drainable. Ongoing
+          // settles/spends still relay for origin-hiding (proof-only, no funds).
           let openDigest = "";
-          if (relayOn && relayer?.address) {
-            const fundTx = buildFundRelayerTx({
-              sender: address,
-              relayerAddress: relayer.address,
-              coinType: usdcType,
-              amountBase: prepared.depositBase,
-            });
-            let fundErr: Error | null = null;
-            await execute(
-              fundTx,
-              {
-                onSuccess: () => {},
-                onError: (e) => {
-                  fundErr = e;
-                },
-              },
-              { allowedRecipients: [relayer.address] }
-            );
-            if (fundErr) throw fundErr;
-            await waitForRelayerBalance(
-              suiClient,
-              relayer.address,
-              usdcType,
-              prepared.depositBase
-            );
-            const { digest } = await relaySubmit({
-              network: (network as NetworkName) ?? "testnet",
-              kind: "open",
-              packageId,
-              coinType: usdcType,
-              poolId,
-              proof: prepared.depositProof,
-              cm: prepared.cm,
-              amountBase: prepared.depositBase,
-              paramsCommitment: prepared.paramsCommitment,
-              ciphertext: prepared.ciphertext,
-            });
-            openDigest = digest;
-          } else {
-            let openErr: Error | null = null;
-            await execute(prepared.tx, {
-              onSuccess: ({ digest }) => {
-                openDigest = digest;
-              },
-              onError: (e) => {
-                openErr = e;
-              },
-            });
-            if (openErr) throw openErr;
-          }
+          let openErr: Error | null = null;
+          await execute(prepared.tx, {
+            onSuccess: ({ digest }) => {
+              openDigest = digest;
+            },
+            onError: (e) => {
+              openErr = e;
+            },
+          });
+          if (openErr) throw openErr;
 
           let fundingCm = prepared.cm;
           let fundingRho = prepared.rho;

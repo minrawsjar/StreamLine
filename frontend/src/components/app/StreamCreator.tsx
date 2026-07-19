@@ -44,8 +44,6 @@ import { SHIELDED_POOL, type NetworkName } from "@/lib/constants";
 import {
   usePrivacyRelayer,
   relaySubmit,
-  buildFundRelayerTx,
-  waitForRelayerBalance,
 } from "@/lib/privacy-relayer";
 import { proveSplitAfterDeposit } from "@/lib/overfund-split";
 import { buildSpend } from "@/lib/shielded";
@@ -398,50 +396,9 @@ export function StreamCreator({
         );
       };
 
-      if (relayOn && relayer?.address) {
-        setStatus("Step 1 — funding privacy relayer (overfund)…");
-        const fundTx = buildFundRelayerTx({
-          sender: account.address,
-          relayerAddress: relayer.address,
-          coinType: usdcType,
-          amountBase: prepared.depositBase,
-        });
-        let fundErr: Error | null = null;
-        await execute(
-          fundTx,
-          {
-            onSuccess: () => {},
-            onError: (e) => {
-              fundErr = e;
-            },
-          },
-          { allowedRecipients: [relayer.address] }
-        );
-        if (fundErr) throw fundErr;
-        setStatus("Waiting for relayer balance…");
-        await waitForRelayerBalance(
-          client,
-          relayer.address,
-          usdcType,
-          prepared.depositBase
-        );
-        setStatus("Relayer opening engagement…");
-        const { digest } = await relaySubmit({
-          network: (network as NetworkName) ?? "testnet",
-          kind: "open",
-          packageId,
-          coinType: usdcType,
-          poolId,
-          proof: prepared.depositProof,
-          cm: prepared.cm,
-          amountBase: prepared.depositBase,
-          paramsCommitment: prepared.paramsCommitment,
-          ciphertext: prepared.ciphertext,
-        });
-        await runSplit(digest);
-        return;
-      }
-
+      // Funding open is user-signed below (Enoki-sponsored gas); the relayer is
+      // never asked to fund principal — that path was drainable. The private
+      // split spend still relays (proof-only, moves no funds from the relayer).
       setStatus("Awaiting wallet signature…");
       let openDigest = "";
       let openErr: Error | null = null;

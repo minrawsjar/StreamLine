@@ -37,8 +37,6 @@ import {
 import {
   usePrivacyRelayer,
   relaySubmit,
-  buildFundRelayerTx,
-  waitForRelayerBalance,
 } from "@/lib/privacy-relayer";
 import {
   overfundAmount,
@@ -145,51 +143,9 @@ export function ShieldedPanel() {
       }
 
       const submitDeposit = async () => {
-        if (doRelay) {
-          setStatus("Step 1 — sending USDC to privacy relayer…");
-          const fundTx = buildFundRelayerTx({
-            sender: address,
-            relayerAddress: relayer!.address!,
-            coinType: usdcType,
-            amountBase: depositBase,
-          });
-          let fundErr: Error | null = null;
-          await execute(
-            fundTx,
-            {
-              onSuccess: () => {},
-              onError: (e) => {
-                fundErr = e;
-              },
-            },
-            { allowedRecipients: [relayer!.address!] }
-          );
-          if (fundErr) throw fundErr;
-          setStatus("Waiting for relayer balance…");
-          await waitForRelayerBalance(
-            client,
-            relayer!.address!,
-            usdcType,
-            depositBase
-          );
-          setStatus(
-            doSplit
-              ? "Relayer depositing overfund (hides your address)…"
-              : "Relayer depositing (hides your address)…"
-          );
-          const { digest } = await relaySubmit({
-            network: (network as NetworkName) ?? "testnet",
-            kind: "deposit",
-            packageId,
-            coinType: usdcType,
-            poolId,
-            proof: depositProof,
-            cm,
-            amountBase: depositBase,
-          });
-          return digest;
-        }
-
+        // Deposit is user-signed (Enoki-sponsored gas); the relayer is never
+        // asked to fund principal — that path was drainable. Spends/withdraws
+        // still relay for origin-hiding (proof-only, no funds leave the relayer).
         setStatus("Awaiting signature…");
         const tx = buildDeposit({
           packageId,

@@ -5,7 +5,7 @@
 import { SuiClient, getFullnodeUrl } from "@mysten/sui/client";
 import { Ed25519Keypair } from "@mysten/sui/keypairs/ed25519";
 import { decodeSuiPrivateKey } from "@mysten/sui/cryptography";
-import { Transaction, coinWithBalance } from "@mysten/sui/transactions";
+import { Transaction } from "@mysten/sui/transactions";
 import { fromBase64 } from "@mysten/sui/utils";
 
 import { FULLNODE_URLS, PACKAGE_IDS, SHIELDED_POOL, USDC_TYPE, type NetworkName } from "@/lib/constants";
@@ -252,59 +252,13 @@ export function buildRelayerTx(
   }
 
   if (kind === "deposit" || kind === "open") {
-    if (!proof || !body.cm || !body.amountBase) {
-      throw new Error("missing_deposit_fields");
-    }
-    assertU256(body.cm, "cm");
-    const amountBase = BigInt(body.amountBase);
-    if (amountBase <= 0n || amountBase > 10_000_000_000_000n) {
-      throw new Error("invalid_amount");
-    }
-    const ciphertext = body.ciphertextB64
-      ? fromBase64(body.ciphertextB64)
-      : new Uint8Array();
-
-    if (kind === "deposit") {
-      tx.moveCall({
-        target: `${packageId}::shielded_pool::deposit`,
-        typeArguments: [coinType],
-        arguments: [
-          tx.object(poolId),
-          coinWithBalance({ type: coinType, balance: amountBase }),
-          tx.pure.u256(BigInt(body.cm)),
-          u8(tx, proof),
-        ],
-      });
-      if (ciphertext.length > 0) {
-        tx.moveCall({
-          target: `${packageId}::shielded_pool::publish_note`,
-          typeArguments: [coinType],
-          arguments: [
-            tx.object(poolId),
-            tx.pure.u256(BigInt(body.cm)),
-            u8(tx, ciphertext),
-          ],
-        });
-      }
-      return tx;
-    }
-
-    // open engagement
-    if (!body.paramsCommitment) throw new Error("missing_params");
-    assertU256(body.paramsCommitment, "paramsCommitment");
-    tx.moveCall({
-      target: `${packageId}::private_stream::open_engagement`,
-      typeArguments: [coinType],
-      arguments: [
-        tx.object(poolId),
-        coinWithBalance({ type: coinType, balance: amountBase }),
-        tx.pure.u256(BigInt(body.cm)),
-        u8(tx, proof),
-        tx.pure.u256(BigInt(body.paramsCommitment)),
-        u8(tx, ciphertext),
-      ],
-    });
-    return tx;
+    // The relayer must NEVER fund deposit principal from its own balance: an
+    // unauthenticated caller can pass their own commitment + a matching proof
+    // and sweep whatever USDC the relayer holds into a note they control. So
+    // funding open/deposit is user-signed client-side (Enoki-sponsored gas);
+    // the relayer only relays proof-only ops (spend/settle/withdraw) that move
+    // no principal out of it.
+    throw new Error("relayer_deposit_disabled");
   }
 
   throw new Error("unsupported_kind");
