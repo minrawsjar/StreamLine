@@ -25,6 +25,7 @@ import {
 import { ProActionModals } from "./modals/ProActionModals";
 import { RosterUnlockBanner } from "./RosterUnlockBanner";
 import { MonthlyRunBars, StatusPill } from "./ui";
+import { HideBalanceCard } from "@/components/app/HideBalanceCard";
 import { ReportsScreen } from "./screens/ReportsScreen";
 import { ToolsScreen } from "./screens/ToolsScreen";
 import { StreamActions } from "./screens/StreamsScreen";
@@ -1157,6 +1158,8 @@ function TreasuryTab({ onRamp }: { onRamp: (mode: OnrampMode) => void }) {
           ) : null}
         </div>
       </section>
+
+      <HideBalanceCard variant="dark" />
     </div>
   );
 }

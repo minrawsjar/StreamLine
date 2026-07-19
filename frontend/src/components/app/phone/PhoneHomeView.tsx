@@ -47,6 +47,7 @@ import {
   loadEngagements,
   type PrivateEngagementSecret,
 } from "@/lib/private-engagement-store";
+import { HideBalanceCard } from "@/components/app/HideBalanceCard";
 import {
   PhoneDashboardView,
   type PhoneTopStat,
@@ -882,6 +883,11 @@ export function PhoneHomeView({
         onShiftCards={shiftCards}
         onPrimaryCardClick={openActiveCard}
         onPrimaryCardDetails={openActiveCard}
+        trailing={
+          <div className="mx-3 mt-1">
+            <HideBalanceCard variant="light" />
+          </div>
+        }
       />
       {selectedActivity && addr && (
         <PhoneActivityDetailModal
