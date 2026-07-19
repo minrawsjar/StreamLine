@@ -25,6 +25,7 @@ import {
 import { ProActionModals } from "./modals/ProActionModals";
 import { RosterUnlockBanner } from "./RosterUnlockBanner";
 import { MonthlyRunBars, StatusPill } from "./ui";
+import { PrivateReceiveCard } from "@/components/app/PrivateReceiveCard";
 import { ReportsScreen } from "./screens/ReportsScreen";
 import { ToolsScreen } from "./screens/ToolsScreen";
 import { StreamActions } from "./screens/StreamsScreen";
@@ -302,6 +303,8 @@ function OverviewTab({
           Manage funds on Treasury
         </p>
       </div>
+
+      <PrivateReceiveCard variant="dark" />
 
       {/* Finance hero — striped run chart */}
       <section className="sl-pro-card sl-pro-card--flush p-3.5">
