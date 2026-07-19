@@ -17,6 +17,9 @@ import {
 } from "@/lib/format";
 import type { NetworkName } from "@/lib/networks";
 import { useMyHandle } from "@/lib/use-handle";
+import { pk } from "@/lib/shielded";
+import { getSpendKey } from "@/lib/shielded-store";
+import { myShieldedAddress } from "@/lib/shielded-address";
 import { FaucetButton } from "./FaucetButton";
 import { ClaimHandleModal } from "./ClaimHandleModal";
 import {
@@ -70,7 +73,26 @@ export function AccountMenu({
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const [claimOpen, setClaimOpen] = useState(false);
+  const [sl, setSl] = useState("");
+  const [slCopied, setSlCopied] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+
+  // Derive the wallet's sl1 shielded receive address from its local spend key.
+  useEffect(() => {
+    const addr = account?.address;
+    if (!addr) {
+      setSl("");
+      return;
+    }
+    const sk = getSpendKey(addr);
+    let cancelled = false;
+    pk(sk).then((pkv) => {
+      if (!cancelled) setSl(myShieldedAddress(sk, pkv));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [account?.address]);
 
   useEffect(() => {
     const onClick = (e: MouseEvent) => {
@@ -88,6 +110,13 @@ export function AccountMenu({
     if (await copyToClipboard(account.address)) {
       setCopied(true);
       setTimeout(() => setCopied(false), 1200);
+    }
+  };
+
+  const onCopySl = async () => {
+    if (sl && (await copyToClipboard(sl))) {
+      setSlCopied(true);
+      setTimeout(() => setSlCopied(false), 1200);
     }
   };
 
@@ -336,6 +365,88 @@ export function AccountMenu({
                 )}
               </button>
             </div>
+
+            {sl && (
+              <div
+                className={`mt-2 flex items-stretch gap-2 rounded-xl border px-3 py-2.5 ${
+                  dark
+                    ? "border-white/10 bg-white/[0.04]"
+                    : "border-black/10 bg-[#fafafa]"
+                }`}
+              >
+                <div className="min-w-0 flex-1 text-left">
+                  <p
+                    className={`text-[8px] font-semibold uppercase tracking-[0.12em] ${
+                      dark ? "text-white/40" : "text-[#999]"
+                    }`}
+                  >
+                    Private receive address
+                  </p>
+                  <p
+                    className={`mt-0.5 truncate font-mono text-[9px] ${
+                      dark ? "text-white/70" : "text-[#333]"
+                    }`}
+                  >
+                    {sl}
+                  </p>
+                  {slCopied && (
+                    <p
+                      className={`mt-1 text-[9px] font-medium ${
+                        dark ? "text-[#4ade80]" : "text-[#1a5c38]"
+                      }`}
+                    >
+                      Copied
+                    </p>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => void onCopySl()}
+                  className={`flex h-8 w-8 shrink-0 self-center items-center justify-center rounded-xl border transition-colors ${
+                    slCopied
+                      ? dark
+                        ? "border-[#4ade80]/40 bg-[#4ade80]/10 text-[#4ade80]"
+                        : "border-[#1a5c38]/30 bg-[#1a5c38]/[0.08] text-[#1a5c38]"
+                      : dark
+                        ? "border-white/10 text-white/50 hover:bg-white/[0.08] hover:text-white"
+                        : "border-black/8 text-[#999] hover:bg-black/[0.04] hover:text-[#111]"
+                  }`}
+                  aria-label="Copy private receive address"
+                  title="Copy sl1 receive address"
+                >
+                  {slCopied ? (
+                    <svg
+                      width="14"
+                      height="14"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="1.75"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      aria-hidden
+                    >
+                      <polyline points="20 6 9 17 4 12" />
+                    </svg>
+                  ) : (
+                    <svg
+                      width="14"
+                      height="14"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="1.75"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      aria-hidden
+                    >
+                      <rect x="9" y="9" width="13" height="13" rx="2" />
+                      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                    </svg>
+                  )}
+                </button>
+              </div>
+            )}
           </div>
 
           <div

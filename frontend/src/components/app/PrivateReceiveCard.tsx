@@ -77,20 +77,20 @@ export function PrivateReceiveCard({
     <div
       className={
         dark
-          ? "rounded-2xl border border-[#6c5ce7]/30 bg-[#6c5ce7]/[0.08] p-3"
-          : "rounded-2xl border border-[#6c5ce7]/20 bg-[#6c5ce7]/[0.05] p-3"
+          ? "rounded-2xl border border-white/10 bg-white/[0.04] p-3"
+          : "rounded-2xl border border-black/10 bg-black/[0.015] p-3"
       }
     >
       <div className="flex items-center justify-between gap-2">
         <p
           className={`text-[10px] font-semibold uppercase tracking-[0.14em] ${
-            dark ? "text-[#b9b2ff]" : "text-[#6c5ce7]"
+            dark ? "text-white/55" : "text-[#333]"
           }`}
         >
           Private receive address
         </p>
         <span
-          className={`text-[8px] ${dark ? "text-white/40" : "text-[#9aa0a6]"}`}
+          className={`text-[8px] ${dark ? "text-white/35" : "text-[#9aa0a6]"}`}
         >
           share to get paid privately
         </span>
@@ -100,7 +100,7 @@ export function PrivateReceiveCard({
           className={`flex-1 truncate rounded-lg px-2 py-1.5 font-mono text-[10px] ${
             dark
               ? "bg-white/[0.06] text-white/85"
-              : "border border-black/5 bg-white text-[#333]"
+              : "border border-black/8 bg-white text-[#333]"
           }`}
         >
           {addr}
@@ -108,7 +108,9 @@ export function PrivateReceiveCard({
         <button
           type="button"
           onClick={copy}
-          className="shrink-0 rounded-lg bg-[#6c5ce7] px-3 py-1.5 text-[10px] font-semibold text-white"
+          className={`shrink-0 rounded-lg px-3 py-1.5 text-[10px] font-semibold ${
+            dark ? "bg-white text-[#0a0a0a]" : "bg-[#111] text-white"
+          }`}
         >
           {copied ? "Copied!" : "Copy"}
         </button>
