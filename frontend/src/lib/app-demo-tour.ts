@@ -188,6 +188,21 @@ async function ensureToggleOn(demo: string, abort: () => boolean) {
   }
 }
 
+async function ensureToggleOff(demo: string, abort: () => boolean) {
+  if (abort()) return;
+  const switchEl = await waitFor(
+    `[data-demo="${demo}"] [role="switch"]`,
+    5000
+  );
+  if (!switchEl || abort()) return;
+  if (switchEl.getAttribute("aria-checked") === "true") {
+    flash(switchEl);
+    await sleep(120);
+    switchEl.click();
+    await sleep(350);
+  }
+}
+
 /**
  * Wait on the claim-name screen.
  * Programmatic Claim clicks often hit "failed to open new window" (browser blocks
@@ -378,7 +393,7 @@ function buildReachHomeSteps(app: "user" | "pro"): StepFn[] {
   ];
 }
 
-/** Scenario A — request private stream + milestones → share link. */
+/** Scenario A — public request: milestones + yield split → share link. */
 export function buildRequestPuppetScript(): StepFn[] {
   return [
     ...buildReachHomeSteps("user"),
@@ -401,8 +416,9 @@ export function buildRequestPuppetScript(): StepFn[] {
       await sleep(350);
     },
     async (abort) => {
-      emitPuppetStatus({ running: true, label: "Private + milestones…" });
-      await ensureToggleOn("request-private", abort);
+      emitPuppetStatus({ running: true, label: "Milestones…" });
+      // Public / named stream — not private
+      await ensureToggleOff("request-private", abort);
       await ensureToggleOn("request-milestones", abort);
       await sleep(300);
       while (
@@ -421,11 +437,29 @@ export function buildRequestPuppetScript(): StepFn[] {
         );
       }
       await puppetClick('[data-demo-action="request-continue"]', abort);
-      await waitFor('[data-demo-action="request-create"]', 8000);
+      await waitFor('[data-demo="request-splits"]', 8000);
       await sleep(350);
     },
     async (abort) => {
-      emitPuppetStatus({ running: true, label: "Create request link…" });
+      emitPuppetStatus({ running: true, label: "Yield split…" });
+      await ensureToggleOn("request-splits", abort);
+      await sleep(300);
+      // 70% spending / 30% yield
+      await puppetType('[data-demo="request-split-pct-0"]', "70", abort);
+      if (!qs('[data-demo="request-split-pct-1"]')) {
+        await puppetClick('[data-demo-action="request-add-split"]', abort);
+        await sleep(250);
+      }
+      await puppetType('[data-demo="request-split-pct-1"]', "30", abort);
+      const yieldBox = qs(
+        '[data-demo="request-split-yield-1"]'
+      ) as HTMLInputElement | null;
+      if (yieldBox && !yieldBox.checked) {
+        flash(yieldBox);
+        yieldBox.click();
+        await sleep(200);
+      }
+      await sleep(300);
       await puppetClick('[data-demo-action="request-create"]', abort);
       await waitFor('[data-demo="request-share"]', 10_000);
       await sleep(600);

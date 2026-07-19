@@ -107,7 +107,7 @@ export function AppDemoTour({ hidden = false }: AppDemoTourProps) {
           <button
             type="button"
             onClick={() => play("request")}
-            title="Play: request stream → share link"
+            title="Play: request milestones + yield → share link"
             aria-label="Play request demo"
             className="flex h-9 w-9 items-center justify-center text-black transition hover:opacity-70"
           >

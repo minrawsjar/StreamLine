@@ -227,7 +227,9 @@ public fun create_stream<T>(
         freelancer,
         balance: payment.into_balance(),
         total,
-        state: STATE_LOCKED,
+        // Consumer / wallet streams start dripping on fund so borrow + accrual
+        // work immediately. Later milestones still re-lock after each settles.
+        state: STATE_DRIPPING,
         milestones,
         current_milestone: 0,
         milestone_paid: 0,
@@ -309,7 +311,7 @@ public fun create_stream_v2<T>(
         freelancer,
         balance: payment.into_balance(),
         total,
-        state: STATE_LOCKED,
+        state: STATE_DRIPPING,
         milestones,
         current_milestone: 0,
         milestone_paid: 0,

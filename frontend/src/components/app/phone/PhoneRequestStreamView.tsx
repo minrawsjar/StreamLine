@@ -344,6 +344,7 @@ export function PhoneRequestStreamView({ onClose }: PhoneRequestStreamViewProps)
       {step === 3 && (
         <>
           <PhoneToggleRow
+            data-demo="request-splits"
             title="Split each drip"
             subtitle={
               isPrivate
@@ -360,6 +361,7 @@ export function PhoneRequestStreamView({ onClose }: PhoneRequestStreamViewProps)
               {splits.map((row, i) => (
                 <div key={i} className="flex items-center gap-1.5">
                   <input
+                    data-demo={`request-split-addr-${i}`}
                     value={row.address}
                     onChange={(e) =>
                       updateSplit(i, {
@@ -374,6 +376,7 @@ export function PhoneRequestStreamView({ onClose }: PhoneRequestStreamViewProps)
                     <input
                       type="number"
                       inputMode="numeric"
+                      data-demo={`request-split-pct-${i}`}
                       value={row.pct === 0 ? "" : row.pct}
                       placeholder="0"
                       onChange={(e) =>
@@ -391,6 +394,7 @@ export function PhoneRequestStreamView({ onClose }: PhoneRequestStreamViewProps)
                   >
                     <input
                       type="checkbox"
+                      data-demo={`request-split-yield-${i}`}
                       checked={row.yield}
                       onChange={(e) => updateSplit(i, { yield: e.target.checked })}
                     />
@@ -408,6 +412,7 @@ export function PhoneRequestStreamView({ onClose }: PhoneRequestStreamViewProps)
               ))}
               <button
                 type="button"
+                data-demo-action="request-add-split"
                 onClick={() =>
                   setSplits((s) => [
                     ...s,

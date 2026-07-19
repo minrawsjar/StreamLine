@@ -21,6 +21,21 @@ export function maxBorrowableBase(
   return Math.min(streamPresentValueBase(remainingBase), poolReserveBase);
 }
 
+/**
+ * Demo / pitch: when the lending pool has no liquidity (or isn't deployed),
+ * still allow borrowing up to 90% of stream remaining — UI + local pending loan.
+ */
+export function maxBorrowableBaseOrDemo(
+  remainingBase: number,
+  poolReserveBase: number
+): { maxBase: number; demo: boolean } {
+  const pv = streamPresentValueBase(remainingBase);
+  if (pv <= 0) return { maxBase: 0, demo: false };
+  const capped = Math.min(pv, Math.max(0, poolReserveBase));
+  if (capped > 0) return { maxBase: capped, demo: false };
+  return { maxBase: pv, demo: true };
+}
+
 export type Loan = {
   loanId: string;
   streamId: string;

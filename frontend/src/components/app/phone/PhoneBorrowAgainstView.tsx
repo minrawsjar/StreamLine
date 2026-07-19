@@ -13,10 +13,10 @@ import {
 } from "@/lib/loan-ui";
 import { useNetworkVariable } from "@/lib/networks";
 import { USDC_BASE } from "@/lib/stream-math";
-import { effectiveState } from "@/lib/stream-state";
+import { effectiveState, liveRemainingBase } from "@/lib/stream-state";
 import { useGaslessExecute } from "@/lib/use-gasless";
 import {
-  maxBorrowableBase,
+  maxBorrowableBaseOrDemo,
   useLending,
   PV_DISCOUNT,
 } from "@/lib/use-lending";
@@ -52,10 +52,22 @@ export function PhoneBorrowAgainstView({
   const [amountUsd, setAmountUsd] = useState(0);
   const [status, setStatus] = useState<string | null>(null);
   const [pendingBorrows, setPendingBorrows] = useState(readPendingBorrows);
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    const t = window.setInterval(() => setNow(Date.now()), 250);
+    return () => window.clearInterval(t);
+  }, []);
 
   const view = effectiveState(stream);
   const isDripping = view === "dripping";
-  const maxBorrowBase = maxBorrowableBase(stream.remaining, pool.reserveBase);
+  const remainingLive = isDripping
+    ? liveRemainingBase(stream, now)
+    : stream.remaining;
+  const { maxBase: maxBorrowBase, demo: demoBorrow } = maxBorrowableBaseOrDemo(
+    remainingLive,
+    pool.reserveBase
+  );
   const maxBorrowUsd = maxBorrowBase / USDC_BASE;
 
   const existingLoan = loanForStream(stream.id, pool.loans, pendingBorrows);
@@ -68,17 +80,22 @@ export function PhoneBorrowAgainstView({
   const netPerSec = netDripPerSec(existingLoan, stream) / USDC_BASE;
 
   const blockReason = useMemo(() => {
-    if (!isDripping) return "Only dripping streams can be borrowed against.";
-    if (!deployed) return "Lending pool is not available on this network yet.";
-    if (existingLoan && maxBorrowBase <= 0) {
-      return null;
-    }
+    if (existingLoan && maxBorrowBase <= 0) return null;
     if (maxBorrowBase <= 0) {
-      if (pool.reserveBase <= 0) return "Pool has no liquidity right now.";
       return "Nothing left to borrow against on this stream.";
     }
+    // Demo path unlocks even when pool/liquidity isn't live.
+    if (demoBorrow) return null;
+    if (!isDripping) return "Only dripping streams can be borrowed against.";
+    if (!deployed) return "Lending pool is not available on this network yet.";
     return null;
-  }, [isDripping, deployed, maxBorrowBase, pool.reserveBase, existingLoan]);
+  }, [
+    isDripping,
+    deployed,
+    maxBorrowBase,
+    existingLoan,
+    demoBorrow,
+  ]);
 
   useEffect(() => {
     if (blockReason) {
@@ -97,6 +114,18 @@ export function PhoneBorrowAgainstView({
 
   const onBorrow = () => {
     if (!account || !canBorrow) return;
+
+    // Pitch / empty-pool path — local receipt, no on-chain liquidity needed.
+    if (demoBorrow || !deployed) {
+      rememberPendingBorrow(stream.id, amountBase);
+      setPendingBorrows(readPendingBorrows());
+      setStatus(
+        "Borrowed — demo credit against this stream. Future drips would repay automatically."
+      );
+      onBorrowed?.();
+      return;
+    }
+
     setStatus("Awaiting signature…");
     execute(
       buildBorrow({
@@ -184,7 +213,8 @@ export function PhoneBorrowAgainstView({
               {usd(maxBorrowBase, 2)}
             </p>
             <p className="mt-2 text-[11px] leading-snug text-[#666]">
-              {(PV_DISCOUNT * 100).toFixed(0)}% of remaining ({usd(stream.remaining, 2)})
+              {(PV_DISCOUNT * 100).toFixed(0)}% of remaining ({usd(remainingLive, 2)})
+              {demoBorrow ? " · demo liquidity" : ""}
             </p>
           </section>
         )}
@@ -204,7 +234,7 @@ export function PhoneBorrowAgainstView({
               <section className="rounded-2xl border border-black/10 bg-white p-4">
                 <div className="flex items-baseline justify-between gap-2">
                   <p className="text-[9px] font-semibold uppercase tracking-[0.16em] text-[#888]">
-                    {detailsMode ? "Borrow more" : "Borrow amount"}
+                    Borrow amount
                   </p>
                   <p className="text-[18px] font-bold tabular-nums text-[#111]">
                     {usd(amountBase, 2)}
@@ -213,7 +243,7 @@ export function PhoneBorrowAgainstView({
                 <input
                   type="range"
                   min={0}
-                  max={maxBorrowUsd}
+                  max={Math.max(maxBorrowUsd, 0.01)}
                   step={maxBorrowUsd >= 100 ? 1 : 0.01}
                   value={amountUsd}
                   onChange={(e) => setAmountUsd(Number(e.target.value))}
@@ -226,13 +256,17 @@ export function PhoneBorrowAgainstView({
               </section>
 
               <div className="grid grid-cols-2 gap-2">
-                <MiniStat label="Borrow APR" value={`${pool.borrowAprPct.toFixed(0)}%`} />
+                <MiniStat
+                  label="Borrow APR"
+                  value={`${(pool.borrowAprPct || 12).toFixed(0)}%`}
+                />
                 <MiniStat label="Repay" value="Auto from drips" />
               </div>
 
               <p className="text-[10px] leading-snug text-[#888]">
-                Cash arrives now. Future drips repay the loan automatically — no
-                liquidation risk as the stream drains.
+                {demoBorrow
+                  ? "Demo borrow against this stream’s remaining value — no pool liquidity required."
+                  : "Cash arrives now. Future drips repay the loan automatically — no liquidation risk as the stream drains."}
               </p>
             </>
           )
@@ -254,7 +288,7 @@ export function PhoneBorrowAgainstView({
           <button
             type="button"
             onClick={onBorrow}
-            disabled={!canBorrow || isPending || pool.isLoading}
+            disabled={!canBorrow || isPending || (!demoBorrow && pool.isLoading)}
             className="mt-2 w-full rounded-2xl bg-[#e85d2a] px-4 py-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-white disabled:opacity-40"
           >
             {isPending ? "Borrowing…" : `Borrow ${usd(amountBase, 2)}`}
