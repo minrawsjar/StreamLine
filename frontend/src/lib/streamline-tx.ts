@@ -439,6 +439,34 @@ export function buildTreasuryDeposit(
   return tx;
 }
 
+/**
+ * Customer pays a payment QR: pull `amountBase` USDC from the payer and settle
+ * it into the merchant's treasury via `pos::pay`, tagged with `qrId` so per-QR
+ * totals aggregate from the emitted `PosPaid` events.
+ */
+export function buildPosPay(a: {
+  packageId: string;
+  usdcType: string;
+  sender: string;
+  qrId: string;
+  treasuryId: string;
+  amountBase: bigint;
+}): Transaction {
+  const tx = new Transaction();
+  tx.setSenderIfNotSet(a.sender);
+  tx.moveCall({
+    target: `${a.packageId}::pos::pay`,
+    typeArguments: [a.usdcType],
+    arguments: [
+      tx.pure.string(a.qrId),
+      coinWithBalance({ type: a.usdcType, balance: a.amountBase }),
+      tx.object(a.treasuryId),
+      tx.object(CLOCK),
+    ],
+  });
+  return tx;
+}
+
 /** Withdraw idle float back to the owner. */
 export function buildTreasuryWithdraw(
   a: TreasuryRef & { amountBase: bigint }

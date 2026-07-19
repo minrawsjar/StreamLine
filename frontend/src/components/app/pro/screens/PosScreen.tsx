@@ -1,86 +1,61 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { QRCodeSVG } from "qrcode.react";
+import { useSuiClient } from "@mysten/dapp-kit";
 
 import { usePhoneEmbedded } from "@/components/app/phone/PhoneEmbeddedContext";
+import {
+  buildPosPayUrl,
+  loadPosQrs,
+  savePosQrs,
+  usePosStats,
+  type PosQr,
+} from "@/lib/pro-pos";
 import { useProWorkspace } from "../ProWorkspaceContext";
 import { fmtUsd } from "../types";
 import { ProEyebrow, ProStat } from "../ui";
 
-type PaymentQr = {
-  id: string;
-  label: string;
-  /** Fixed USDC amount; null = open / customer chooses */
-  amountUsd: number | null;
-  uses: number;
-  accumulatedUsd: number;
-  active: boolean;
-  createdAtMs: number;
-};
-
-const SEED_QRS: PaymentQr[] = [
-  {
-    id: "qr-counter",
-    label: "Counter",
-    amountUsd: null,
-    uses: 48,
-    accumulatedUsd: 612.4,
-    active: true,
-    createdAtMs: Date.now() - 12 * 24 * 60 * 60_000,
-  },
-  {
-    id: "qr-coffee",
-    label: "Coffee fixed",
-    amountUsd: 4.5,
-    uses: 126,
-    accumulatedUsd: 567,
-    active: true,
-    createdAtMs: Date.now() - 40 * 24 * 60 * 60_000,
-  },
-  {
-    id: "qr-event",
-    label: "Pop-up Saturday",
-    amountUsd: 12,
-    uses: 9,
-    accumulatedUsd: 108,
-    active: false,
-    createdAtMs: Date.now() - 5 * 24 * 60 * 60_000,
-  },
-];
-
-function payUrl(orgSlug: string, qrId: string): string {
-  // Preview URL shape — real pay route wires later
-  return `https://streamline.app/pay/${orgSlug}/${qrId}`;
-}
-
-function orgSlug(name: string): string {
-  return (
-    name
-      .trim()
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/^-|-$/g, "") || "org"
-  );
-}
-
 export function PosScreen() {
   const embedded = usePhoneEmbedded();
-  const { workspace } = useProWorkspace();
-  const slug = orgSlug(workspace.orgName);
-  const [qrs, setQrs] = useState<PaymentQr[]>(SEED_QRS);
+  const client = useSuiClient();
+  const { workspace, address } = useProWorkspace();
+  const treasuryId = workspace.treasuryId;
+
+  const [qrs, setQrs] = useState<PosQr[]>([]);
   const [view, setView] = useState<"list" | "create" | "detail">("list");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [draftLabel, setDraftLabel] = useState("");
   const [draftAmount, setDraftAmount] = useState("");
   const [openAmount, setOpenAmount] = useState(true);
+  const [copied, setCopied] = useState(false);
 
-  const totals = useMemo(() => {
-    const uses = qrs.reduce((a, q) => a + q.uses, 0);
-    const accumulated = qrs.reduce((a, q) => a + q.accumulatedUsd, 0);
-    const active = qrs.filter((q) => q.active).length;
-    return { uses, accumulated, active, count: qrs.length };
-  }, [qrs]);
+  // Load persisted QR definitions for this org.
+  useEffect(() => {
+    setQrs(loadPosQrs(address));
+  }, [address]);
+
+  const persist = useCallback(
+    (next: PosQr[]) => {
+      setQrs(next);
+      savePosQrs(address, next);
+    },
+    [address]
+  );
+
+  // Real uses + totals from on-chain PosPaid events for this treasury.
+  const { data: stats } = usePosStats(client, treasuryId);
+  const statFor = (id: string) => stats?.byQr[id] ?? { uses: 0, totalUsd: 0 };
+
+  const totals = useMemo(
+    () => ({
+      count: qrs.length,
+      active: qrs.filter((q) => q.active).length,
+      uses: stats?.totalUses ?? 0,
+      taken: stats?.totalUsd ?? 0,
+    }),
+    [qrs, stats]
+  );
 
   const selected = qrs.find((q) => q.id === selectedId) ?? null;
 
@@ -99,17 +74,9 @@ export function PosScreen() {
       if (!Number.isFinite(n) || n <= 0) return;
       amountUsd = Math.round(n * 100) / 100;
     }
-    const id = `qr-${Date.now()}`;
-    const next: PaymentQr = {
-      id,
-      label,
-      amountUsd,
-      uses: 0,
-      accumulatedUsd: 0,
-      active: true,
-      createdAtMs: Date.now(),
-    };
-    setQrs((prev) => [next, ...prev]);
+    const id = `qr-${Date.now().toString(36)}`;
+    const next: PosQr = { id, label, amountUsd, active: true, createdAtMs: Date.now() };
+    persist([next, ...qrs]);
     setSelectedId(id);
     setView("detail");
   };
@@ -118,17 +85,14 @@ export function PosScreen() {
     ? "flex flex-col gap-2.5 px-0.5 pb-1 pt-0.5"
     : "mx-auto max-w-lg space-y-5";
 
+  // No treasury yet → payments have nowhere to land. Gate creation honestly.
+  const noTreasury = !treasuryId;
+
   if (view === "create") {
     return (
       <div className={shell}>
-        {!embedded ? (
-          <Header title="New payment QR" />
-        ) : null}
-        <section
-          className={`sl-pro-card sl-pro-card--flush ${
-            embedded ? "p-3.5" : "p-5"
-          }`}
-        >
+        {!embedded ? <Header title="New payment QR" /> : null}
+        <section className={`sl-pro-card sl-pro-card--flush ${embedded ? "p-3.5" : "p-5"}`}>
           <div className="flex items-center justify-between">
             <p className="text-[8px] font-medium uppercase tracking-[0.16em] text-white/40">
               Create QR
@@ -201,10 +165,17 @@ export function PosScreen() {
             )}
           </div>
 
+          {noTreasury ? (
+            <p className="mt-4 rounded-xl border border-amber-400/20 bg-amber-400/[0.06] px-3 py-2.5 text-[10px] leading-snug text-amber-200/80">
+              Fund your treasury pool first (Treasury tab) — scanned payments
+              settle into it.
+            </p>
+          ) : null}
+
           <button
             type="button"
             onClick={createQr}
-            disabled={!openAmount && !(Number(draftAmount) > 0)}
+            disabled={noTreasury || (!openAmount && !(Number(draftAmount) > 0))}
             className="mt-4 flex w-full items-center justify-center rounded-2xl bg-[#22c55e] px-4 py-3.5 text-[14px] font-semibold text-white shadow-[0_8px_24px_rgba(34,197,94,0.35)] transition-transform enabled:active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-35 disabled:shadow-none"
           >
             Create payment QR
@@ -214,16 +185,13 @@ export function PosScreen() {
     );
   }
 
-  if (view === "detail" && selected) {
-    const url = payUrl(slug, selected.id);
+  if (view === "detail" && selected && treasuryId) {
+    const url = buildPosPayUrl(selected, treasuryId, workspace.orgName);
+    const s = statFor(selected.id);
     return (
       <div className={shell}>
         {!embedded ? <Header title={selected.label} /> : null}
-        <section
-          className={`sl-pro-card sl-pro-card--flush ${
-            embedded ? "p-3.5" : "p-5"
-          }`}
-        >
+        <section className={`sl-pro-card sl-pro-card--flush ${embedded ? "p-3.5" : "p-5"}`}>
           <div className="flex items-center justify-between">
             <p className="text-[8px] font-medium uppercase tracking-[0.16em] text-white/40">
               Payment QR
@@ -253,55 +221,39 @@ export function PosScreen() {
           <div className="mx-auto mt-4 flex items-center justify-center rounded-2xl bg-white p-3.5">
             <QRCodeSVG value={url} size={embedded ? 148 : 180} level="M" />
           </div>
-          <p className="mt-2.5 break-all text-center text-[9px] leading-snug text-white/30">
-            {url}
-          </p>
+          <button
+            type="button"
+            onClick={() => {
+              void navigator.clipboard?.writeText(url);
+              setCopied(true);
+              setTimeout(() => setCopied(false), 1500);
+            }}
+            className="mt-2.5 block w-full break-all text-center text-[9px] leading-snug text-white/30 transition-colors hover:text-white/50"
+          >
+            {copied ? "Copied ✓" : url}
+          </button>
 
           <div className="mt-4 grid grid-cols-2 gap-1.5">
-            <StatTile label="Uses" value={String(selected.uses)} />
+            <StatTile label="Uses" value={String(s.uses)} />
             <StatTile
-              label="Accumulated"
-              value={fmtUsd(selected.accumulatedUsd, selected.accumulatedUsd % 1 ? 2 : 0)}
+              label="Taken"
+              value={fmtUsd(s.totalUsd, s.totalUsd % 1 ? 2 : 0)}
             />
           </div>
 
-          <div className="mt-3 grid grid-cols-2 gap-1.5">
-            <button
-              type="button"
-              onClick={() =>
-                setQrs((prev) =>
-                  prev.map((q) =>
-                    q.id === selected.id ? { ...q, active: !q.active } : q
-                  )
+          <button
+            type="button"
+            onClick={() =>
+              persist(
+                qrs.map((q) =>
+                  q.id === selected.id ? { ...q, active: !q.active } : q
                 )
-              }
-              className="rounded-2xl border border-white/12 bg-white/[0.06] px-3 py-3 text-[12px] font-semibold text-white"
-            >
-              {selected.active ? "Pause" : "Activate"}
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                // Demo: bump use as if someone paid
-                setQrs((prev) =>
-                  prev.map((q) =>
-                    q.id === selected.id
-                      ? {
-                          ...q,
-                          uses: q.uses + 1,
-                          accumulatedUsd:
-                            q.accumulatedUsd +
-                            (q.amountUsd ?? 10),
-                        }
-                      : q
-                  )
-                );
-              }}
-              className="rounded-2xl bg-[#22c55e] px-3 py-3 text-[12px] font-semibold text-white shadow-[0_6px_18px_rgba(34,197,94,0.3)]"
-            >
-              Simulate scan
-            </button>
-          </div>
+              )
+            }
+            className="mt-3 w-full rounded-2xl border border-white/12 bg-white/[0.06] px-3 py-3 text-[12px] font-semibold text-white"
+          >
+            {selected.active ? "Pause" : "Activate"}
+          </button>
         </section>
       </div>
     );
@@ -316,19 +268,18 @@ export function PosScreen() {
             Payment QRs
           </h1>
           <p className="mt-1 text-[13px] text-white/45">
-            Create reusable USDC QR codes for the counter. Track uses and
-            totals — UI preview.
+            Reusable USDC QR codes for the counter. Scans pay on-chain into your
+            treasury pool; uses & totals are read from chain.
           </p>
         </div>
       ) : null}
 
-      {/* Stats — one block, three cards */}
       <div className={`grid grid-cols-3 ${embedded ? "gap-1.5" : "gap-3"}`}>
         <ProStat label="Codes" value={String(totals.count)} />
         <ProStat label="Uses" value={String(totals.uses)} />
         <ProStat
           label="Taken"
-          value={fmtUsd(totals.accumulated, totals.accumulated % 1 ? 2 : 0)}
+          value={fmtUsd(totals.taken, totals.taken % 1 ? 2 : 0)}
           accent
         />
       </div>
@@ -342,62 +293,59 @@ export function PosScreen() {
         Create payment QR
       </button>
 
-      {/* All QRs */}
-      <section
-        className={`sl-pro-card sl-pro-card--flush ${
-          embedded ? "p-3.5" : "p-5"
-        }`}
-      >
+      <section className={`sl-pro-card sl-pro-card--flush ${embedded ? "p-3.5" : "p-5"}`}>
         <div className="flex items-center justify-between">
           <p className="text-[8px] font-medium uppercase tracking-[0.16em] text-white/40">
             All payment QRs
           </p>
-          <span className="text-[9px] text-white/35">
-            {totals.active} active
-          </span>
+          <span className="text-[9px] text-white/35">{totals.active} active</span>
         </div>
 
         <div className="mt-2.5 space-y-1.5">
-          {qrs.map((qr) => (
-            <button
-              key={qr.id}
-              type="button"
-              onClick={() => {
-                setSelectedId(qr.id);
-                setView("detail");
-              }}
-              className="flex w-full items-center gap-3 rounded-xl bg-white/[0.04] px-2.5 py-2.5 text-left transition-colors active:bg-white/[0.07]"
-            >
-              <QrThumb url={payUrl(slug, qr.id)} muted={!qr.active} />
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-1.5">
-                  <p className="truncate text-[12px] font-semibold text-white">
-                    {qr.label}
+          {qrs.map((qr) => {
+            const s = statFor(qr.id);
+            return (
+              <button
+                key={qr.id}
+                type="button"
+                onClick={() => {
+                  setSelectedId(qr.id);
+                  setView("detail");
+                }}
+                className="flex w-full items-center gap-3 rounded-xl bg-white/[0.04] px-2.5 py-2.5 text-left transition-colors active:bg-white/[0.07]"
+              >
+                <QrThumb
+                  url={treasuryId ? buildPosPayUrl(qr, treasuryId, workspace.orgName) : ""}
+                  muted={!qr.active}
+                />
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-1.5">
+                    <p className="truncate text-[12px] font-semibold text-white">
+                      {qr.label}
+                    </p>
+                    {!qr.active ? (
+                      <span className="shrink-0 rounded-full bg-white/8 px-1.5 py-0.5 text-[7px] font-semibold uppercase tracking-[0.08em] text-white/40">
+                        Paused
+                      </span>
+                    ) : null}
+                  </div>
+                  <p className="mt-0.5 text-[10px] text-white/40">
+                    {qr.amountUsd != null ? `${fmtUsd(qr.amountUsd)} fixed` : "Open amount"}
+                    {" · "}
+                    {s.uses} use{s.uses === 1 ? "" : "s"}
                   </p>
-                  {!qr.active ? (
-                    <span className="shrink-0 rounded-full bg-white/8 px-1.5 py-0.5 text-[7px] font-semibold uppercase tracking-[0.08em] text-white/40">
-                      Paused
-                    </span>
-                  ) : null}
                 </div>
-                <p className="mt-0.5 text-[10px] text-white/40">
-                  {qr.amountUsd != null
-                    ? `${fmtUsd(qr.amountUsd)} fixed`
-                    : "Open amount"}
-                  {" · "}
-                  {qr.uses} use{qr.uses === 1 ? "" : "s"}
-                </p>
-              </div>
-              <div className="shrink-0 text-right">
-                <p className="text-[12px] font-semibold tabular text-white">
-                  {fmtUsd(qr.accumulatedUsd, qr.accumulatedUsd % 1 ? 2 : 0)}
-                </p>
-                <p className="mt-0.5 text-[8px] uppercase tracking-[0.1em] text-white/30">
-                  total
-                </p>
-              </div>
-            </button>
-          ))}
+                <div className="shrink-0 text-right">
+                  <p className="text-[12px] font-semibold tabular text-white">
+                    {fmtUsd(s.totalUsd, s.totalUsd % 1 ? 2 : 0)}
+                  </p>
+                  <p className="mt-0.5 text-[8px] uppercase tracking-[0.1em] text-white/30">
+                    total
+                  </p>
+                </div>
+              </button>
+            );
+          })}
           {qrs.length === 0 ? (
             <p className="px-2 py-6 text-center text-[11px] text-white/35">
               No payment QRs yet.
@@ -440,7 +388,7 @@ function QrThumb({ url, muted }: { url: string; muted?: boolean }) {
         muted ? "opacity-40" : ""
       }`}
     >
-      <QRCodeSVG value={url} size={36} level="L" />
+      {url ? <QRCodeSVG value={url} size={36} level="L" /> : null}
     </div>
   );
 }

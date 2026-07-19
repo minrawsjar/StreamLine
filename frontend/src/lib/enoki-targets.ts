@@ -67,6 +67,8 @@ export function allowedMoveCallTargets(
     // Scallop-shaped yield vault (gasless deposit/redeem).
     targets.push(`${pkg}::yield_vault::deposit`);
     targets.push(`${pkg}::yield_vault::redeem`);
+    // Payment QRs (gasless scan-to-pay into a treasury pool).
+    targets.push(`${pkg}::pos::pay`);
     // Org treasury / Pro pool (gasless fund/withdraw/invest/divest).
     targets.push(`${pkg}::treasury::open`);
     targets.push(`${pkg}::treasury::deposit`);

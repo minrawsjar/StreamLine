@@ -9,12 +9,12 @@ function env(name: string): string | undefined {
   return v || undefined;
 }
 
-// Latest package version (move-call target). Upgraded 2026-07-19 to add
-// stream::start_payroll (payer-side start for LOCKED streams). Type origin
+// Latest package version (move-call target). Upgraded 2026-07-19 to add the
+// pos module (pos::pay — payment-QR settlement into a treasury). Type origin
 // stays 0x597f34fe… (ORIGINAL_PACKAGE_IDS), so object types + the indexer are
 // unaffected.
 const TESTNET_PACKAGE =
-  "0x2362f832f056ae74e4b093a3ae6947f91970f2434176fd7d373d004ea1f08020";
+  "0x05affbed7e9e8836d49e60762ccd172a63876bfefaef6e384b4f6103db6e539d";
 
 export const PACKAGE_IDS = {
   mainnet:
