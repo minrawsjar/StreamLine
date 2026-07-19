@@ -661,6 +661,8 @@ function StreamsTab() {
     setModal,
     setWorkerStatus,
     createWorkerStream,
+    approveStream,
+    cancelStream,
     creating,
     deleteWorker,
   } = useProWorkspace();
@@ -767,6 +769,16 @@ function StreamsTab() {
                   creating={creating}
                   onStatus={setWorkerStatus}
                   onStart={createWorkerStream}
+                  onApprove={approveStream}
+                  onCancel={(streamId, alias) => {
+                    if (
+                      window.confirm(
+                        `Cancel ${alias}'s stream and refund the remainder to the pool?`
+                      )
+                    ) {
+                      void cancelStream(streamId);
+                    }
+                  }}
                   onDelete={(id, alias) => {
                     if (window.confirm(`Remove ${alias} from the run?`)) {
                       deleteWorker(id);

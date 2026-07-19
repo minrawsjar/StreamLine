@@ -202,6 +202,27 @@ export function buildCancel(r: StreamRef & { capId: string }): Transaction {
   return tx;
 }
 
+/**
+ * Cancel a treasury-funded (payroll) stream via the StreamCap: settle nothing
+ * further, refund the unstreamed balance back to the treasury pool, close the
+ * stream, and consume the cap. Works in any state (revocable caps only).
+ */
+export function buildCancelToTreasury(
+  r: StreamRef & { capId: string; treasuryId: string }
+): Transaction {
+  const tx = new Transaction();
+  tx.moveCall({
+    target: `${r.packageId}::stream::cancel_to_treasury`,
+    typeArguments: [r.usdcType],
+    arguments: [
+      tx.object(r.capId),
+      tx.object(r.streamId),
+      tx.object(r.treasuryId),
+    ],
+  });
+  return tx;
+}
+
 /** Client approves the raised milestone via the StreamCap. */
 export function buildApproveMilestone(r: StreamRef & { capId: string }): Transaction {
   const tx = new Transaction();

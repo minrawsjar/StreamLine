@@ -36,6 +36,8 @@ import {
   buildSuspendPayroll,
   buildResumePayroll,
   buildStopPayroll,
+  buildApproveMilestone,
+  buildCancelToTreasury,
   DEFAULT_STREAM_YIELD_BPS,
 } from "@/lib/streamline-tx";
 import { findCreatedTreasury, useTreasuryState } from "@/lib/treasury";
@@ -108,6 +110,10 @@ type ProWorkspaceContextValue = {
   setWorkerStatus: (workerId: string, status: ProWorkerStatus) => Promise<boolean>;
   /** Lock the worker's budget from the treasury pool and record the stream id. */
   createWorkerStream: (workerId: string) => Promise<boolean>;
+  /** Approve a review-ready stream on-chain so it starts dripping (Start). */
+  approveStream: (streamId: string) => Promise<boolean>;
+  /** Cancel a treasury stream on-chain, refunding the remainder to the pool (Delete). */
+  cancelStream: (streamId: string) => Promise<boolean>;
   /** Deposit USDC into the on-chain treasury (opens one on first use). */
   fundTreasury: (amount: number) => Promise<boolean>;
   /** Withdraw idle float from the on-chain treasury. */
@@ -141,6 +147,36 @@ type ProWorkspaceContextValue = {
 };
 
 const ProWorkspaceContext = createContext<ProWorkspaceContextValue | null>(null);
+
+/** Find the StreamCap the caller owns for a given stream — needed to approve
+ *  or cancel it on-chain. StreamCap type is pinned to the original package. */
+async function findStreamCap(
+  client: ReturnType<typeof useSuiClient>,
+  owner: string,
+  originalPackageId: string,
+  streamId: string
+): Promise<string | null> {
+  if (!owner || !originalPackageId || originalPackageId === "0x0") return null;
+  let cursor: string | null | undefined = undefined;
+  for (let page = 0; page < 5; page++) {
+    const res = await client.getOwnedObjects({
+      owner,
+      filter: { StructType: `${originalPackageId}::stream::StreamCap` },
+      options: { showContent: true },
+      cursor,
+    });
+    for (const o of res.data) {
+      const c = o.data?.content;
+      if (c?.dataType !== "moveObject") continue;
+      if ((c.fields as Record<string, unknown>).stream_id === streamId) {
+        return o.data?.objectId ?? null;
+      }
+    }
+    if (!res.hasNextPage) break;
+    cursor = res.nextCursor;
+  }
+  return null;
+}
 
 export function ProWorkspaceProvider({
   children,
@@ -184,6 +220,7 @@ export function ProWorkspaceProvider({
   const packageId = useNetworkVariable("packageId");
   const usdcType = useNetworkVariable("usdcType");
   const yieldVaultId = useNetworkVariable("yieldVaultId");
+  const originalPackageId = useNetworkVariable("originalPackageId");
   const suiClient = useSuiClient();
   const { execute, isPending: creating } = useGaslessExecute();
 
@@ -813,6 +850,58 @@ export function ProWorkspaceProvider({
     [mutate]
   );
 
+  // Approve a review-ready (PENDING_REVIEW) stream so it starts dripping —
+  // the payer's real on-chain "Start". Resolves the StreamCap the payer holds.
+  const approveStream = useCallback(
+    async (streamId: string): Promise<boolean> => {
+      if (!address || !packageId || packageId === "0x0") return false;
+      const capId = await findStreamCap(suiClient, address, originalPackageId, streamId);
+      if (!capId) return false;
+      const tx = buildApproveMilestone({ packageId, usdcType, streamId, capId });
+      let ok = false;
+      await execute(tx, {
+        onSuccess: () => {
+          ok = true;
+          mutate((prev) =>
+            pushActivity(prev, { kind: "resumed", label: "Approved & started stream" })
+          );
+        },
+      });
+      return ok;
+    },
+    [address, packageId, usdcType, originalPackageId, suiClient, execute, mutate]
+  );
+
+  // Cancel a treasury-funded stream on-chain: refund the remainder to the pool,
+  // close it, consume the cap. The payer's real on-chain "Delete".
+  const cancelStream = useCallback(
+    async (streamId: string): Promise<boolean> => {
+      if (!address || !packageId || packageId === "0x0") return false;
+      const tid = workspace.treasuryId;
+      if (!tid) return false;
+      const capId = await findStreamCap(suiClient, address, originalPackageId, streamId);
+      if (!capId) return false;
+      const tx = buildCancelToTreasury({
+        packageId,
+        usdcType,
+        streamId,
+        capId,
+        treasuryId: tid,
+      });
+      let ok = false;
+      await execute(tx, {
+        onSuccess: () => {
+          ok = true;
+          mutate((prev) =>
+            pushActivity(prev, { kind: "stopped", label: "Canceled stream — refunded to pool" })
+          );
+        },
+      });
+      return ok;
+    },
+    [address, packageId, usdcType, originalPackageId, suiClient, execute, mutate, workspace.treasuryId]
+  );
+
   const resetDemo = useCallback(() => {
     setWorkspace(emptyWorkspace());
   }, []);
@@ -963,6 +1052,8 @@ export function ProWorkspaceProvider({
     deleteWorker,
     setWorkerStatus,
     createWorkerStream,
+    approveStream,
+    cancelStream,
     fundTreasury,
     withdrawTreasury,
     investTreasury,

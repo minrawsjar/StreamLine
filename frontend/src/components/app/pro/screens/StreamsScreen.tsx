@@ -95,12 +95,16 @@ export function StreamActions({
   creating,
   onStatus,
   onStart,
+  onApprove,
+  onCancel,
   onDelete,
 }: {
   worker: ProWorker;
   creating: boolean;
   onStatus: (id: string, status: ProWorkerStatus) => void;
   onStart: (id: string) => void;
+  onApprove: (streamId: string) => void;
+  onCancel: (streamId: string, alias: string) => void;
   onDelete: (id: string, alias: string) => void;
 }) {
   return (
@@ -125,11 +129,13 @@ export function StreamActions({
                 : "Resume"
           }
           disabled={creating}
-          onClick={() =>
-            worker.streamId && worker.status !== "pending"
-              ? onStatus(worker.id, "dripping")
-              : onStart(worker.id)
-          }
+          onClick={() => {
+            if (worker.streamId && worker.status === "pending")
+              onApprove(worker.streamId); // approve review-ready stream on-chain
+            else if (worker.streamId)
+              onStatus(worker.id, "dripping"); // resume a suspended stream
+            else onStart(worker.id); // local worker: create the on-chain stream
+          }}
         >
           <IconPlay />
         </ActionIconBtn>
@@ -145,7 +151,11 @@ export function StreamActions({
       <ActionIconBtn
         label="Delete"
         danger
-        onClick={() => onDelete(worker.id, worker.alias)}
+        onClick={() =>
+          worker.streamId
+            ? onCancel(worker.streamId, worker.alias) // cancel on-chain, refund to pool
+            : onDelete(worker.id, worker.alias) // local-only worker: drop the row
+        }
       >
         <IconTrash />
       </ActionIconBtn>
@@ -160,10 +170,18 @@ export function StreamsScreen() {
     setModal,
     setWorkerStatus,
     createWorkerStream,
+    approveStream,
+    cancelStream,
     creating,
     deleteWorker,
   } = useProWorkspace();
   const alloc = workspace.pool.allocation;
+
+  const cancelOnChain = (streamId: string, alias: string) => {
+    if (window.confirm(`Cancel ${alias}'s stream and refund the remainder to the pool?`)) {
+      void cancelStream(streamId);
+    }
+  };
 
   const active = workspace.workers.filter((w) => w.status === "dripping");
   const paused = workspace.workers.filter((w) => w.status === "paused");
@@ -335,6 +353,8 @@ export function StreamsScreen() {
                   creating={creating}
                   onStatus={setWorkerStatus}
                   onStart={createWorkerStream}
+                  onApprove={approveStream}
+                  onCancel={cancelOnChain}
                   onDelete={removeWorker}
                 />
               </div>
