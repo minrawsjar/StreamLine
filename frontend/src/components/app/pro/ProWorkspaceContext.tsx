@@ -6,7 +6,6 @@ import {
   useContext,
   useEffect,
   useMemo,
-  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -24,7 +23,7 @@ import {
   saveProWorkspace,
   emptyWorkspace,
 } from "@/lib/pro-workspace-store";
-import { encryptWorkers, decryptWorkers } from "@/lib/pro-roster-seal";
+import { decryptWorkers } from "@/lib/pro-roster-seal";
 import { loadOrCreateSessionKey } from "@/lib/seal";
 import { useStreams } from "@/lib/indexer";
 import { useGaslessExecute } from "@/lib/use-gasless";
@@ -249,7 +248,6 @@ export function ProWorkspaceProvider({
   const [modal, setModal] = useState<ModalKind>(null);
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [rosterUnlocking, setRosterUnlocking] = useState(false);
-  const sealSaveGen = useRef(0);
 
   // Real on-chain streams this org created, from the indexer. Poll keeps the
   // reconciled view (streamed/status/pool) fresh as the keeper drips.
@@ -286,61 +284,25 @@ export function ProWorkspaceProvider({
       return;
     }
     // Real login: persisted workspace or empty — never auto-seed mock payroll.
-    setWorkspace(loadProWorkspace(address));
+    // Force unlocked so People / Streams work without Seal.
+    const loaded = loadProWorkspace(address);
+    setWorkspace({
+      ...loaded,
+      rosterLocked: false,
+      workersSealed: null,
+    });
     setHydrated(true);
   }, [address, isDemo]);
 
-  // Block adding workers while Seal roster is locked.
-  useEffect(() => {
-    if (!workspace.rosterLocked) return;
-    if (modal === "worker" || (typeof modal === "object" && modal?.kind === "worker-edit")) {
-      setModal(null);
-    }
-  }, [workspace.rosterLocked, modal]);
-
+  // Demo: roster stays unlocked — persist cleartext workers (no Seal gate).
   useEffect(() => {
     if (!hydrated || !address || isDemo) return;
-    const gen = ++sealSaveGen.current;
-    let cancelled = false;
-    void (async () => {
-      // Seal-encrypt unlocked roster before disk write (never persist cleartext on v4).
-      if (
-        !workspace.rosterLocked &&
-        originalPackageId &&
-        originalPackageId !== "0x0"
-      ) {
-        try {
-          const sealed = await encryptWorkers({
-            suiClient,
-            sealNamespace: originalPackageId,
-            orgAddress: address,
-            workers: workspace.workers,
-          });
-          if (cancelled || gen !== sealSaveGen.current) return;
-          saveProWorkspace(address, {
-            ...workspace,
-            version: 4,
-            workersSealed: sealed,
-          });
-          return;
-        } catch {
-          // Offline / Seal unavailable — keep prior sealed blob if any.
-        }
-      }
-      if (cancelled || gen !== sealSaveGen.current) return;
-      saveProWorkspace(address, workspace);
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [
-    workspace,
-    address,
-    hydrated,
-    isDemo,
-    originalPackageId,
-    suiClient,
-  ]);
+    saveProWorkspace(address, {
+      ...workspace,
+      rosterLocked: false,
+      workersSealed: null,
+    });
+  }, [workspace, address, hydrated, isDemo]);
 
   useEffect(() => {
     const id = window.setInterval(() => {
@@ -434,7 +396,6 @@ export function ProWorkspaceProvider({
       shieldedAddress?: string;
     }) => {
       mutate((prev) => {
-        if (prev.rosterLocked) return prev;
         const hireMode = input.hireMode ?? "private";
         if (input.id) {
           return {

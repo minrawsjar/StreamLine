@@ -14,13 +14,12 @@ function storageKey(address: string) {
   return `${KEY_PREFIX}:${address.toLowerCase()}`;
 }
 
-/** Disk shape — never persists cleartext workers. */
+/** Disk shape — cleartext workers for demo UX (Seal lock optional / unused). */
 type PersistedWorkspace = Omit<
   ProWorkspace,
   "workers" | "rosterLocked" | "workersSealed"
 > & {
   version: 3 | 4;
-  /** Legacy v3 only. */
   workers?: ProWorker[];
   workersSealed?: WorkersSealed | null;
 };
@@ -54,13 +53,13 @@ export function loadProWorkspace(address: string): ProWorkspace {
       const parsed = JSON.parse(raw) as PersistedWorkspace;
 
       if (parsed?.version === 4) {
+        // Demo: always unlocked. Prefer cleartext workers; ignore Seal lock gate.
         const sealed = parsed.workersSealed ?? null;
-        const locked = !!sealed?.ciphertextB64;
         return {
           version: 4,
           orgName: parsed.orgName || "My organization",
           groups: parsed.groups ?? [],
-          workers: [],
+          workers: parsed.workers ?? [],
           pool: parsed.pool ?? emptyWorkspace().pool,
           activity: parsed.activity ?? [],
           yieldEarned: parsed.yieldEarned ?? 0,
@@ -68,7 +67,7 @@ export function loadProWorkspace(address: string): ProWorkspace {
           treasuryId: parsed.treasuryId,
           investedPrincipal: parsed.investedPrincipal,
           workersSealed: sealed,
-          rosterLocked: locked,
+          rosterLocked: false,
         };
       }
 
@@ -109,13 +108,13 @@ export function loadProWorkspace(address: string): ProWorkspace {
 }
 
 /**
- * Persist workspace shell. Workers are never written cleartext —
- * only `workersSealed` (or empty roster).
+ * Persist workspace. Demo path keeps workers cleartext so People/Streams
+ * work without a Seal unlock session.
  */
 export function saveProWorkspace(address: string, workspace: ProWorkspace) {
   if (typeof window === "undefined" || !address) return;
   const disk: PersistedWorkspace = {
-    version: workspace.workersSealed ? 4 : workspace.version === 3 && !workspace.workersSealed ? 3 : 4,
+    version: 3,
     orgName: workspace.orgName,
     groups: workspace.groups,
     pool: workspace.pool,
@@ -124,12 +123,9 @@ export function saveProWorkspace(address: string, workspace: ProWorkspace) {
     updatedAt: Date.now(),
     treasuryId: workspace.treasuryId,
     investedPrincipal: workspace.investedPrincipal,
-    workersSealed: workspace.workersSealed ?? null,
+    workers: workspace.workers,
+    workersSealed: null,
   };
-  // Only keep cleartext workers on disk for unmigrated v3 (no seal yet).
-  if (disk.version === 3 && !disk.workersSealed) {
-    disk.workers = workspace.workers;
-  }
   localStorage.setItem(storageKey(address), JSON.stringify(disk));
 }
 
