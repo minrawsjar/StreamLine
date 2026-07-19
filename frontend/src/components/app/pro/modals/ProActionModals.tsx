@@ -550,28 +550,31 @@ function WorkerModal({
           />
         </ProField>
         <ProField label="Amount">
-          <div className="flex gap-2">
-            <div className="relative flex-1">
-              <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[13px] text-white/40">
-                $
-              </span>
-              <input
-                data-demo="pro-worker-monthly"
-                inputMode="decimal"
-                className={`${proInputClass} pl-6`}
-                value={monthly}
-                onChange={(e) => setMonthly(e.target.value)}
-                placeholder="5000"
-              />
-            </div>
+          <div className="flex items-center gap-1.5 rounded-2xl border border-white/12 bg-white/[0.04] px-3 focus-within:border-white/25">
+            <span className="text-[13px] text-white/40">$</span>
+            <input
+              data-demo="pro-worker-monthly"
+              inputMode="decimal"
+              className="min-w-0 flex-1 bg-transparent py-2.5 text-[13px] tabular text-white outline-none placeholder:text-white/25"
+              value={monthly}
+              onChange={(e) => setMonthly(e.target.value)}
+              placeholder="5000"
+            />
+            <span className="text-white/15" aria-hidden>
+              |
+            </span>
             <select
               aria-label="Cadence"
-              className={`${proSelectClass} w-auto shrink-0`}
+              className="cursor-pointer appearance-none bg-transparent py-2.5 pl-1 text-[12px] text-white/70 outline-none"
               value={cadence}
               onChange={(e) => setCadence(e.target.value as ProCadence)}
             >
-              <option value="MONTHLY">/ month</option>
-              <option value="HOURLY">/ hour</option>
+              <option value="MONTHLY" className="bg-[#121212]">
+                / month
+              </option>
+              <option value="HOURLY" className="bg-[#121212]">
+                / hour
+              </option>
             </select>
           </div>
         </ProField>
