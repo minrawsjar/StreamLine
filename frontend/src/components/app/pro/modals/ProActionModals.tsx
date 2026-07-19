@@ -21,6 +21,28 @@ import {
   proSelectClass,
 } from "../ui";
 
+/** Tiny inline lock, matches the monochrome UI (no icon dependency). */
+function LockGlyph() {
+  return (
+    <svg
+      width="10"
+      height="10"
+      viewBox="0 0 24 24"
+      fill="none"
+      aria-hidden
+      className="shrink-0 text-white/55"
+    >
+      <rect x="4" y="10" width="16" height="10" rx="2" fill="currentColor" />
+      <path
+        d="M8 10V7a4 4 0 0 1 8 0v3"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
 /** Valid-looking Sui address for roster rows when resolve fails (pitch/demo). */
 function demoRosterAddress(seed: string): string {
   let h = 0xc0ffee;
@@ -491,104 +513,141 @@ function WorkerModal({
   );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showAdvanced, setShowAdvanced] = useState(false);
+
+  const isPublic = hireMode === "public";
+  const modeLocked = !!existing?.streamId || !!existing?.engagementId;
 
   return (
     <ProModal
-      title={existing ? "Edit substream" : "Add substream"}
-      subtitle="Roster is Seal-encrypted to your org wallet. Private hire funds the shielded pool from your wallet; public hire withdraws the treasury."
+      title={existing ? "Edit person" : "Add person"}
+      subtitle="Private by default — funded from your wallet into the shielded pool. The amount and who↔whom stay hidden."
       onClose={onClose}
-      wide
     >
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className="grid gap-3">
         <ProField label="Name">
           <input
             data-demo="pro-worker-name"
             className={proInputClass}
             value={alias}
             onChange={(e) => setAlias(e.target.value)}
+            placeholder="e.g. Ana — designer"
           />
         </ProField>
-        <ProField label="Stream group">
-          <select
-            className={proSelectClass}
-            value={groupId}
-            onChange={(e) => setGroupId(e.target.value)}
-          >
-            <option value="">Ungrouped</option>
-            {workspace.groups.map((g) => (
-              <option key={g.id} value={g.id}>
-                {g.name}
-              </option>
-            ))}
-          </select>
-        </ProField>
-        <ProField label="Hire mode">
-          <select
-            data-demo="pro-worker-hire-mode"
-            className={proSelectClass}
-            value={hireMode}
-            onChange={(e) => setHireMode(e.target.value as ProHireMode)}
-            disabled={!!existing?.streamId || !!existing?.engagementId}
-          >
-            <option value="private">Private (shielded pool)</option>
-            <option value="public">Public (treasury stream)</option>
-          </select>
-        </ProField>
-        <ProField
-          label={
-            hireMode === "private"
-              ? "Pay-to (sl1… preferred, or 0x / @handle)"
-              : `Wallet (@${suinsBrand()} or 0x)`
-          }
-        >
+        <ProField label="Pay to">
           <input
             data-demo="pro-worker-payto"
             className={proInputClass}
             value={wallet}
             onChange={(e) => setWallet(e.target.value)}
             placeholder={
-              hireMode === "private" ? "sl1… or 0x…" : `@${suinsBrand()} or 0x…`
+              isPublic
+                ? `@${suinsBrand()} or 0x…`
+                : "sl1… (private) · or 0x / @handle"
             }
             spellCheck={false}
             autoComplete="off"
           />
         </ProField>
-        <ProField label="Monthly USDC">
-          <input
-            data-demo="pro-worker-monthly"
-            className={proInputClass}
-            value={monthly}
-            onChange={(e) => setMonthly(e.target.value)}
-          />
-        </ProField>
-        <ProField label="Cadence">
-          <select
-            className={proSelectClass}
-            value={cadence}
-            onChange={(e) => setCadence(e.target.value as ProCadence)}
-          >
-            <option value="MONTHLY">Monthly</option>
-            <option value="HOURLY">Hourly</option>
-          </select>
-        </ProField>
-        <ProField label="Status">
-          <select
-            className={proSelectClass}
-            value={status}
-            onChange={(e) => setStatus(e.target.value as ProWorkerStatus)}
-          >
-            <option value="pending">Pending</option>
-            <option value="dripping">Streaming</option>
-            <option value="paused">Paused</option>
-            <option value="stopped">Stopped</option>
-          </select>
+        <ProField label="Amount">
+          <div className="flex gap-2">
+            <div className="relative flex-1">
+              <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[13px] text-white/40">
+                $
+              </span>
+              <input
+                data-demo="pro-worker-monthly"
+                inputMode="decimal"
+                className={`${proInputClass} pl-6`}
+                value={monthly}
+                onChange={(e) => setMonthly(e.target.value)}
+                placeholder="5000"
+              />
+            </div>
+            <select
+              aria-label="Cadence"
+              className={`${proSelectClass} w-auto shrink-0`}
+              value={cadence}
+              onChange={(e) => setCadence(e.target.value as ProCadence)}
+            >
+              <option value="MONTHLY">/ month</option>
+              <option value="HOURLY">/ hour</option>
+            </select>
+          </div>
         </ProField>
       </div>
-      <p className="mt-3 text-[11px] text-white/35">
-        {hireMode === "private"
-          ? "Start opens a private engagement (overfund + split). Amount and who↔whom stay inside the pool."
-          : "Start withdraws treasury into a cleartext Stream — salary and parties are public on-chain."}
-      </p>
+
+      <div className="mt-3 flex items-center justify-between gap-2">
+        <p className="flex items-center gap-1.5 text-[11px] leading-snug text-white/45">
+          {isPublic ? (
+            "Public — salary and parties are visible on-chain."
+          ) : (
+            <>
+              <LockGlyph />
+              Private — amount and parties stay inside the pool.
+            </>
+          )}
+        </p>
+        <button
+          type="button"
+          className="shrink-0 text-[11px] text-white/45 underline-offset-2 hover:text-white/80 hover:underline"
+          onClick={() => setShowAdvanced((v) => !v)}
+        >
+          {showAdvanced ? "Hide options" : "Options"}
+        </button>
+      </div>
+
+      {showAdvanced ? (
+        <div className="mt-3 grid gap-3 rounded-2xl border border-white/[0.08] bg-white/[0.02] p-3">
+          <label
+            className={`flex items-center justify-between gap-3 ${
+              modeLocked ? "opacity-40" : ""
+            }`}
+          >
+            <span className="text-[12px] text-white/70">
+              Pay publicly (visible on-chain)
+            </span>
+            <input
+              type="checkbox"
+              data-demo="pro-worker-hire-mode"
+              checked={isPublic}
+              disabled={modeLocked}
+              onChange={(e) =>
+                setHireMode(e.target.checked ? "public" : "private")
+              }
+              className="h-4 w-4 accent-white"
+            />
+          </label>
+          <ProField label="Group">
+            <select
+              className={proSelectClass}
+              value={groupId}
+              onChange={(e) => setGroupId(e.target.value)}
+            >
+              <option value="">Ungrouped</option>
+              {workspace.groups.map((g) => (
+                <option key={g.id} value={g.id}>
+                  {g.name}
+                </option>
+              ))}
+            </select>
+          </ProField>
+          {existing ? (
+            <ProField label="Status">
+              <select
+                className={proSelectClass}
+                value={status}
+                onChange={(e) => setStatus(e.target.value as ProWorkerStatus)}
+              >
+                <option value="pending">Pending</option>
+                <option value="dripping">Streaming</option>
+                <option value="paused">Paused</option>
+                <option value="stopped">Stopped</option>
+              </select>
+            </ProField>
+          ) : null}
+        </div>
+      ) : null}
       {error && (
         <p className="mt-3 text-[11px] text-[#c0533a]">{error}</p>
       )}

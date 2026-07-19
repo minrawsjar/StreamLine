@@ -964,7 +964,7 @@ function PeopleTab() {
           </div>
           <div className="min-w-0 flex-1">
             <p className="text-[12px] font-semibold text-white/85">Add person</p>
-            <p className="text-[9px] text-white/35">New substream on the roster</p>
+            <p className="text-[9px] text-white/35">Private payroll by default</p>
           </div>
         </button>
 
