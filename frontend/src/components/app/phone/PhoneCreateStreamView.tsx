@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useCurrentAccount, useSuiClient } from "@mysten/dapp-kit";
+import { useCurrentAccount, useSuiClient, useSuiClientContext } from "@mysten/dapp-kit";
 
 import { useNetworkVariable } from "@/lib/networks";
 import { useGaslessExecute } from "@/lib/use-gasless";
@@ -30,6 +30,15 @@ import {
   findCreatedConfidentialStream,
 } from "@/lib/confidential-store";
 import {
+  prepareOpenEngagement,
+  findCreatedEngagement,
+} from "@/lib/private-stream";
+import { addEngagement } from "@/lib/private-engagement-store";
+import { getSpendKey, addNote } from "@/lib/shielded-store";
+import { SHIELDED_POOL, type NetworkName } from "@/lib/constants";
+import { proveSplitAfterDeposit } from "@/lib/overfund-split";
+import { buildSpend } from "@/lib/shielded";
+import {
   PhoneDurationField,
   PhoneField,
   PhoneToggleRow,
@@ -57,10 +66,12 @@ const STEP_TITLES: Record<CreateStep, string> = {
 export function PhoneCreateStreamView({ onClose }: PhoneCreateStreamViewProps) {
   const account = useCurrentAccount();
   const client = useSuiClient();
+  const { network } = useSuiClientContext();
   const packageId = useNetworkVariable("packageId");
   const usdcType = useNetworkVariable("usdcType");
   const originalPackageId = useNetworkVariable("originalPackageId");
   const { execute, isPending } = useGaslessExecute();
+  const poolId = SHIELDED_POOL[(network as NetworkName) ?? "testnet"];
 
   const [step, setStep] = useState<CreateStep>(1);
   const [freelancer, setFreelancer] = useState("");
@@ -69,7 +80,7 @@ export function PhoneCreateStreamView({ onClose }: PhoneCreateStreamViewProps) {
   const [durationValue, setDurationValue] = useState("14");
   const [durationUnit, setDurationUnit] = useState<DurationUnit>("days");
   const [note, setNote] = useState("");
-  const [isPrivate, setIsPrivate] = useState(false);
+  const [isPrivate, setIsPrivate] = useState(true);
   const [useMilestones, setUseMilestones] = useState(false);
   const [milestones, setMilestones] = useState<string[]>([
     "request start",
@@ -144,6 +155,141 @@ export function PhoneCreateStreamView({ onClose }: PhoneCreateStreamViewProps) {
   const goBack = () => {
     setStepError(null);
     if (step > 1) setStep((s) => (s - 1) as CreateStep);
+  };
+
+  const onCreateFullPrivate = async () => {
+    if (!account) return;
+    if (!poolId || poolId === "0x0") {
+      setStatus("Shielded pool not configured on this network.");
+      return;
+    }
+    setProving(true);
+    try {
+      const totalBase = toBaseUnits(Number(amount));
+      const durationMs = durationToMs(Number(durationValue) || 1, durationUnit);
+      const durationSec = BigInt(Math.max(1, Math.floor(durationMs / 1000)));
+      const sk = getSpendKey(account.address);
+      const recipient = freelancer.trim();
+      const shielded = /^sl1[A-Za-z0-9+/_-]+$/.test(recipient)
+        ? recipient
+        : undefined;
+      setStatus("Proving overfunded deposit + pinning vesting schedule…");
+      const prepared = await prepareOpenEngagement({
+        packageId,
+        coinType: usdcType,
+        poolId,
+        sender: account.address,
+        sk,
+        capBase: totalBase,
+        durationSec,
+        recipientShielded: shielded,
+      });
+      setStatus("Awaiting wallet signature…");
+      let openDigest = "";
+      let openErr: Error | null = null;
+      await execute(prepared.tx, {
+        onSuccess: async ({ digest }) => {
+          openDigest = digest;
+        },
+        onError: (e) => {
+          openErr = e;
+        },
+      });
+      if (openErr) throw openErr;
+
+      let fundingCm = prepared.cm;
+      let fundingRho = prepared.rho;
+      let fundingValue = totalBase;
+      let changeCm: bigint | null = null;
+      let changeRho: bigint | null = null;
+
+      if (prepared.changeBase > 0n) {
+        setStatus("Proving private split (work note + change)…");
+        const split = await proveSplitAfterDeposit({
+          client,
+          packageId,
+          sk,
+          pkv: prepared.pkv,
+          cmDeposit: prepared.cm,
+          rhoDeposit: prepared.rho,
+          depositBase: prepared.depositBase,
+          desiredBase: totalBase,
+        });
+        setStatus("Awaiting signature for private split…");
+        let splitErr: Error | null = null;
+        await execute(
+          buildSpend({
+            packageId,
+            coinType: usdcType,
+            poolId,
+            root: split.root,
+            nf: split.nf,
+            cm1: split.cmWork,
+            cm2: split.cmChange,
+            proof: split.proof,
+          }),
+          {
+            onSuccess: () => {},
+            onError: (e) => {
+              splitErr = e;
+            },
+          }
+        );
+        if (splitErr) throw splitErr;
+        fundingCm = split.cmWork;
+        fundingRho = split.rhoWork;
+        changeCm = split.cmChange;
+        changeRho = split.rhoChange;
+      }
+
+      setStatus("Confirming on-chain…");
+      const engagementId = await findCreatedEngagement(client, openDigest);
+      if (engagementId) {
+        rememberStreamLabel(engagementId, streamName || "Private engagement");
+        addEngagement(account.address, {
+          engagementId,
+          coinType: usdcType,
+          poolId,
+          fundingCm: fundingCm.toString(),
+          fundingRho: fundingRho.toString(),
+          fundingValue: fundingValue.toString(),
+          rate: prepared.rate.toString(),
+          start: prepared.start.toString(),
+          cap: totalBase.toString(),
+          rParams: prepared.rParams.toString(),
+          paramsCommitment: prepared.paramsCommitment.toString(),
+          workerShielded: shielded,
+          label: streamName || undefined,
+          createdAt: Date.now(),
+        });
+        addNote(account.address, {
+          commitment: fundingCm.toString(),
+          value: fundingValue.toString(),
+          rho: fundingRho.toString(),
+          spent: false,
+          createdAt: Date.now(),
+        });
+        if (changeCm && changeRho && prepared.changeBase > 0n) {
+          addNote(account.address, {
+            commitment: changeCm.toString(),
+            value: prepared.changeBase.toString(),
+            rho: changeRho.toString(),
+            spent: false,
+            createdAt: Date.now(),
+          });
+        }
+      }
+      setCreated(true);
+      setStatus(
+        prepared.changeBase > 0n
+          ? `Private engagement opened — public edge ${formatUsd(Number(prepared.depositBase) / 1e6)}; work ${formatUsd(Number(amount))}.`
+          : `Private engagement opened — amount, who, and when hidden in the pool.`
+      );
+    } catch (e) {
+      setStatus(e instanceof Error ? e.message : String(e));
+    } finally {
+      setProving(false);
+    }
   };
 
   const onCreatePrivate = async () => {
@@ -233,6 +379,10 @@ export function PhoneCreateStreamView({ onClose }: PhoneCreateStreamViewProps) {
     if (!account) return;
     if (!deployed) {
       setStatus("Move package not deployed on this network yet.");
+      return;
+    }
+    if (isPrivate && !useMilestones) {
+      void onCreateFullPrivate();
       return;
     }
     if (isPrivate) {
@@ -386,9 +536,12 @@ export function PhoneCreateStreamView({ onClose }: PhoneCreateStreamViewProps) {
         <>
           <PhoneToggleRow
             title="Private stream"
-            subtitle="Hide amounts on-chain"
+            subtitle="Hide amount, who & when"
             checked={isPrivate}
-            onChange={setIsPrivate}
+            onChange={(v) => {
+              setIsPrivate(v);
+              if (v) setUseMilestones(false);
+            }}
           />
 
           <PhoneToggleRow

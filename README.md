@@ -12,10 +12,10 @@ Built for **Sui Overflow 2026 · DeFi & Payments track**.
 
 | 🔁 Real-time streaming | 🔒 Private by design | 🧩 Composable DeFi |
 |---|---|---|
-| Money accrues by the second and settles gasless, milestone-gated, on-chain — no invoice, no middleman. | Toggle **Private amounts** and balances/drips become **ZK commitments**; only the two parties ever see the numbers. A first-class mode, not an afterthought. | The instant value is earned it can **auto-compound in a yield vault** or **back a loan** — in place, no bridge. |
+| Money accrues by the second and settles gasless, milestone-gated, on-chain — no invoice, no middleman. | **Private by default**: amount, who↔whom, and drip cadence stay inside a shielded pool + lazy settle. Deposit/withdraw edges still reveal (honest anonymity-set tradeoff). Amounts-only and public remain as compat modes. | The instant value is earned it can **auto-compound in a yield vault** or **back a loan** — in place, no bridge (on public / named streams). |
 | [Why a stream →](#why-a-stream-not-a-payment--and-why-a-card-physically-cant-do-this) | [Privacy →](#privacy) | [DeFi →](#composable-defi--where-the-money-goes) |
 
-**Privacy is a headline feature of StreamLine, not a roadmap item** — confidential amounts (Groth16 zk-SNARKs), encrypted metadata (Seal), and identity/gasless privacy (zkLogin) all run live on Sui testnet today. See **[Privacy](#privacy)**.
+**Privacy is a headline feature of StreamLine, not a roadmap item** — private engagements (shielded pool + lazy vest), amounts-only confidential streams, Seal/ECIES openings, and zkLogin all run on Sui testnet today. See **[Privacy](#privacy)**.
 
 ---
 

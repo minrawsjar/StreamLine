@@ -41,6 +41,9 @@ const DEPOSIT_VK: vector<u8> =
     x"1d8e4233c3c66ab59c2b3c265a2886837b80219952150d8f2e8bf26fb6dce2aac4c97bbe7457d570a27e0306ebde64269e0a9fd5a9bb0cb070a2824c0b65e710daeb07e8f409c3bd2a195bca7638955741c4590f5d98465d1a6481a2896f6006edf692d95cbdde46ddda5ef7d422436779445c5e66006a42761e1f12efde0018c212f3aeb785e49712e7a9353349aaf1255dfb31b7bf60723a480d9293938e1963a702cd10ce6fbda7719b1fb13ff1c022eecebd01bb9128ab3ef5881944ea2b83e30c3136d9ac2a3db8dcbbfc2af49f528b8cc128c77a0fef02c6383d39ac0d03000000000000009371faaef65ef8934aee0b7a8c99d2a7e56aec02a3c3f5b8cbb7e12b2709af29d9736948fdbc8f6542e71ea765ed092043691e3e494eec785cf7b9dd9e848005ab3ddbe90df4024b2db14dc2f79001e777d1bfde4a3db51478f9de9fd4164c08";
 const WITHDRAW_VK: vector<u8> =
     x"1d8e4233c3c66ab59c2b3c265a2886837b80219952150d8f2e8bf26fb6dce2aac4c97bbe7457d570a27e0306ebde64269e0a9fd5a9bb0cb070a2824c0b65e710daeb07e8f409c3bd2a195bca7638955741c4590f5d98465d1a6481a2896f6006edf692d95cbdde46ddda5ef7d422436779445c5e66006a42761e1f12efde0018c212f3aeb785e49712e7a9353349aaf1255dfb31b7bf60723a480d9293938e196e725297dab02975c2874d5dcbcb307087d800f42ea6d8eb75a0eb1f6543301ad621d9174032eff9c2eb9c697e352bf97f7fa662abb2df7b232dfae9a4f4360a0500000000000000071b4d23db5e7f30c962a7d36e4ace44902fe7da60cac9be2a9f29ba9aee38910df43c05a1d8cffa9ac5f3c37b9dbbd459818ba73baeb3eda9bf1159c8d49ca938ef6a0fedb467b3deece02a033c2832d84fdacc41c278916e519ca1d662af252af39e914d7c8269658738a3fcc6726a9acf82f01ae0a82c553d3a2610edc2981c4f04c65d835a70299c9bf7710d05d83328244d0daac5d646772a56987334a8";
+/// private_settle.circom — shielded spend + lazy vesting bound.
+const PRIVATE_SETTLE_VK: vector<u8> =
+    x"e2f26dbea299f5223b646cb1fb33eadb059d9407559d7441dfd902e3a79a4d2dabb73dc17fbc13021e2471e0c08bd67d8401f52b73d6d07483794cad4778180e0c06f33bbc4c79a9cadef253a68084d382f17788f885c9afd176f7cb2f036789edf692d95cbdde46ddda5ef7d422436779445c5e66006a42761e1f12efde0018c212f3aeb785e49712e7a9353349aaf1255dfb31b7bf60723a480d9293938e1962965dd8f6990e64f8de5589e7a129d48d94a8838c90c01453f80dff18a4700a4df0f16d8ae12dd7a82a441982a673363204281cdaf2a8d7604834724cdfbf8f07000000000000004319e9de08642139194898dd2301c6829809e8ebaa5f0e43b76543faa5f0b4283ef657eeabf6f000c63a48771ad426e11edd1eafd3045ec65b3e77a3bd9b29030fe7dee78ab603241bfe11131f05102673b7fc7fe46dfcf462f08ed0fb6094109bf44c662886172280143003b1871c471e4b128dbd05b9211df69eb4da278a082945b1f6e9268af9eb4fb906202fc5b7f4ceeb270dad73c1102d6c676049862fb893d55013e034e2d6b4cbba96ce71f6cfd2d1e6893a68483c35ab53e4c5eba16509749da66b46d26961733636fa3b3bd6266d0679c4d2cd37b443e3fccee000";
 
 // === Objects ===
 
@@ -187,6 +190,26 @@ public(package) fun verify_withdraw(
     inputs.append(u64_to_scalar(amount));
     inputs.append(sui::bcs::to_bytes(&cm_change));
     verify(WITHDRAW_VK, inputs, proof);
+}
+
+/// private_settle.circom — shielded spend + vesting bound.
+/// Public signal order: [root, nf, cm1, cm2, cParams, nowSec].
+public(package) fun verify_private_settle(
+    root: u256,
+    nf: u256,
+    cm1: u256,
+    cm2: u256,
+    params_commitment: u256,
+    now_sec: u64,
+    proof: vector<u8>,
+) {
+    let mut inputs = sui::bcs::to_bytes(&root);
+    inputs.append(sui::bcs::to_bytes(&nf));
+    inputs.append(sui::bcs::to_bytes(&cm1));
+    inputs.append(sui::bcs::to_bytes(&cm2));
+    inputs.append(sui::bcs::to_bytes(&params_commitment));
+    inputs.append(u64_to_scalar(now_sec));
+    verify(PRIVATE_SETTLE_VK, inputs, proof);
 }
 
 /// 32-byte scalar length, for callers building commitments.

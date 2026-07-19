@@ -1,7 +1,11 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { useCurrentAccount, useSuiClient } from "@mysten/dapp-kit";
+import {
+  useCurrentAccount,
+  useSuiClient,
+  useSuiClientContext,
+} from "@mysten/dapp-kit";
 
 import { useNetworkVariable } from "@/lib/networks";
 import { useGaslessExecute } from "@/lib/use-gasless";
@@ -30,6 +34,21 @@ import {
   addSecret,
   findCreatedConfidentialStream,
 } from "@/lib/confidential-store";
+import {
+  prepareOpenEngagement,
+  findCreatedEngagement,
+} from "@/lib/private-stream";
+import { addEngagement } from "@/lib/private-engagement-store";
+import { getSpendKey, addNote } from "@/lib/shielded-store";
+import { SHIELDED_POOL, type NetworkName } from "@/lib/constants";
+import {
+  usePrivacyRelayer,
+  relaySubmit,
+  buildFundRelayerTx,
+  waitForRelayerBalance,
+} from "@/lib/privacy-relayer";
+import { proveSplitAfterDeposit } from "@/lib/overfund-split";
+import { buildSpend } from "@/lib/shielded";
 import { DITHER_HATCH } from "./dashboard-ui";
 import { usePhoneEmbedded } from "./phone/PhoneEmbeddedContext";
 import {
@@ -53,17 +72,24 @@ const DEFAULT_SPLITS: SplitRow[] = [
   { label: "Scallop (yield)", address: "", pct: 30, yield: true },
 ];
 
+export type PrivacyMode = "private" | "amounts" | "public";
+
 export type StreamCreatorPrefill = {
   freelancer?: string;
   amount?: number;
   durationValue?: number;
   durationUnit?: DurationUnit;
   isPrivate?: boolean;
+  privacyMode?: PrivacyMode;
   useMilestones?: boolean;
   milestones?: string[];
   useSplitConfig?: boolean;
   splits?: SplitRow[];
 };
+
+function looksLikeShielded(s: string): boolean {
+  return /^sl1[A-Za-z0-9+/_-]+$/.test(s.trim());
+}
 
 export function StreamCreator({
   onCancel,
@@ -74,13 +100,24 @@ export function StreamCreator({
 } = {}) {
   const account = useCurrentAccount();
   const client = useSuiClient();
+  const { network } = useSuiClientContext();
   const embedded = usePhoneEmbedded();
   const packageId = useNetworkVariable("packageId");
   const usdcType = useNetworkVariable("usdcType");
   const originalPackageId = useNetworkVariable("originalPackageId");
   const { execute, isPending } = useGaslessExecute();
+  const poolId = SHIELDED_POOL[(network as NetworkName) ?? "testnet"];
+  const { data: relayer } = usePrivacyRelayer();
+  const relayOn = !!relayer?.enabled && !!relayer.address;
 
-  const [isPrivate, setIsPrivate] = useState(prefill?.isPrivate ?? false);
+  const [privacyMode, setPrivacyMode] = useState<PrivacyMode>(
+    prefill?.privacyMode ??
+      (prefill?.isPrivate === false ? "public" : "private")
+  );
+  const isPrivate = privacyMode !== "public";
+  const isFullPrivate = privacyMode === "private";
+  const setIsPrivate = (v: boolean) =>
+    setPrivacyMode(v ? "private" : "public");
   const [streamName, setStreamName] = useState("");
   const [freelancer, setFreelancer] = useState(prefill?.freelancer ?? "");
   const [amount, setAmount] = useState(prefill?.amount ?? 800);
@@ -114,21 +151,40 @@ export function StreamCreator({
     if (effectiveMilestones.length === 0) e.push("Add at least one milestone.");
     if (amount / Math.max(effectiveMilestones.length, 1) < 0.01)
       e.push("Each milestone must be ≥ 0.01 USDC.");
-    if (!looksLikeRecipient(freelancer))
+    if (isFullPrivate) {
+      if (!looksLikeShielded(freelancer) && !looksLikeRecipient(freelancer))
+        e.push(
+          `Recipient: shielded sl1… address (preferred) or @${suinsBrand()} / 0x.`
+        );
+      if (durationValue <= 0) e.push("Duration must be greater than 0.");
+      if (useMilestones)
+        e.push("Milestones need Amounts-only or Public mode.");
+    } else if (!looksLikeRecipient(freelancer)) {
       e.push(
         `Recipient must be a @${suinsBrand()} handle or a full Sui address (0x + 64 hex).`
       );
+    }
     if (!isPrivate) {
       if (durationValue <= 0) e.push("Duration must be greater than 0.");
       if (splitSum !== 100)
         e.push(`Splits must total 100% (currently ${splitSum}%).`);
     }
     return e;
-  }, [amount, durationValue, effectiveMilestones.length, splitSum, isPrivate, freelancer]);
+  }, [
+    amount,
+    durationValue,
+    effectiveMilestones.length,
+    splitSum,
+    isPrivate,
+    isFullPrivate,
+    freelancer,
+    useMilestones,
+  ]);
 
   const canCreate = errors.length === 0 && !!account;
-  const recipientInvalid =
-    isPrivate && !looksLikeRecipient(freelancer);
+  const recipientInvalid = isFullPrivate
+    ? !looksLikeShielded(freelancer) && !looksLikeRecipient(freelancer)
+    : isPrivate && !looksLikeRecipient(freelancer);
   const updateMilestone = (i: number, v: string) =>
     setMilestones((m) => m.map((x, j) => (j === i ? v : x)));
   const updateSplit = (i: number, patch: Partial<SplitRow>) =>
@@ -140,6 +196,10 @@ export function StreamCreator({
       setStatus(
         "Move package not deployed on this network yet — PTB is previewed above."
       );
+      return;
+    }
+    if (isFullPrivate) {
+      void onCreateFullPrivate();
       return;
     }
     let recipientAddr = freelancer.trim();
@@ -155,7 +215,7 @@ export function StreamCreator({
       setStatus(e instanceof Error ? e.message : String(e));
       return;
     }
-    if (isPrivate) {
+    if (privacyMode === "amounts") {
       void onCreatePrivate(recipientAddr);
       return;
     }
@@ -185,6 +245,221 @@ export function StreamCreator({
       },
       onError: (e) => setStatus(e.message),
     });
+  };
+
+  /** Default private path: shielded pool + lazy vesting (amount + who + when). */
+  const onCreateFullPrivate = async () => {
+    if (!account) return;
+    if (!poolId || poolId === "0x0") {
+      setStatus("Shielded pool not configured on this network.");
+      return;
+    }
+    setProving(true);
+    try {
+      const totalBase = toBaseUnits(amount);
+      const durationSec = BigInt(Math.max(1, Math.floor(durationMs / 1000)));
+      const sk = getSpendKey(account.address);
+      const recipient = freelancer.trim();
+      setStatus("Proving overfunded deposit + pinning vesting schedule…");
+      const prepared = await prepareOpenEngagement({
+        packageId,
+        coinType: usdcType,
+        poolId,
+        sender: account.address,
+        sk,
+        capBase: totalBase,
+        durationSec,
+        recipientShielded: looksLikeShielded(recipient) ? recipient : undefined,
+      });
+
+      const saveAfterSplit = async (
+        openDigest: string,
+        funding: {
+          cm: bigint;
+          rho: bigint;
+          value: bigint;
+        },
+        change?: { cm: bigint; rho: bigint; value: bigint }
+      ) => {
+        setStatus("Confirming on-chain…");
+        const engagementId = await findCreatedEngagement(client, openDigest);
+        if (engagementId) {
+          rememberStreamLabel(engagementId, streamName || "Private engagement");
+          addEngagement(account.address, {
+            engagementId,
+            coinType: usdcType,
+            poolId,
+            fundingCm: funding.cm.toString(),
+            fundingRho: funding.rho.toString(),
+            fundingValue: funding.value.toString(),
+            rate: prepared.rate.toString(),
+            start: prepared.start.toString(),
+            cap: totalBase.toString(),
+            rParams: prepared.rParams.toString(),
+            paramsCommitment: prepared.paramsCommitment.toString(),
+            workerShielded: looksLikeShielded(recipient) ? recipient : undefined,
+            label: streamName || undefined,
+            createdAt: Date.now(),
+          });
+          addNote(account.address, {
+            commitment: funding.cm.toString(),
+            value: funding.value.toString(),
+            rho: funding.rho.toString(),
+            spent: false,
+            createdAt: Date.now(),
+          });
+          if (change && change.value > 0n) {
+            addNote(account.address, {
+              commitment: change.cm.toString(),
+              value: change.value.toString(),
+              rho: change.rho.toString(),
+              spent: false,
+              createdAt: Date.now(),
+            });
+          }
+        }
+        const edge = prepared.depositBase;
+        setStatus(
+          prepared.changeBase > 0n
+            ? `Private engagement opened — public edge ${formatUsd(Number(edge) / 1e6)}; work note ${formatUsd(amount)}. Digest ${openDigest}`
+            : `Private engagement opened — amount, parties, and drip cadence hidden. Digest ${openDigest}`
+        );
+      };
+
+      const runSplit = async (openDigest: string) => {
+        if (prepared.changeBase <= 0n) {
+          await saveAfterSplit(openDigest, {
+            cm: prepared.cm,
+            rho: prepared.rho,
+            value: totalBase,
+          });
+          return;
+        }
+        setStatus("Proving private split (work note + change)…");
+        const split = await proveSplitAfterDeposit({
+          client,
+          packageId,
+          sk,
+          pkv: prepared.pkv,
+          cmDeposit: prepared.cm,
+          rhoDeposit: prepared.rho,
+          depositBase: prepared.depositBase,
+          desiredBase: totalBase,
+        });
+        if (relayOn) {
+          setStatus("Relaying private split…");
+          await relaySubmit({
+            network: (network as NetworkName) ?? "testnet",
+            kind: "spend",
+            packageId,
+            coinType: usdcType,
+            poolId,
+            proof: split.proof,
+            root: split.root,
+            nf: split.nf,
+            cm1: split.cmWork,
+            cm2: split.cmChange,
+          });
+        } else {
+          setStatus("Awaiting signature for private split…");
+          let splitErr: Error | null = null;
+          await execute(
+            buildSpend({
+              packageId,
+              coinType: usdcType,
+              poolId,
+              root: split.root,
+              nf: split.nf,
+              cm1: split.cmWork,
+              cm2: split.cmChange,
+              proof: split.proof,
+            }),
+            {
+              onSuccess: () => {},
+              onError: (e) => {
+                splitErr = e;
+              },
+            }
+          );
+          if (splitErr) throw splitErr;
+        }
+        await saveAfterSplit(
+          openDigest,
+          {
+            cm: split.cmWork,
+            rho: split.rhoWork,
+            value: totalBase,
+          },
+          {
+            cm: split.cmChange,
+            rho: split.rhoChange,
+            value: prepared.changeBase,
+          }
+        );
+      };
+
+      if (relayOn && relayer?.address) {
+        setStatus("Step 1 — funding privacy relayer (overfund)…");
+        const fundTx = buildFundRelayerTx({
+          sender: account.address,
+          relayerAddress: relayer.address,
+          coinType: usdcType,
+          amountBase: prepared.depositBase,
+        });
+        let fundErr: Error | null = null;
+        await execute(
+          fundTx,
+          {
+            onSuccess: () => {},
+            onError: (e) => {
+              fundErr = e;
+            },
+          },
+          { allowedRecipients: [relayer.address] }
+        );
+        if (fundErr) throw fundErr;
+        setStatus("Waiting for relayer balance…");
+        await waitForRelayerBalance(
+          client,
+          relayer.address,
+          usdcType,
+          prepared.depositBase
+        );
+        setStatus("Relayer opening engagement…");
+        const { digest } = await relaySubmit({
+          network: (network as NetworkName) ?? "testnet",
+          kind: "open",
+          packageId,
+          coinType: usdcType,
+          poolId,
+          proof: prepared.depositProof,
+          cm: prepared.cm,
+          amountBase: prepared.depositBase,
+          paramsCommitment: prepared.paramsCommitment,
+          ciphertext: prepared.ciphertext,
+        });
+        await runSplit(digest);
+        return;
+      }
+
+      setStatus("Awaiting wallet signature…");
+      let openDigest = "";
+      let openErr: Error | null = null;
+      await execute(prepared.tx, {
+        onSuccess: async ({ digest }) => {
+          openDigest = digest;
+        },
+        onError: (e) => {
+          openErr = e;
+        },
+      });
+      if (openErr) throw openErr;
+      await runSplit(openDigest);
+    } catch (e) {
+      setStatus(e instanceof Error ? e.message : String(e));
+    } finally {
+      setProving(false);
+    }
   };
 
   /**
@@ -278,7 +553,7 @@ export function StreamCreator({
           <input
             value={freelancer}
             onChange={(e) => setFreelancer(e.target.value)}
-            placeholder={`@${suinsBrand()} or 0x…`}
+            placeholder={isFullPrivate ? "sl1… shielded (or @handle)" : `@${suinsBrand()} or 0x…`}
             className={`${phoneInputClass} text-[11px] ${
               recipientInvalid ? "border-[#c0533a]" : ""
             }`}
@@ -322,11 +597,14 @@ export function StreamCreator({
 
         <PhoneToggleRow
           title="Private stream"
-          subtitle="Hide amounts on-chain"
+          subtitle="Hide amount, who & when (pool)"
           checked={isPrivate}
           onChange={(v) => {
-            setIsPrivate(v);
-            if (v) setUseSplitConfig(false);
+            setPrivacyMode(v ? "private" : "public");
+            if (v) {
+              setUseSplitConfig(false);
+              setUseMilestones(false);
+            }
           }}
         />
 
@@ -498,31 +776,48 @@ export function StreamCreator({
           <span className="text-[11px] text-[#777]">{showPrivateArea ? "Hide" : "Show"}</span>
         </button>
         {showPrivateArea && (
-          <div className="flex items-center justify-between border border-[#2b2a5e]/15 bg-white px-4 py-3">
-            <div>
-              <p className="text-[12px] font-semibold">
-                Private amounts {isPrivate && "🔒"}
-              </p>
-              <p className="mt-0.5 text-[11px] leading-relaxed text-[#2b2a5e]/60">
-                {isPrivate
-                  ? "Amounts are hidden on-chain (commitments + ZK proofs). Secrets are Seal-encrypted to you and the recipient."
-                  : "Amounts visible on-chain. Toggle to hide them with ZK commitments."}
-              </p>
+          <div className="border border-[#2b2a5e]/15 bg-white px-4 py-3">
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <p className="text-[12px] font-semibold">
+                  Full private {isFullPrivate && "🔒"}
+                </p>
+                <p className="mt-0.5 text-[11px] leading-relaxed text-[#2b2a5e]/60">
+                  {isFullPrivate
+                    ? "Default: shielded pool + lazy vest — hides amount, who↔whom, and drip cadence. Opens with overfund + private split so the public edge ≠ the work amount."
+                    : privacyMode === "amounts"
+                      ? "Compat: ConfidentialStream hides amounts only (parties + milestones public)."
+                      : "Public stream — amounts and parties on-chain. Toggle for full private."}
+                </p>
+              </div>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={isFullPrivate}
+                onClick={() => {
+                  setPrivacyMode(isFullPrivate ? "public" : "private");
+                  if (!isFullPrivate) {
+                    setUseSplitConfig(false);
+                    setUseMilestones(false);
+                  }
+                }}
+                className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${
+                  isFullPrivate ? "bg-[#5b54e6]" : "bg-[#2b2a5e]/25"
+                }`}
+              >
+                <span
+                  className={`absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition-transform ${
+                    isFullPrivate ? "translate-x-5" : "translate-x-0"
+                  }`}
+                />
+              </button>
             </div>
             <button
               type="button"
-              role="switch"
-              aria-checked={isPrivate}
-              onClick={() => setIsPrivate((v) => !v)}
-              className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${
-                isPrivate ? "bg-[#5b54e6]" : "bg-[#2b2a5e]/25"
-              }`}
+              className="mt-2 text-[11px] text-[#5b54e6] underline-offset-2 hover:underline"
+              onClick={() => setPrivacyMode("amounts")}
             >
-              <span
-                className={`absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition-transform ${
-                  isPrivate ? "translate-x-5" : "translate-x-0"
-                }`}
-              />
+              Need milestones / dispute? Switch to amounts-only compat
             </button>
           </div>
         )}
@@ -530,7 +825,11 @@ export function StreamCreator({
           <input
             value={freelancer}
             onChange={(e) => setFreelancer(e.target.value)}
-            placeholder={`@${suinsBrand()} or 0x…`}
+            placeholder={
+              isFullPrivate
+                ? "sl1… shielded (preferred) or @handle"
+                : `@${suinsBrand()} or 0x…`
+            }
             spellCheck={false}
             autoComplete="off"
             className={`w-full border bg-white px-3 py-2.5 font-mono text-[13px] outline-none focus:border-[#5b54e6] ${
@@ -563,7 +862,7 @@ export function StreamCreator({
               className="w-full border border-[#2b2a5e]/20 bg-white px-3 py-2.5 text-[14px] outline-none focus:border-[#5b54e6]"
             />
           </Field>
-          {!isPrivate && (
+          {privacyMode !== "amounts" && (
             <Field label="Duration">
               <div className="flex gap-2">
                 <input

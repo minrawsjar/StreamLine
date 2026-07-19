@@ -149,7 +149,8 @@ type CircuitName =
   | "lazydrip"
   | "shielded"
   | "deposit"
-  | "withdraw";
+  | "withdraw"
+  | "private_settle";
 
 /** Poseidon hash of field elements (matches sui::poseidon + the circuits). */
 export async function poseidon(inputs: bigint[]): Promise<bigint> {

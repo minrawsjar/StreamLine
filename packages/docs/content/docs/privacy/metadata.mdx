@@ -28,7 +28,11 @@ Plaintext brief / file
 
 ## Confidential streams already use Seal
 
-For private amounts, Seal is not hypothetical: **secret openings** (balances + blindings) are sealed to both wallets at create time and rotated on drip. Decryption never leaves the device. That same primitive extends cleanly to larger payloads — the difference is blob size, not cryptography.
+For **amounts-only** private streams (`ConfidentialStream`), Seal is not hypothetical: **secret openings** (balances + blindings) are sealed to both wallets at create time and rotated on drip. Decryption never leaves the device.
+
+**Private engagements** (default full-private path) deliver note openings with **ECIES** via `publish_note` — not Seal. Same idea (ciphertext on-chain, plaintext only for the recipient), different crypto. See [Private engagements](/docs/privacy/engagements).
+
+That Seal primitive also extends cleanly to larger payloads — the difference is blob size, not cryptography.
 
 ## Deliverables & disputes
 
@@ -52,8 +56,9 @@ Indexers store references, never plaintext. Explorers see that work progressed; 
 
 | Capability | Posture |
 | --- | --- |
-| Seal-sealed confidential openings | **Live** with private streams in the app |
+| Seal-sealed openings on amounts-only streams | **Live** in the app |
+| ECIES note publish for private engagements / shielded pool | **Live** in the app |
 | On-chain `seal_approve` policy | **Live** in the Move package |
-| Large deliverable blobs via Walrus | **Rolling out** — same crypto, larger objects |
+| Large deliverable blobs via Walrus | **Rolling out** — same Seal crypto, larger objects |
 
 Build against the live Seal path today; treat Walrus-backed file pipelines as the expanding surface, not a different product.

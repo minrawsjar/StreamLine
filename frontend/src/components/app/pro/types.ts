@@ -20,6 +20,8 @@ export type ProStreamGroup = {
   createdAt: number;
 };
 
+export type ProHireMode = "private" | "public";
+
 export type ProWorker = {
   id: string;
   alias: string;
@@ -36,8 +38,21 @@ export type ProWorker = {
   startedAt?: number;
   pausedAt?: number;
   totalPausedMs?: number;
-  /** On-chain stream id once funded from treasury (undefined = local only). */
+  /** On-chain stream id once funded from treasury (public hire). */
   streamId?: string;
+  /** Default private engagement hire; public = treasury Stream. */
+  hireMode?: ProHireMode;
+  /** Shielded receive address (sl1…) for private hire. */
+  shieldedAddress?: string;
+  /** Private engagement object id once opened. */
+  engagementId?: string;
+};
+
+/** Seal ciphertext for the worker roster (persisted; workers stay in memory). */
+export type WorkersSealed = {
+  v: 1;
+  ciphertextB64: string;
+  sealNamespace: string;
 };
 
 /** Map an indexer stream `state` onto a worker status for the reconciled view. */
@@ -78,7 +93,8 @@ export type ProActivity = {
 };
 
 export type ProWorkspace = {
-  version: 3;
+  /** 4 = Seal-sealed workers at rest; 3 = legacy cleartext workers. */
+  version: 3 | 4;
   orgName: string;
   groups: ProStreamGroup[];
   workers: ProWorker[];
@@ -91,6 +107,13 @@ export type ProWorkspace = {
   treasuryId?: string;
   /** Net USDC principal moved into the yield vault (to derive real accrued yield). */
   investedPrincipal?: number;
+  /** Seal blob for workers — present on v4; workers[] empty until unlock. */
+  workersSealed?: WorkersSealed | null;
+  /**
+   * Ephemeral: true when sealed workers exist but are not decrypted yet.
+   * Not written to localStorage.
+   */
+  rosterLocked?: boolean;
 };
 
 /** Legacy demo shape (v1 localStorage). */

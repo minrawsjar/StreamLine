@@ -10,6 +10,7 @@ import { useProWorkspace } from "../ProWorkspaceContext";
 import {
   fmtUsd,
   type ProCadence,
+  type ProHireMode,
   type ProPoolBucket,
   type ProWorkerStatus,
 } from "../types";
@@ -454,7 +455,9 @@ function WorkerModal({
   const client = useSuiClient();
   const existing = workspace.workers.find((w) => w.id === workerId);
   const [alias, setAlias] = useState(existing?.alias ?? "");
-  const [wallet, setWallet] = useState(existing?.walletAddress ?? "");
+  const [wallet, setWallet] = useState(
+    existing?.shieldedAddress || existing?.walletAddress || ""
+  );
   const [groupId, setGroupId] = useState(existing?.groupId ?? "");
   const [monthly, setMonthly] = useState(String(existing?.monthlyUsd ?? 5000));
   const [cadence, setCadence] = useState<ProCadence>(
@@ -463,13 +466,16 @@ function WorkerModal({
   const [status, setStatus] = useState<ProWorkerStatus>(
     existing?.status ?? "pending"
   );
+  const [hireMode, setHireMode] = useState<ProHireMode>(
+    existing?.hireMode ?? "private"
+  );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   return (
     <ProModal
       title={existing ? "Edit substream" : "Add substream"}
-      subtitle="Roster entry maps to a continuous drip once the pool is funded."
+      subtitle="Roster is Seal-encrypted to your org wallet. Private hire funds the shielded pool from your wallet; public hire withdraws the treasury."
       onClose={onClose}
       wide
     >
@@ -491,12 +497,31 @@ function WorkerModal({
             ))}
           </select>
         </ProField>
-        <ProField label={`Wallet (@${suinsBrand()} or 0x)`}>
+        <ProField label="Hire mode">
+          <select
+            className={proSelectClass}
+            value={hireMode}
+            onChange={(e) => setHireMode(e.target.value as ProHireMode)}
+            disabled={!!existing?.streamId || !!existing?.engagementId}
+          >
+            <option value="private">Private (shielded pool)</option>
+            <option value="public">Public (treasury stream)</option>
+          </select>
+        </ProField>
+        <ProField
+          label={
+            hireMode === "private"
+              ? "Pay-to (sl1… preferred, or 0x / @handle)"
+              : `Wallet (@${suinsBrand()} or 0x)`
+          }
+        >
           <input
             className={proInputClass}
             value={wallet}
             onChange={(e) => setWallet(e.target.value)}
-            placeholder={`@${suinsBrand()} or 0x…`}
+            placeholder={
+              hireMode === "private" ? "sl1… or 0x…" : `@${suinsBrand()} or 0x…`
+            }
             spellCheck={false}
             autoComplete="off"
           />
@@ -527,6 +552,11 @@ function WorkerModal({
           </select>
         </ProField>
       </div>
+      <p className="mt-3 text-[11px] text-white/35">
+        {hireMode === "private"
+          ? "Start opens a private engagement (overfund + split). Amount and who↔whom stay inside the pool."
+          : "Start withdraws treasury into a cleartext Stream — salary and parties are public on-chain."}
+      </p>
       {error && (
         <p className="mt-3 text-[11px] text-[#c0533a]">{error}</p>
       )}
@@ -560,13 +590,23 @@ function WorkerModal({
                 setSaving(true);
                 setError(null);
                 try {
-                  let walletAddress = wallet.trim();
-                  if (!isHexAddress(walletAddress)) {
-                    const resolved = await resolveRecipientOrThrow(
-                      client,
-                      wallet
-                    );
+                  const raw = wallet.trim();
+                  let walletAddress = raw;
+                  let shieldedAddress: string | undefined;
+                  if (raw.startsWith("sl1")) {
+                    shieldedAddress = raw;
+                    // Placeholder payout address for roster display / public mode switch.
+                    walletAddress =
+                      existing?.walletAddress &&
+                      !existing.walletAddress.startsWith("sl1")
+                        ? existing.walletAddress
+                        : "0x0";
+                  } else if (!isHexAddress(raw)) {
+                    const resolved = await resolveRecipientOrThrow(client, wallet);
                     walletAddress = resolved.address;
+                  }
+                  if (hireMode === "public" && walletAddress === "0x0") {
+                    throw new Error("Public hire needs a 0x wallet or @handle");
                   }
                   upsertWorker({
                     id: existing?.id,
@@ -576,6 +616,8 @@ function WorkerModal({
                     monthlyUsd: n,
                     cadence,
                     status,
+                    hireMode,
+                    shieldedAddress,
                   });
                   onClose();
                 } catch (e) {
@@ -592,8 +634,11 @@ function WorkerModal({
       </div>
       {existing ? (
         <p className="mt-3 text-[11px] text-white/30">
-          {shortAddress(existing.walletAddress)} · streamed{" "}
-          {fmtUsd(existing.streamedUsd)}
+          {(existing.hireMode ?? "private") === "private" ? "Private" : "Public"} ·{" "}
+          {existing.shieldedAddress
+            ? `${existing.shieldedAddress.slice(0, 10)}…`
+            : shortAddress(existing.walletAddress)}{" "}
+          · streamed {fmtUsd(existing.streamedUsd)}
         </p>
       ) : null}
     </ProModal>

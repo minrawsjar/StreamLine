@@ -1,14 +1,14 @@
 ---
 title: Confidential amounts
-description: Hide balances and drip sizes with Groth16 proofs — live on Sui testnet.
+description: Amounts-only compat mode — hide balances with Groth16; parties stay public.
 icon: EyeOff
 ---
 
 # Confidential amounts
 
-Toggle **Private amounts** and the stream’s economics leave the clear. Totals, remaining balance, earned value, and drip sizes become **cryptographic commitments**. The Move package still enforces conservation and range; the public never learns the numbers.
+**Amounts-only** mode (`ConfidentialStream`) hides **how much** is locked, remaining, earned, and dripped. It does **not** hide who pays whom or when drips happen.
 
-This is not a mixer and not a sidechain. It is the same StreamLine state machine — with a confidential balance substrate underneath.
+For the **default** create path that also hides the payment graph and drip cadence, see [Private engagements](/docs/privacy/engagements).
 
 ## How it works
 
@@ -21,32 +21,43 @@ Public Coin  ──wrap──►  Poseidon commitments (on-chain)
 ```
 
 1. **Commit, don’t publish.** Amounts are bound in **Poseidon** commitments with fresh blindings. The chain stores commitments; not the plaintext.
-2. **Prove every move.** Each confidential drip carries a **Groth16** proof (BN254) that the new commitments are a valid debit/credit of the old ones and that the moved amount sits in a **safe range** — so nobody can invent money. Verification uses Sui’s native `sui::groth16` (enabled on **testnet and mainnet**).
-3. **Seal the openings.** Commitments alone aren’t enough for the two parties to *use* the stream. Secret openings (values + blindings) are **Seal-encrypted to both wallets** and decrypted only in the browser. Indexers never see them.
-4. **Rotate on drip.** Blindings change as value moves; the Seal envelope is refreshed so both parties stay in sync without leaking history.
+2. **Prove every move.** Each confidential drip carries a **Groth16** proof (BN254) that the new commitments are a valid debit/credit of the old ones and that the moved amount sits in a **safe range**. Verification uses Sui’s native `sui::groth16`.
+3. **Seal the openings.** Secret openings (values + blindings) are **Seal-encrypted to both wallets** and decrypted only in the browser.
+4. **Rotate on drip.** Blindings change as value moves; the Seal envelope is refreshed.
 
-## Why Groth16 on Sui
+## On-chain what stays public
 
-The textbook confidential-transfer stack (Bulletproofs + ristretto255) is powerful — and **devnet-gated** on Sui. StreamLine’s production path uses **Groth16** because on-chain verification is available where users actually settle. That choice is what makes private amounts a **shipped mode**, not a lab demo.
+On a `ConfidentialStream` object and its events:
 
-## What confidential mode unlocks
+| Field | Visibility |
+| --- | --- |
+| `sender` / `freelancer` | **Public** |
+| Locked reserve total at create | **Public** |
+| Milestone index / raise / approve | **Public** |
+| Drip **timestamp** | **Public** (no amount on `ConfStreamDripped`) |
+| Remaining / earned / per-drip amount | **Hidden** |
+| Claim / unwrap amount | **Revealed** at cash-out |
 
-- **Quiet payroll** — contractors get paid continuously without publishing rate cards on a block explorer.
-- **Sensitive briefs** — pair with [encrypted metadata](/docs/privacy/metadata) so neither dollars nor deliverables are public.
-- **Agent-safe payouts** — machines can settle under policy without dumping treasury math into public mempools.
+## Why keep this mode
+
+Use amounts-only when you still need a **named stream object**:
+
+- Milestones + auto-approve
+- Mutual dispute / pause
+- Pro payroll suspend / resume / stop
+- Path toward borrow / yield (needs identifiable stream PV)
 
 ## Trade-offs (stated plainly)
 
 | You gain | You trade |
 | --- | --- |
-| Amount privacy between the two parties | Yield / lending composability that needs plaintext PV |
+| Amount privacy between the two parties | Graph + cadence still leak |
 | On-chain ZK verification | Heavier create / drip payloads (proofs) |
-| Local decryption only | Cash-out to a public coin reveals that exit amount |
-
-Confidential streams prioritize **discretion**. Public streams prioritize **DeFi composability**. Pick per engagement — both are first-class.
+| Milestone / dispute UX on a named object | Not the default “full private” path |
+| Local Seal decryption | Cash-out reveals the exit amount |
 
 ## In the product
 
-In the StreamLine app, enable **Private amounts** when creating a stream. Proof generation and Seal encryption run in the browser; sponsorship keeps the flow gasless for zkLogin users.
+In the StreamLine app: **Full private** is the default toggle. Choose **amounts-only compat** when you need milestones or dispute. Proof generation and Seal encryption run in the browser; sponsorship keeps the flow gasless for zkLogin users.
 
-Programmatic confidential create is expanding beyond the app surface; SDK v1 remains the clear-stream path (`stream.to`). Treat the app as the reference client for private mode today.
+SDK v1 remains the clear-stream path (`stream.to`). Treat the app as the reference client for private modes today.

@@ -34,6 +34,17 @@ import {
   markSpent,
   type ShieldedNote,
 } from "@/lib/shielded-store";
+import {
+  usePrivacyRelayer,
+  relaySubmit,
+  buildFundRelayerTx,
+  waitForRelayerBalance,
+} from "@/lib/privacy-relayer";
+import {
+  overfundAmount,
+  proveOverfundDeposit,
+  proveSplitAfterDeposit,
+} from "@/lib/overfund-split";
 
 const s = (x: bigint) => x.toString();
 const usd = (base: bigint | string) => `$${(Number(base) / USDC_BASE).toFixed(2)}`;
@@ -53,7 +64,11 @@ export function ShieldedPanel() {
   const { execute, isPending } = useGaslessExecute();
   const address = account?.address ?? "";
   const poolId = SHIELDED_POOL[(network as NetworkName) ?? "testnet"];
+  const { data: relayer } = usePrivacyRelayer();
+  const relayOn = !!relayer?.enabled && !!relayer.address;
 
+  const [useRelay, setUseRelay] = useState(true);
+  const [overfundSplit, setOverfundSplit] = useState(true);
   const [depositAmt, setDepositAmt] = useState("100");
   const [transferAmt, setTransferAmt] = useState("25");
   const [recipientAddr, setRecipientAddr] = useState("");
@@ -62,6 +77,18 @@ export function ShieldedPanel() {
   const [status, setStatus] = useState<string | null>(null);
   const [myAddr, setMyAddr] = useState("");
   const [tick, setTick] = useState(0);
+
+  const desiredDeposit = (() => {
+    try {
+      return toBaseUnits(Number(depositAmt) || 0);
+    } catch {
+      return 0n;
+    }
+  })();
+  const publicDeposit =
+    overfundSplit && desiredDeposit > 0n
+      ? overfundAmount(desiredDeposit)
+      : desiredDeposit;
 
   const notes = address ? loadNotes(address) : [];
   const balance = notes.reduce((a, n) => a + (n.spent ? 0n : BigInt(n.value)), 0n);
@@ -86,42 +113,226 @@ export function ShieldedPanel() {
     if (!address) return;
     setStatus(null);
     try {
-      const value = toBaseUnits(Number(depositAmt));
-      if (value <= 0n) return;
+      const desired = toBaseUnits(Number(depositAmt));
+      if (desired <= 0n) return;
       const sk = getSpendKey(address);
-      const pkv = await pk(sk);
-      const rho = randomBlinding();
-      setStatus("Proving the deposit note…");
-      const proofBytes = await proveDeposit(value, pkv, rho);
-      const cm = BigInt(proofBytes.publicSignals[0]);
-      setStatus("Awaiting signature…");
-      const tx = buildDeposit({
-        packageId,
-        coinType: usdcType,
-        poolId,
-        sender: address,
-        capBase: value,
-        cm,
-        proof: proofBytes.proof,
+      const doSplit = overfundSplit;
+      const doRelay = useRelay && relayOn && relayer?.address;
+
+      let depositBase = desired;
+      let cm: bigint;
+      let rho: bigint;
+      let pkv: bigint;
+      let depositProof: Uint8Array;
+      let changeBase = 0n;
+
+      if (doSplit) {
+        setStatus("Proving overfunded deposit note…");
+        const of = await proveOverfundDeposit({ sk, desiredBase: desired });
+        depositBase = of.depositBase;
+        changeBase = of.changeBase;
+        cm = of.cmDeposit;
+        rho = of.rhoDeposit;
+        pkv = of.pkv;
+        depositProof = of.depositProof;
+      } else {
+        pkv = await pk(sk);
+        rho = randomBlinding();
+        setStatus("Proving the deposit note…");
+        const proofBytes = await proveDeposit(desired, pkv, rho);
+        depositProof = proofBytes.proof;
+        cm = BigInt(proofBytes.publicSignals[0]);
+      }
+
+      const submitDeposit = async () => {
+        if (doRelay) {
+          setStatus("Step 1 — sending USDC to privacy relayer…");
+          const fundTx = buildFundRelayerTx({
+            sender: address,
+            relayerAddress: relayer!.address!,
+            coinType: usdcType,
+            amountBase: depositBase,
+          });
+          let fundErr: Error | null = null;
+          await execute(
+            fundTx,
+            {
+              onSuccess: () => {},
+              onError: (e) => {
+                fundErr = e;
+              },
+            },
+            { allowedRecipients: [relayer!.address!] }
+          );
+          if (fundErr) throw fundErr;
+          setStatus("Waiting for relayer balance…");
+          await waitForRelayerBalance(
+            client,
+            relayer!.address!,
+            usdcType,
+            depositBase
+          );
+          setStatus(
+            doSplit
+              ? "Relayer depositing overfund (hides your address)…"
+              : "Relayer depositing (hides your address)…"
+          );
+          const { digest } = await relaySubmit({
+            network: (network as NetworkName) ?? "testnet",
+            kind: "deposit",
+            packageId,
+            coinType: usdcType,
+            poolId,
+            proof: depositProof,
+            cm,
+            amountBase: depositBase,
+          });
+          return digest;
+        }
+
+        setStatus("Awaiting signature…");
+        const tx = buildDeposit({
+          packageId,
+          coinType: usdcType,
+          poolId,
+          sender: address,
+          capBase: depositBase,
+          cm,
+          proof: depositProof,
+        });
+        let digest = "";
+        let execErr: Error | null = null;
+        await execute(tx, {
+          onSuccess: (r) => {
+            digest = r.digest;
+          },
+          onError: (e) => {
+            execErr = e;
+          },
+        });
+        if (execErr) throw execErr;
+        return digest;
+      };
+
+      await submitDeposit();
+
+      if (!doSplit) {
+        addNote(address, {
+          commitment: s(cm),
+          value: s(desired),
+          rho: s(rho),
+          spent: false,
+          createdAt: Date.now(),
+        });
+        bump();
+        setStatus(
+          doRelay
+            ? `Relayed deposit ${usd(desired)} — chain sees relayer, not you.`
+            : `Deposited ${usd(desired)} into the shield — now a private note.`
+        );
+        return;
+      }
+
+      // Keep overfund opening locally in case the split tx fails mid-flow.
+      addNote(address, {
+        commitment: s(cm),
+        value: s(depositBase),
+        rho: s(rho),
+        spent: false,
+        createdAt: Date.now(),
       });
-      await execute(tx, {
-        onSuccess: () => {
+
+      setStatus("Proving private split (work + change)…");
+      const split = await proveSplitAfterDeposit({
+        client,
+        packageId,
+        sk,
+        pkv,
+        cmDeposit: cm,
+        rhoDeposit: rho,
+        depositBase,
+        desiredBase: desired,
+      });
+
+      const finishSplitLocal = () => {
+        markSpent(address, s(cm));
+        addNote(address, {
+          commitment: s(split.cmWork),
+          value: s(desired),
+          rho: s(split.rhoWork),
+          spent: false,
+          createdAt: Date.now(),
+        });
+        if (changeBase > 0n) {
           addNote(address, {
-            commitment: s(cm),
-            value: s(value),
-            rho: s(rho),
+            commitment: s(split.cmChange),
+            value: s(changeBase),
+            rho: s(split.rhoChange),
             spent: false,
             createdAt: Date.now(),
           });
-          bump();
-          setStatus(`Deposited ${usd(value)} into the shield — now a private note.`);
+        }
+        bump();
+      };
+
+      if (doRelay) {
+        setStatus("Relaying private split…");
+        await relaySubmit({
+          network: (network as NetworkName) ?? "testnet",
+          kind: "spend",
+          packageId,
+          coinType: usdcType,
+          poolId,
+          proof: split.proof,
+          root: split.root,
+          nf: split.nf,
+          cm1: split.cmWork,
+          cm2: split.cmChange,
+        });
+        finishSplitLocal();
+        setStatus(
+          `Shielded ${usd(desired)} privately — public edge was ${usd(depositBase)}; change ${usd(changeBase)} kept. Origin hidden.`
+        );
+        return;
+      }
+
+      setStatus("Awaiting signature for private split…");
+      const spendTx = buildSpend({
+        packageId,
+        coinType: usdcType,
+        poolId,
+        root: split.root,
+        nf: split.nf,
+        cm1: split.cmWork,
+        cm2: split.cmChange,
+        proof: split.proof,
+      });
+      await execute(spendTx, {
+        onSuccess: () => {
+          finishSplitLocal();
+          setStatus(
+            `Shielded ${usd(desired)} privately — public edge was ${usd(depositBase)}; change ${usd(changeBase)} kept.`
+          );
         },
         onError: (e) => setStatus(e.message),
       });
     } catch (e) {
       setStatus(e instanceof Error ? e.message : String(e));
     }
-  }, [address, depositAmt, packageId, usdcType, poolId, execute]);
+  }, [
+    address,
+    depositAmt,
+    packageId,
+    usdcType,
+    poolId,
+    execute,
+    useRelay,
+    relayOn,
+    relayer,
+    client,
+    network,
+    overfundSplit,
+  ]);
 
   const onTransfer = useCallback(async () => {
     if (!address) return;
@@ -165,6 +376,53 @@ export function ShieldedPanel() {
       const [root, nf, cm1, cm2] = signalsBig(pf);
       // For a real recipient, hand them the opening on-chain, encrypted to them.
       const cipher1 = recip ? await encryptNote(recip.encPub, v1, rho1) : undefined;
+      const finishLocal = () => {
+        markSpent(address, note.commitment);
+        if (toSelf) {
+          addNote(address, {
+            commitment: s(cm1),
+            value: s(v1),
+            rho: s(rho1),
+            spent: false,
+            createdAt: Date.now(),
+          });
+        }
+        if (v2 > 0n) {
+          addNote(address, {
+            commitment: s(cm2),
+            value: s(v2),
+            rho: s(rho2),
+            spent: false,
+            createdAt: Date.now(),
+          });
+        }
+        bump();
+      };
+
+      if (useRelay && relayOn) {
+        setStatus("Relaying private spend (hides your address)…");
+        await relaySubmit({
+          network: (network as NetworkName) ?? "testnet",
+          kind: "spend",
+          packageId,
+          coinType: usdcType,
+          poolId,
+          proof: pf.proof,
+          root,
+          nf,
+          cm1,
+          cm2,
+          cipher1,
+        });
+        finishLocal();
+        setStatus(
+          toSelf
+            ? `Relayed split — origin hidden; link to the original is broken on-chain.`
+            : `Relayed ${usd(v1)} privately; ${usd(v2)} change kept.`
+        );
+        return;
+      }
+
       setStatus("Awaiting signature…");
       const tx = buildSpend({
         packageId,
@@ -179,26 +437,7 @@ export function ShieldedPanel() {
       });
       await execute(tx, {
         onSuccess: () => {
-          markSpent(address, note.commitment);
-          if (toSelf) {
-            addNote(address, {
-              commitment: s(cm1),
-              value: s(v1),
-              rho: s(rho1),
-              spent: false,
-              createdAt: Date.now(),
-            });
-          }
-          if (v2 > 0n) {
-            addNote(address, {
-              commitment: s(cm2),
-              value: s(v2),
-              rho: s(rho2),
-              spent: false,
-              createdAt: Date.now(),
-            });
-          }
-          bump();
+          finishLocal();
           setStatus(
             toSelf
               ? `Split note privately — link to the original is broken on-chain.`
@@ -210,7 +449,7 @@ export function ShieldedPanel() {
     } catch (e) {
       setStatus(e instanceof Error ? e.message : String(e));
     }
-  }, [address, transferAmt, recipientAddr, notes, prep, packageId, usdcType, poolId, execute]);
+  }, [address, transferAmt, recipientAddr, notes, prep, packageId, usdcType, poolId, execute, useRelay, relayOn, network]);
 
   const onScan = useCallback(async () => {
     if (!address) return;
@@ -270,6 +509,42 @@ export function ShieldedPanel() {
         rhoChange,
       });
       const [root, nf, amt, cmChange] = signalsBig(pf);
+      const finishWd = () => {
+        markSpent(address, note.commitment);
+        if (changeValue > 0n) {
+          addNote(address, {
+            commitment: s(cmChange),
+            value: s(changeValue),
+            rho: s(rhoChange),
+            spent: false,
+            createdAt: Date.now(),
+          });
+        }
+        bump();
+      };
+
+      if (useRelay && relayOn) {
+        setStatus("Relaying withdraw (hides your address)…");
+        await relaySubmit({
+          network: (network as NetworkName) ?? "testnet",
+          kind: "withdraw",
+          packageId,
+          coinType: usdcType,
+          poolId,
+          proof: pf.proof,
+          root,
+          nf,
+          amount: amt,
+          cmChange,
+          recipient,
+        });
+        finishWd();
+        setStatus(
+          `Relayed withdraw ${usd(amount)} to ${short(recipient)} — origin hidden.`
+        );
+        return;
+      }
+
       setStatus("Awaiting signature…");
       const tx = buildWithdraw({
         packageId,
@@ -284,17 +559,7 @@ export function ShieldedPanel() {
       });
       await execute(tx, {
         onSuccess: () => {
-          markSpent(address, note.commitment);
-          if (changeValue > 0n) {
-            addNote(address, {
-              commitment: s(cmChange),
-              value: s(changeValue),
-              rho: s(rhoChange),
-              spent: false,
-              createdAt: Date.now(),
-            });
-          }
-          bump();
+          finishWd();
           setStatus(`Withdrew ${usd(amount)} to ${short(recipient)} — source note hidden.`);
         },
         onError: (e) => setStatus(e.message),
@@ -302,7 +567,7 @@ export function ShieldedPanel() {
     } catch (e) {
       setStatus(e instanceof Error ? e.message : String(e));
     }
-  }, [address, withdrawAmt, payTo, notes, prep, packageId, usdcType, poolId, execute]);
+  }, [address, withdrawAmt, payTo, notes, prep, packageId, usdcType, poolId, execute, useRelay, relayOn, network]);
 
   if (!address) return null;
   const field =
@@ -352,15 +617,30 @@ export function ShieldedPanel() {
         )}
       </div>
 
+      {relayOn && (
+        <label className="flex items-center gap-2 rounded-2xl border border-[#6c5ce7]/20 bg-[#6c5ce7]/[0.03] px-4 py-3 text-[11px] text-[#333]">
+          <input
+            type="checkbox"
+            checked={useRelay}
+            onChange={(e) => setUseRelay(e.target.checked)}
+            className="accent-[#6c5ce7]"
+          />
+          <span>
+            <strong className="font-semibold">Privacy relayer</strong> — hide your
+            address as tx sender (deposit is two-step; amounts still public at the edge)
+          </span>
+        </label>
+      )}
+
       {/* Deposit */}
       <div className="rounded-2xl border border-black/10 bg-white p-4">
         <p className="text-[13px] font-semibold text-[#111]">Shield funds (deposit)</p>
         <p className="mt-1 text-[11px] text-[#666]">
-          Public USDC → a private note. The amount is visible entering the pool; after
-          that your balance and transfers are hidden.
+          Public USDC → private notes. With overfund on, the chain sees a round
+          amount; a private spend immediately splits into your desired note + change.
         </p>
         <label className="mt-3 block text-[10px] text-[#888]">
-          Amount (USDC)
+          Desired amount (USDC)
           <input
             className={field}
             inputMode="decimal"
@@ -368,8 +648,27 @@ export function ShieldedPanel() {
             onChange={(e) => setDepositAmt(e.target.value)}
           />
         </label>
+        {desiredDeposit > 0n && (
+          <p className="mt-1.5 text-[10px] text-[#888]">
+            {overfundSplit
+              ? `Public edge: ${usd(publicDeposit)} · private note: ${usd(desiredDeposit)} · change: ${usd(publicDeposit - desiredDeposit)}`
+              : `Public edge = ${usd(desiredDeposit)} (matches your note)`}
+          </p>
+        )}
+        <label className="mt-3 flex items-center gap-2 text-[11px] text-[#333]">
+          <input
+            type="checkbox"
+            checked={overfundSplit}
+            onChange={(e) => setOverfundSplit(e.target.checked)}
+            className="accent-[#6c5ce7]"
+          />
+          <span>
+            <strong className="font-semibold">Overfund + private split</strong> — edge
+            amount ≠ economic amount
+          </span>
+        </label>
         <button type="button" disabled={isPending} onClick={onDeposit} className={btn}>
-          {isPending ? "Working…" : "Shield"}
+          {isPending ? "Working…" : overfundSplit ? "Shield (overfund + split)" : "Shield"}
         </button>
       </div>
 

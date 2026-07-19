@@ -104,6 +104,10 @@ export function allowedMoveCallTargets(
     targets.push(`${pkg}::confidential_balance::wrap`);
     targets.push(`${pkg}::confidential_balance::unwrap`);
     targets.push(`${pkg}::confidential_balance::confidential_transfer`);
+    // Private engagement (default private stream: pool + lazy vest).
+    targets.push(`${pkg}::private_stream::open_engagement`);
+    targets.push(`${pkg}::private_stream::settle_vested`);
+    targets.push(`${pkg}::private_stream::claim_exit`);
   }
 
   // Test-USDC faucet is only deployed (and only worth sponsoring) on testnet.

@@ -109,13 +109,36 @@ public fun spend<T>(
     cm2: u256,
     proof: vector<u8>,
 ) {
+    confidential_balance::verify_shielded(root, nf, cm1, cm2, proof);
+    apply_spend(pool, root, nf, cm1, cm2);
+    event::emit(Spent { nullifier: nf, cm1, cm2 });
+}
+
+/// Apply a verified spend (nullifier + insert outputs). Used by `spend` and by
+/// `private_stream::settle_vested` after a `private_settle` proof.
+public(package) fun apply_spend<T>(
+    pool: &mut ShieldedPool<T>,
+    root: u256,
+    nf: u256,
+    cm1: u256,
+    cm2: u256,
+) {
     assert!(merkle_tree::is_known_root(&pool.tree, root), EUnknownRoot);
     assert!(!pool.nullifiers.contains(nf), ENullifierUsed);
-    confidential_balance::verify_shielded(root, nf, cm1, cm2, proof);
     pool.nullifiers.add(nf, true);
     merkle_tree::insert(&mut pool.tree, cm1);
     merkle_tree::insert(&mut pool.tree, cm2);
-    event::emit(Spent { nullifier: nf, cm1, cm2 });
+}
+
+/// Alias for private-engagement settles (same tree mutation as a shielded spend).
+public(package) fun apply_private_settle<T>(
+    pool: &mut ShieldedPool<T>,
+    root: u256,
+    nf: u256,
+    cm1: u256,
+    cm2: u256,
+) {
+    apply_spend(pool, root, nf, cm1, cm2);
 }
 
 /// Phase 4: publish a Seal-encrypted note opening so the recipient can discover

@@ -5,6 +5,7 @@ import {
   type ProActivity,
   type ProWorker,
   type ProWorkspace,
+  type WorkersSealed,
 } from "@/components/app/pro/types";
 
 const KEY_PREFIX = "sl-pro-workspace";
@@ -13,9 +14,20 @@ function storageKey(address: string) {
   return `${KEY_PREFIX}:${address.toLowerCase()}`;
 }
 
+/** Disk shape — never persists cleartext workers. */
+type PersistedWorkspace = Omit<
+  ProWorkspace,
+  "workers" | "rosterLocked" | "workersSealed"
+> & {
+  version: 3 | 4;
+  /** Legacy v3 only. */
+  workers?: ProWorker[];
+  workersSealed?: WorkersSealed | null;
+};
+
 export function emptyWorkspace(orgName = "My organization"): ProWorkspace {
   return {
-    version: 3,
+    version: 4,
     orgName,
     groups: [],
     workers: [],
@@ -29,6 +41,8 @@ export function emptyWorkspace(orgName = "My organization"): ProWorkspace {
     activity: [],
     yieldEarned: 0,
     updatedAt: Date.now(),
+    workersSealed: null,
+    rosterLocked: false,
   };
 }
 
@@ -37,8 +51,45 @@ export function loadProWorkspace(address: string): ProWorkspace {
   try {
     const raw = localStorage.getItem(storageKey(address));
     if (raw) {
-      const parsed = JSON.parse(raw) as ProWorkspace;
-      if (parsed?.version === 3) return parsed;
+      const parsed = JSON.parse(raw) as PersistedWorkspace;
+
+      if (parsed?.version === 4) {
+        const sealed = parsed.workersSealed ?? null;
+        const locked = !!sealed?.ciphertextB64;
+        return {
+          version: 4,
+          orgName: parsed.orgName || "My organization",
+          groups: parsed.groups ?? [],
+          workers: [],
+          pool: parsed.pool ?? emptyWorkspace().pool,
+          activity: parsed.activity ?? [],
+          yieldEarned: parsed.yieldEarned ?? 0,
+          updatedAt: parsed.updatedAt ?? Date.now(),
+          treasuryId: parsed.treasuryId,
+          investedPrincipal: parsed.investedPrincipal,
+          workersSealed: sealed,
+          rosterLocked: locked,
+        };
+      }
+
+      if (parsed?.version === 3) {
+        // Legacy cleartext roster — load into memory; next sealed save migrates to v4.
+        return {
+          version: 3,
+          orgName: parsed.orgName || "My organization",
+          groups: parsed.groups ?? [],
+          workers: parsed.workers ?? [],
+          pool: parsed.pool ?? emptyWorkspace().pool,
+          activity: parsed.activity ?? [],
+          yieldEarned: parsed.yieldEarned ?? 0,
+          updatedAt: parsed.updatedAt ?? Date.now(),
+          treasuryId: parsed.treasuryId,
+          investedPrincipal: parsed.investedPrincipal,
+          workersSealed: null,
+          rosterLocked: false,
+        };
+      }
+
       // Older workspace (v2/legacy migrations): drop the accumulated local
       // roster — test/mock people that were never real on-chain streams — but
       // keep the real on-chain treasury link + org name so funds aren't orphaned.
@@ -54,15 +105,32 @@ export function loadProWorkspace(address: string): ProWorkspace {
   } catch {
     /* fall through */
   }
-  // Real orgs start empty; the roster fills from on-chain streams. The demo
-  // fixtures load only via an explicit "Load demo" (resetDemo).
   return emptyWorkspace();
 }
 
+/**
+ * Persist workspace shell. Workers are never written cleartext —
+ * only `workersSealed` (or empty roster).
+ */
 export function saveProWorkspace(address: string, workspace: ProWorkspace) {
   if (typeof window === "undefined" || !address) return;
-  const next = { ...workspace, updatedAt: Date.now(), version: 3 as const };
-  localStorage.setItem(storageKey(address), JSON.stringify(next));
+  const disk: PersistedWorkspace = {
+    version: workspace.workersSealed ? 4 : workspace.version === 3 && !workspace.workersSealed ? 3 : 4,
+    orgName: workspace.orgName,
+    groups: workspace.groups,
+    pool: workspace.pool,
+    activity: workspace.activity,
+    yieldEarned: workspace.yieldEarned,
+    updatedAt: Date.now(),
+    treasuryId: workspace.treasuryId,
+    investedPrincipal: workspace.investedPrincipal,
+    workersSealed: workspace.workersSealed ?? null,
+  };
+  // Only keep cleartext workers on disk for unmigrated v3 (no seal yet).
+  if (disk.version === 3 && !disk.workersSealed) {
+    disk.workers = workspace.workers;
+  }
+  localStorage.setItem(storageKey(address), JSON.stringify(disk));
 }
 
 export function pushActivity(

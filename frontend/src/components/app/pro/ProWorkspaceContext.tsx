@@ -6,10 +6,16 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
-import { useCurrentAccount, useSuiClient } from "@mysten/dapp-kit";
+import {
+  useCurrentAccount,
+  useSignPersonalMessage,
+  useSuiClient,
+  useSuiClientContext,
+} from "@mysten/dapp-kit";
 import type { Transaction } from "@mysten/sui/transactions";
 
 import {
@@ -18,6 +24,8 @@ import {
   saveProWorkspace,
   emptyWorkspace,
 } from "@/lib/pro-workspace-store";
+import { encryptWorkers, decryptWorkers } from "@/lib/pro-roster-seal";
+import { loadOrCreateSessionKey } from "@/lib/seal";
 import { useStreams } from "@/lib/indexer";
 import { useGaslessExecute } from "@/lib/use-gasless";
 import { useNetworkVariable } from "@/lib/networks";
@@ -47,6 +55,21 @@ import {
   readStreamTreasuryId,
   useTreasuryState,
 } from "@/lib/treasury";
+import {
+  prepareOpenEngagement,
+  findCreatedEngagement,
+} from "@/lib/private-stream";
+import { proveSplitAfterDeposit } from "@/lib/overfund-split";
+import { buildSpend } from "@/lib/shielded";
+import { getSpendKey, addNote } from "@/lib/shielded-store";
+import { addEngagement } from "@/lib/private-engagement-store";
+import {
+  usePrivacyRelayer,
+  relaySubmit,
+  buildFundRelayerTx,
+  waitForRelayerBalance,
+} from "@/lib/privacy-relayer";
+import { SHIELDED_POOL, type NetworkName } from "@/lib/constants";
 import { USDC_BASE, toBaseUnits } from "@/lib/stream-math";
 import { onProAction } from "./pro-actions";
 import {
@@ -58,6 +81,7 @@ import {
   poolTotal,
   streamStateToWorkerStatus,
   type ProCadence,
+  type ProHireMode,
   type ProPoolBucket,
   type ProStreamGroup,
   type ProWorker,
@@ -111,11 +135,16 @@ type ProWorkspaceContextValue = {
     cadence: ProCadence;
     budget?: number;
     status?: ProWorkerStatus;
+    hireMode?: ProHireMode;
+    shieldedAddress?: string;
   }) => void;
   deleteWorker: (workerId: string) => void;
   setWorkerStatus: (workerId: string, status: ProWorkerStatus) => Promise<boolean>;
-  /** Lock the worker's budget from the treasury pool and record the stream id. */
+  /** Lock the worker's budget and open private engagement or public treasury stream. */
   createWorkerStream: (workerId: string) => Promise<boolean>;
+  /** Decrypt Seal-sealed roster (org wallet personal message). */
+  unlockRoster: () => Promise<boolean>;
+  rosterUnlocking: boolean;
   /** Approve a review-ready stream on-chain so it starts dripping (Start). */
   approveStream: (streamId: string) => Promise<boolean>;
   /** Cancel a treasury stream on-chain, refunding the remainder to the pool (Delete). */
@@ -219,6 +248,8 @@ export function ProWorkspaceProvider({
   const [tick, setTick] = useState(0);
   const [modal, setModal] = useState<ModalKind>(null);
   const [nowMs, setNowMs] = useState(() => Date.now());
+  const [rosterUnlocking, setRosterUnlocking] = useState(false);
+  const sealSaveGen = useRef(0);
 
   // Real on-chain streams this org created, from the indexer. Poll keeps the
   // reconciled view (streamed/status/pool) fresh as the keeper drips.
@@ -228,7 +259,12 @@ export function ProWorkspaceProvider({
   const yieldVaultId = useNetworkVariable("yieldVaultId");
   const originalPackageId = useNetworkVariable("originalPackageId");
   const suiClient = useSuiClient();
+  const { network } = useSuiClientContext();
+  const { mutateAsync: signPersonalMessage } = useSignPersonalMessage();
   const { execute, isPending: creating } = useGaslessExecute();
+  const { data: relayer } = usePrivacyRelayer();
+  const relayOn = !!relayer?.enabled && !!relayer.address;
+  const poolId = SHIELDED_POOL[(network as NetworkName) ?? "testnet"];
 
   // Live treasury (Pro pool) state — real idle + invested USDC on-chain.
   const { data: treasury, dataUpdatedAt: treasuryUpdatedAt } = useTreasuryState(suiClient, {
@@ -254,10 +290,57 @@ export function ProWorkspaceProvider({
     setHydrated(true);
   }, [address, isDemo]);
 
+  // Block adding workers while Seal roster is locked.
+  useEffect(() => {
+    if (!workspace.rosterLocked) return;
+    if (modal === "worker" || (typeof modal === "object" && modal?.kind === "worker-edit")) {
+      setModal(null);
+    }
+  }, [workspace.rosterLocked, modal]);
+
   useEffect(() => {
     if (!hydrated || !address || isDemo) return;
-    saveProWorkspace(address, workspace);
-  }, [workspace, address, hydrated, isDemo]);
+    const gen = ++sealSaveGen.current;
+    let cancelled = false;
+    void (async () => {
+      // Seal-encrypt unlocked roster before disk write (never persist cleartext on v4).
+      if (
+        !workspace.rosterLocked &&
+        originalPackageId &&
+        originalPackageId !== "0x0"
+      ) {
+        try {
+          const sealed = await encryptWorkers({
+            suiClient,
+            sealNamespace: originalPackageId,
+            orgAddress: address,
+            workers: workspace.workers,
+          });
+          if (cancelled || gen !== sealSaveGen.current) return;
+          saveProWorkspace(address, {
+            ...workspace,
+            version: 4,
+            workersSealed: sealed,
+          });
+          return;
+        } catch {
+          // Offline / Seal unavailable — keep prior sealed blob if any.
+        }
+      }
+      if (cancelled || gen !== sealSaveGen.current) return;
+      saveProWorkspace(address, workspace);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    workspace,
+    address,
+    hydrated,
+    isDemo,
+    originalPackageId,
+    suiClient,
+  ]);
 
   useEffect(() => {
     const id = window.setInterval(() => {
@@ -347,8 +430,12 @@ export function ProWorkspaceProvider({
       cadence: ProCadence;
       budget?: number;
       status?: ProWorkerStatus;
+      hireMode?: ProHireMode;
+      shieldedAddress?: string;
     }) => {
       mutate((prev) => {
+        if (prev.rosterLocked) return prev;
+        const hireMode = input.hireMode ?? "private";
         if (input.id) {
           return {
             ...prev,
@@ -363,6 +450,9 @@ export function ProWorkspaceProvider({
                     cadence: input.cadence,
                     budget: input.budget ?? w.budget,
                     status: input.status ?? w.status,
+                    hireMode,
+                    shieldedAddress:
+                      input.shieldedAddress ?? w.shieldedAddress,
                   }
                 : w
             ),
@@ -378,6 +468,8 @@ export function ProWorkspaceProvider({
           budget: input.budget ?? 0,
           streamedUsd: 0,
           status: input.status ?? "pending",
+          hireMode,
+          shieldedAddress: input.shieldedAddress,
         };
         return pushActivity(
           { ...prev, workers: [...prev.workers, worker] },
@@ -387,6 +479,58 @@ export function ProWorkspaceProvider({
     },
     [mutate]
   );
+
+  const unlockRoster = useCallback(async (): Promise<boolean> => {
+    if (!address || isDemo) return false;
+    const sealed = workspace.workersSealed;
+    if (!sealed?.ciphertextB64) {
+      mutate((prev) => ({ ...prev, rosterLocked: false }));
+      return true;
+    }
+    if (!packageId || packageId === "0x0" || !originalPackageId) return false;
+    setRosterUnlocking(true);
+    try {
+      const session = await loadOrCreateSessionKey({
+        suiClient,
+        address,
+        network: (network as NetworkName) ?? "testnet",
+        sealNamespace: sealed.sealNamespace || originalPackageId,
+        signPersonalMessage: (message) => signPersonalMessage({ message }),
+      });
+      const workers = await decryptWorkers({
+        suiClient,
+        packageId,
+        sessionKey: session,
+        orgAddress: address,
+        sealed,
+      });
+      mutate((prev) => ({
+        ...prev,
+        version: 4,
+        workers,
+        rosterLocked: false,
+        workersSealed: sealed,
+      }));
+      return true;
+    } catch (e) {
+      window.alert(
+        `Couldn't unlock roster: ${e instanceof Error ? e.message : String(e)}`
+      );
+      return false;
+    } finally {
+      setRosterUnlocking(false);
+    }
+  }, [
+    address,
+    isDemo,
+    workspace.workersSealed,
+    packageId,
+    originalPackageId,
+    suiClient,
+    network,
+    signPersonalMessage,
+    mutate,
+  ]);
 
   const deleteWorker = useCallback(
     (workerId: string) => {
@@ -403,8 +547,26 @@ export function ProWorkspaceProvider({
       const worker = workspace.workers.find((w) => w.id === workerId);
       if (!worker) return false;
 
-      // Demo / local-only workers: UI state only.
-      if (isDemo || !worker.streamId || !packageId || packageId === "0x0") {
+      const isPrivate =
+        (worker.hireMode ?? "private") === "private" || !!worker.engagementId;
+
+      // Demo / local-only / private engagement: UI state only (no on-chain HR).
+      if (
+        isDemo ||
+        isPrivate ||
+        !worker.streamId ||
+        !packageId ||
+        packageId === "0x0"
+      ) {
+        if (isPrivate && !isDemo && worker.engagementId) {
+          // Honest: private legs have no suspend_payroll on-chain.
+          if (status === "paused" || status === "stopped") {
+            const ok = window.confirm(
+              "Private hire has no on-chain HR pause/stop yet — this only updates your local roster. Continue?"
+            );
+            if (!ok) return false;
+          }
+        }
         mutate((prev) => {
           const now = Date.now();
           const nextWorkers = prev.workers.map((w) => {
@@ -436,7 +598,7 @@ export function ProWorkspaceProvider({
                   : status === "dripping"
                     ? "resumed"
                     : "stopped",
-              label: `${status === "dripping" ? "Resumed" : status === "paused" ? "Paused" : "Stopped"} ${worker.alias}`,
+              label: `${status === "dripping" ? "Resumed" : status === "paused" ? "Paused" : "Stopped"} ${worker.alias}${isPrivate ? " (local)" : ""}`,
             }
           );
         });
@@ -550,11 +712,222 @@ export function ProWorkspaceProvider({
       if (!address) return false;
       const worker = workspace.workers.find((w) => w.id === workerId);
       if (!worker) return false;
-      if (worker.streamId) return true;
+      if (worker.streamId || worker.engagementId) return true;
       if (!packageId || packageId === "0x0") return false;
       const budget = worker.budget > 0 ? worker.budget : worker.monthlyUsd;
       if (budget <= 0) return false;
 
+      const hireMode: ProHireMode = worker.hireMode ?? "private";
+
+      // ——— Private engagement (default) ———
+      if (hireMode === "private") {
+        if (!poolId || poolId === "0x0") {
+          window.alert("Shielded pool not configured on this network.");
+          return false;
+        }
+        try {
+          const totalBase = toBaseUnits(budget);
+          const durationSec = BigInt(
+            Math.max(1, Math.floor(CADENCE_DURATION_MS[worker.cadence] / 1000))
+          );
+          const sk = getSpendKey(address);
+          const shielded =
+            worker.shieldedAddress?.startsWith("sl1")
+              ? worker.shieldedAddress
+              : undefined;
+          const prepared = await prepareOpenEngagement({
+            packageId,
+            coinType: usdcType,
+            poolId,
+            sender: address,
+            sk,
+            capBase: totalBase,
+            durationSec,
+            recipientShielded: shielded,
+          });
+
+          let openDigest = "";
+          if (relayOn && relayer?.address) {
+            const fundTx = buildFundRelayerTx({
+              sender: address,
+              relayerAddress: relayer.address,
+              coinType: usdcType,
+              amountBase: prepared.depositBase,
+            });
+            let fundErr: Error | null = null;
+            await execute(
+              fundTx,
+              {
+                onSuccess: () => {},
+                onError: (e) => {
+                  fundErr = e;
+                },
+              },
+              { allowedRecipients: [relayer.address] }
+            );
+            if (fundErr) throw fundErr;
+            await waitForRelayerBalance(
+              suiClient,
+              relayer.address,
+              usdcType,
+              prepared.depositBase
+            );
+            const { digest } = await relaySubmit({
+              network: (network as NetworkName) ?? "testnet",
+              kind: "open",
+              packageId,
+              coinType: usdcType,
+              poolId,
+              proof: prepared.depositProof,
+              cm: prepared.cm,
+              amountBase: prepared.depositBase,
+              paramsCommitment: prepared.paramsCommitment,
+              ciphertext: prepared.ciphertext,
+            });
+            openDigest = digest;
+          } else {
+            let openErr: Error | null = null;
+            await execute(prepared.tx, {
+              onSuccess: ({ digest }) => {
+                openDigest = digest;
+              },
+              onError: (e) => {
+                openErr = e;
+              },
+            });
+            if (openErr) throw openErr;
+          }
+
+          let fundingCm = prepared.cm;
+          let fundingRho = prepared.rho;
+          let fundingValue = totalBase;
+          let changeCm: bigint | null = null;
+          let changeRho: bigint | null = null;
+
+          if (prepared.changeBase > 0n) {
+            const split = await proveSplitAfterDeposit({
+              client: suiClient,
+              packageId,
+              sk,
+              pkv: prepared.pkv,
+              cmDeposit: prepared.cm,
+              rhoDeposit: prepared.rho,
+              depositBase: prepared.depositBase,
+              desiredBase: totalBase,
+            });
+            if (relayOn) {
+              await relaySubmit({
+                network: (network as NetworkName) ?? "testnet",
+                kind: "spend",
+                packageId,
+                coinType: usdcType,
+                poolId,
+                proof: split.proof,
+                root: split.root,
+                nf: split.nf,
+                cm1: split.cmWork,
+                cm2: split.cmChange,
+              });
+            } else {
+              let splitErr: Error | null = null;
+              await execute(
+                buildSpend({
+                  packageId,
+                  coinType: usdcType,
+                  poolId,
+                  root: split.root,
+                  nf: split.nf,
+                  cm1: split.cmWork,
+                  cm2: split.cmChange,
+                  proof: split.proof,
+                }),
+                {
+                  onSuccess: () => {},
+                  onError: (e) => {
+                    splitErr = e;
+                  },
+                }
+              );
+              if (splitErr) throw splitErr;
+            }
+            fundingCm = split.cmWork;
+            fundingRho = split.rhoWork;
+            changeCm = split.cmChange;
+            changeRho = split.rhoChange;
+          }
+
+          const engagementId = await findCreatedEngagement(suiClient, openDigest);
+          if (!engagementId) throw new Error("Engagement opened but id not found");
+
+          addEngagement(address, {
+            engagementId,
+            coinType: usdcType,
+            poolId,
+            fundingCm: fundingCm.toString(),
+            fundingRho: fundingRho.toString(),
+            fundingValue: fundingValue.toString(),
+            rate: prepared.rate.toString(),
+            start: prepared.start.toString(),
+            cap: totalBase.toString(),
+            rParams: prepared.rParams.toString(),
+            paramsCommitment: prepared.paramsCommitment.toString(),
+            workerShielded: shielded,
+            label: worker.alias,
+            createdAt: Date.now(),
+          });
+          addNote(address, {
+            commitment: fundingCm.toString(),
+            value: fundingValue.toString(),
+            rho: fundingRho.toString(),
+            spent: false,
+            createdAt: Date.now(),
+          });
+          if (changeCm && changeRho && prepared.changeBase > 0n) {
+            addNote(address, {
+              commitment: changeCm.toString(),
+              value: prepared.changeBase.toString(),
+              rho: changeRho.toString(),
+              spent: false,
+              createdAt: Date.now(),
+            });
+          }
+
+          mutate((prev) =>
+            pushActivity(
+              {
+                ...prev,
+                workers: prev.workers.map((w) =>
+                  w.id === workerId
+                    ? {
+                        ...w,
+                        status: "dripping" as const,
+                        startedAt: Date.now(),
+                        budget,
+                        hireMode: "private",
+                        engagementId,
+                      }
+                    : w
+                ),
+              },
+              {
+                kind: "resumed",
+                label: `Hired ${worker.alias} privately (shielded pool)`,
+                amount: budget,
+              }
+            )
+          );
+          return true;
+        } catch (e) {
+          window.alert(
+            `Couldn't start private hire for ${worker.alias}: ${
+              e instanceof Error ? e.message : String(e)
+            }`
+          );
+          return false;
+        }
+      }
+
+      // ——— Public treasury hire ———
       let tid: string | null = null;
       try {
         tid = await ensureTreasury();
@@ -599,8 +972,6 @@ export function ProWorkspaceProvider({
         return false;
       }
       if (!ok) return false;
-      // Persist the created stream's id so the worker binds to it exactly —
-      // address matching can't tell two workers on the same payout wallet apart.
       const newStreamId = digest
         ? await findCreatedStream(suiClient, digest)
         : null;
@@ -615,6 +986,7 @@ export function ProWorkspaceProvider({
                     status: "dripping" as const,
                     startedAt: Date.now(),
                     budget,
+                    hireMode: "public",
                     streamId: newStreamId ?? w.streamId,
                   }
                 : w
@@ -622,7 +994,7 @@ export function ProWorkspaceProvider({
           },
           {
             kind: "resumed",
-            label: `Hired ${worker.alias} from treasury`,
+            label: `Hired ${worker.alias} from treasury (public)`,
             amount: budget,
           }
         )
@@ -639,6 +1011,10 @@ export function ProWorkspaceProvider({
       mutate,
       ensureTreasury,
       suiClient,
+      poolId,
+      relayOn,
+      relayer,
+      network,
     ]
   );
 
@@ -1009,11 +1385,12 @@ export function ProWorkspaceProvider({
           })(),
         }
       : null;
-    // A local worker with no bound on-chain stream must never render as live:
-    // downgrade a stale "dripping"/"paused" (e.g. a phantom left by an old
-    // failed Start) to "pending" so it can't masquerade as a real stream.
+    // A local worker with no bound on-chain stream/engagement must never render
+    // as live: downgrade a stale "dripping"/"paused" to "pending".
     const phantomGuard = (w: ProWorker): ProWorker =>
-      !w.streamId && (w.status === "dripping" || w.status === "paused")
+      !w.streamId &&
+      !w.engagementId &&
+      (w.status === "dripping" || w.status === "paused")
         ? { ...w, status: "pending" }
         : w;
 
@@ -1068,6 +1445,7 @@ export function ProWorkspaceProvider({
         budget: total,
         streamedUsd: (s.total - s.remaining) / USDC_BASE,
         status: streamStateToWorkerStatus(s.state),
+        hireMode: "public" as const,
         streamId: s.id,
         startedAt: s.created_at_ms,
       });
@@ -1127,6 +1505,8 @@ export function ProWorkspaceProvider({
     deleteWorker,
     setWorkerStatus,
     createWorkerStream,
+    unlockRoster,
+    rosterUnlocking,
     approveStream,
     cancelStream,
     fundTreasury,

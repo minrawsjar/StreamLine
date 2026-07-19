@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 
 import { shortAddress } from "@/lib/format";
 import { useProWorkspace } from "../ProWorkspaceContext";
+import { HireModeBadge, RosterUnlockBanner } from "../RosterUnlockBanner";
 import { fmtUsd, type ProWorkerStatus } from "../types";
 import { ProCard, ProEyebrow, ProStat, StatusPill } from "../ui";
 
@@ -51,6 +52,7 @@ export function PeopleScreen() {
 
   return (
     <div className="space-y-6">
+      <RosterUnlockBanner />
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <ProEyebrow>People</ProEyebrow>
@@ -207,12 +209,16 @@ export function PeopleScreen() {
                   {w.alias.slice(0, 1).toUpperCase()}
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-[13px] font-medium text-white">
+                  <p className="flex items-center gap-2 truncate text-[13px] font-medium text-white">
                     {w.alias}
+                    <HireModeBadge mode={w.hireMode} />
                   </p>
                   <p className="truncate text-[11px] text-white/35">
-                    {group?.name ?? "Ungrouped"} · {shortAddress(w.walletAddress)} ·{" "}
-                    {fmtUsd(w.monthlyUsd, 0)}/mo
+                    {group?.name ?? "Ungrouped"} ·{" "}
+                    {w.shieldedAddress
+                      ? `${w.shieldedAddress.slice(0, 10)}…`
+                      : shortAddress(w.walletAddress)}{" "}
+                    · {fmtUsd(w.monthlyUsd, 0)}/mo
                   </p>
                 </div>
                 <StatusPill status={w.status} />

@@ -23,6 +23,7 @@ import {
   type OnrampMode,
 } from "@/components/wallet/OnramperWidget";
 import { ProActionModals } from "./modals/ProActionModals";
+import { HireModeBadge, RosterUnlockBanner } from "./RosterUnlockBanner";
 import { MonthlyRunBars, StatusPill } from "./ui";
 import { ReportsScreen } from "./screens/ReportsScreen";
 import { ToolsScreen } from "./screens/ToolsScreen";
@@ -684,6 +685,9 @@ function StreamsTab() {
 
   return (
     <div className="flex flex-col px-0.5 pb-1 pt-0.5">
+      <div className="mb-2">
+        <RosterUnlockBanner />
+      </div>
       <p className="text-[8px] font-medium uppercase tracking-[0.18em] text-white/40">
         Live substreams
       </p>
@@ -749,11 +753,15 @@ function StreamsTab() {
             >
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
-                  <p className="truncate text-[11px] font-medium text-white/85">
+                  <p className="flex items-center gap-1.5 truncate text-[11px] font-medium text-white/85">
                     {w.alias}
+                    <HireModeBadge mode={w.hireMode} />
                   </p>
                   <p className="text-[8px] text-white/35">
-                    {group?.name ?? "Ungrouped"} · {shortAddress(w.walletAddress)}
+                    {group?.name ?? "Ungrouped"} ·{" "}
+                    {w.shieldedAddress
+                      ? `${w.shieldedAddress.slice(0, 8)}…`
+                      : shortAddress(w.walletAddress)}
                   </p>
                 </div>
                 <div className="shrink-0 text-right">
@@ -848,6 +856,7 @@ function PeopleTab() {
 
   return (
     <div className="flex flex-col gap-2.5 px-0.5 pb-1 pt-0.5">
+      <RosterUnlockBanner />
       <div className="px-0.5">
         <p className="text-[13px] font-semibold text-white">People</p>
       </div>
@@ -963,8 +972,9 @@ function PeopleTab() {
                 {w.alias.slice(0, 1).toUpperCase()}
               </div>
               <div className="min-w-0 flex-1">
-                <p className="truncate text-[12px] font-semibold text-white">
+                <p className="flex items-center gap-1.5 truncate text-[12px] font-semibold text-white">
                   {w.alias}
+                  <HireModeBadge mode={w.hireMode} />
                 </p>
                 <p className="truncate text-[9px] text-white/40">
                   {group?.name ?? "Ungrouped"} · {fmtUsd(w.monthlyUsd, 0)}/mo

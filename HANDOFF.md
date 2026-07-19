@@ -117,33 +117,44 @@ capture digest synchronously, resolve id after await), and swallowed `onError`
   live vault has ~56k USDC reserve, index grown past 1.0077). But the 8% APR is
   **subsidized** from a seeded buffer (a Scallop-shaped testnet stand-in), not market
   yield. Pro's displayed yield is now real (derived from the vault), not the old sim.
-- **Privacy:** REAL cryptography. Poseidon commitments (`circomlibjs`) hide amounts;
-  real Groth16 proofs (`snarkjs.groth16.fullProve` over the circom circuits) verified
-  on-chain by Sui native `groth16::verify_groth16_proof` (bn254); real Seal
-  (`@mysten/seal`) threshold-encrypts stream secrets to both parties. Caveat: the
-  trusted setup is a dev setup (fine for testnet; needs an MPC ceremony for mainnet).
-- **What today's confidential model LEAKS** (the important gap): `ConfidentialStream`
-  stores `sender`/`freelancer` in **plaintext** and emits per-drip events with
-  timestamps. So amounts are hidden but the **graph (who-pays-whom) and the cadence**
-  are public. `confidential_balance.move` is a shared-pool aggregator but its
-  `transfer(from, to)` also takes addresses in plaintext → graph leaks.
+- **Privacy:** REAL cryptography across three product modes:
+  - **Default private engagement** (`private_stream` + `shielded_pool` + `private_settle`):
+    hides **amount + who↔whom + drip cadence** inside the pool. Deposit/withdraw
+    still reveal amount + address at the anonymity-set edge. Note openings use
+    **ECIES** (`publish_note`), not Seal. **Personal create only** — not Pro hire.
+  - **Amounts-only** (`ConfidentialStream`): Poseidon + Groth16 + **Seal** openings.
+    **Still leaks** `sender`/`freelancer` and drip/milestone timestamps.
+  - **Public** `Stream`: cleartext; required for borrow / yield splits / **Pro treasury hire**.
+  Trusted setup is a hackathon ceremony (fine for testnet; needs MPC for mainnet).
+  **Deploy:** upgrade the package so `private_stream` is on-chain before relying on
+  the app’s default Private create path.
+  **Privacy relayer:** set `PRIVACY_RELAYER_SUI_PRIVATE_KEY` (suiprivkey…) and fund
+  that address with SUI + USDC. Hides **tx origin** for spend/settle/withdraw;
+  deposit/open is two-step (user→relayer transfer, then relayer deposits). Amounts
+  at the edge and two-tx timing still leak. `GET /api/relayer` → `{ enabled, address }`.
+  **Overfund + private split (default):** deposits/open round up to the next $50 USDC
+  bucket, then immediately `spend` into work(desired) + change so the public edge
+  amount ≠ the economic note. See `frontend/src/lib/overfund-split.ts`.
+  **Payroll:** Pro defaults to private engagement hire + Seal-sealed roster
+  (`pro-roster-seal.ts`). Public treasury hire remains an explicit escape hatch
+  for compliance / on-chain HR.
 
 ## 7. Privacy roadmap (the "build this fully" plan, testnet-targeted)
 
-Threat-model priority for payroll: hide **graph > rate > amount** (today only amount
-is hidden). Phases:
+Threat-model priority for payroll: hide **graph > rate > amount**.
 
-- **Phase 1 — Lazy private stream (no drips, no keeper).** `earned(t) =
-  min(cap, rate·elapsed)` computed, not dripped. Freelancer settles the whole
-  vested-so-far in one proof, anytime → kills the cadence leak + the keeper-can't-
-  drip-private problem. **← IN PROGRESS, see §8.**
-- **Phase 2 — Graph hiding.** Rewrite `confidential_balance` from account-model to
-  note-commitment + nullifier + Merkle membership (UTXO/Zcash-style) so transfers
-  don't reveal from/to.
-- **Phase 3 — Dual yield.** Pool reserve = one `yield_vault` position; notes
-  denominated in shares → both ends earn, uniform accrual (indistinguishable).
-  Reuses the treasury↔vault plumbing from §4.
-- **Phase 4 — Selective disclosure** via Seal viewing keys (primitive already exists).
+**Status (2026-07-19):** personal create **and Pro Start** default to **private engagement**
+with overfund/split + optional relayer. Roster Seal at rest. Public treasury hire is
+opt-in. Next: treasury → pool unlinkable debit + private on-chain HR.
+
+Phases below are historical roadmap context:
+
+- **Phase 1 — Lazy private stream** — DONE (`lazy_stream`; folded into private settle).
+- **Phase 2 — Graph hiding** — DONE at pool layer; integrated via `private_stream`.
+- **Phase 2b — Private Pro hire** — DONE (default); treasury accounting bridge NOT DONE.
+- **Phase 3 — Dual yield** — pool can invest idle reserve (see §9 / vault).
+- **Phase 4 — Selective disclosure** — Seal auditor packs for compliance payloads;
+  note-level re-encrypt still productize.
 
 ---
 
@@ -200,14 +211,7 @@ per-drip txs, no keeper). Deployed on-chain in package **v10**.
    creator == settler, e.g. the sender settling on the freelancer's behalf — settle is
    permissionless). For a different-wallet freelancer to settle/claim, Seal-encrypt the
    openings on create (reuse `encryptSecrets` in `seal.ts`) and decrypt on their side,
-   like the existing `ConfidentialStream` flow. `create` already accepts
-   `encrypted_secrets` (currently passed empty).
-3. **Discovery without local store:** index `LazyStreamCreated` events (or add indexer
-   support) so streams show up on a fresh device.
-
-### Watch-outs
-- Rate is base-units **per second**; `start` in seconds. `cap` == initial remaining.
-- Use `settle_at` (not `settle`) — the plain `settle` binds now_sec to the exact clock
+   like the existing `ConfidentialStream` flow. `create` already acceptsc
   and will race/fail in practice; it only exists for upgrade compat.
 - Changing a `public fun` signature breaks upgrade compat (that's why `settle_at` is a
   new fn, not a changed `settle`). Add new fns instead.

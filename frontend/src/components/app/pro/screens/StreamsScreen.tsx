@@ -3,6 +3,7 @@
 import type { ReactNode } from "react";
 import { shortAddress } from "@/lib/format";
 import { useProWorkspace } from "../ProWorkspaceContext";
+import { HireModeBadge, RosterUnlockBanner } from "../RosterUnlockBanner";
 import {
   bucketLabel,
   fmtUsd,
@@ -132,9 +133,9 @@ export function StreamActions({
           onClick={() => {
             if (worker.streamId && worker.status === "pending")
               onApprove(worker.streamId); // approve review-ready stream on-chain
-            else if (worker.streamId)
-              onStatus(worker.id, "dripping"); // resume a suspended stream
-            else onStart(worker.id); // local worker: create the on-chain stream
+            else if (worker.streamId || worker.engagementId)
+              onStatus(worker.id, "dripping"); // resume
+            else onStart(worker.id); // open private engagement or treasury stream
           }}
         >
           <IconPlay />
@@ -152,11 +153,9 @@ export function StreamActions({
         label="Delete"
         danger
         onClick={() =>
-          worker.status === "stopped"
-            ? onDelete(worker.id, worker.alias) // terminal/local-only: just drop the row
-            : worker.streamId
-              ? onCancel(worker.streamId, worker.alias) // live: cancel on-chain, refund
-              : onDelete(worker.id, worker.alias) // local-only worker: drop the row
+          worker.status === "stopped" || worker.engagementId || !worker.streamId
+            ? onDelete(worker.id, worker.alias)
+            : onCancel(worker.streamId, worker.alias)
         }
       >
         <IconTrash />
@@ -202,6 +201,7 @@ export function StreamsScreen() {
 
   return (
     <div className="space-y-6">
+      <RosterUnlockBanner />
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <ProEyebrow>Funding & streams</ProEyebrow>
@@ -209,8 +209,9 @@ export function StreamsScreen() {
             Run the payroll pool
           </h1>
           <p className="mt-1 max-w-xl text-[13px] text-white/45">
-            One USDC pool for the org. Pause, resume, or stop drips — stop
-            returns unearned capital to the pool.
+            Default hire is private (shielded pool). Public treasury hire is an
+            escape hatch for compliance demos. Pause/stop on-chain only for
+            public legs.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -338,12 +339,16 @@ export function StreamsScreen() {
                   {w.alias.slice(0, 1).toUpperCase()}
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-[13px] font-medium text-white">
+                  <p className="flex items-center gap-2 truncate text-[13px] font-medium text-white">
                     {w.alias}
+                    <HireModeBadge mode={w.hireMode} />
                   </p>
                   <p className="truncate text-[11px] text-white/35">
-                    {group?.name ?? "Ungrouped"} · {shortAddress(w.walletAddress)} ·{" "}
-                    {fmtUsd(w.monthlyUsd, 0)}/mo
+                    {group?.name ?? "Ungrouped"} ·{" "}
+                    {w.shieldedAddress
+                      ? `${w.shieldedAddress.slice(0, 10)}…`
+                      : shortAddress(w.walletAddress)}{" "}
+                    · {fmtUsd(w.monthlyUsd, 0)}/mo
                     {w.status === "dripping"
                       ? ` · −${fmtUsd(drip, 4)}/s`
                       : ""}
