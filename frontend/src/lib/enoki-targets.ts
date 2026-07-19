@@ -13,6 +13,7 @@ const STREAM_FUNCTIONS = [
   "drip_with_yield",
   "raise_completion",
   "approve_milestone",
+  "start_payroll",
   "cancel",
   "cancel_to_treasury",
   "drip",

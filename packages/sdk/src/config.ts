@@ -10,10 +10,11 @@ function env(name: string): string | undefined {
 }
 
 // Latest package version (move-call target). Upgraded 2026-07-19 to add
-// create_stream_v3. Type origin stays 0x597f34fe… (ORIGINAL_PACKAGE_IDS), so
-// object types + the indexer are unaffected.
+// stream::start_payroll (payer-side start for LOCKED streams). Type origin
+// stays 0x597f34fe… (ORIGINAL_PACKAGE_IDS), so object types + the indexer are
+// unaffected.
 const TESTNET_PACKAGE =
-  "0xef73396f40e121ed8775ff93f7a5aa44f209d1aa3e7e710a1324fd9cb9348410";
+  "0x2362f832f056ae74e4b093a3ae6947f91970f2434176fd7d373d004ea1f08020";
 
 export const PACKAGE_IDS = {
   mainnet:

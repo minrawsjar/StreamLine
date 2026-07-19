@@ -2,10 +2,11 @@
 name = "streamline"
 edition = "2024.beta"
 version = "0.1.0"
-# Upgraded 2026-07-19: create_stream_v3, then treasury reserve (to_reserve/
-# from_reserve). `published-at` = latest version (upgrade from); the [addresses]
-# streamline = ORIGINAL package (type origin, unchanged across upgrades).
-published-at = "0xef73396f40e121ed8775ff93f7a5aa44f209d1aa3e7e710a1324fd9cb9348410"
+# Upgraded 2026-07-19: create_stream_v3, treasury reserve (to_reserve/
+# from_reserve), then stream::start_payroll (payer-side LOCKED→DRIPPING start).
+# `published-at` = latest version (upgrade from); the [addresses] streamline =
+# ORIGINAL package (type origin, unchanged across upgrades).
+published-at = "0x2362f832f056ae74e4b093a3ae6947f91970f2434176fd7d373d004ea1f08020"
 
 # The Sui / MoveStdlib framework dependencies are managed automatically by the
 # Sui CLI, pinned to the active environment's framework version.

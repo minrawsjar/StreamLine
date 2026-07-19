@@ -37,6 +37,37 @@ export async function findCreatedTreasury(
   }
 }
 
+/**
+ * Read a stream's funding source: the treasury id if it was funded from a
+ * payroll pool (has the `payroll_treasury` dynamic field), else null for a
+ * wallet-funded stream. Lets the payer's Delete route to the right refund path
+ * — `cancel_to_treasury` (back to the pool) vs `cancel` (back to the wallet).
+ */
+export async function readStreamTreasuryId(
+  client: SuiClient,
+  a: { packageId: string; usdcType: string; streamId: string; sender: string }
+): Promise<string | null> {
+  const tx = new Transaction();
+  tx.moveCall({
+    target: `${a.packageId}::stream::payroll_treasury_id`,
+    typeArguments: [a.usdcType],
+    arguments: [tx.object(a.streamId)],
+  });
+  const res = await client.devInspectTransactionBlock({
+    sender: a.sender,
+    transactionBlock: tx,
+  });
+  // Option<ID> BCS: tag byte (0 = None, 1 = Some) then 32 id bytes.
+  const bytes = res.results?.[0]?.returnValues?.[0]?.[0] ?? [];
+  if (bytes[0] !== 1 || bytes.length < 33) return null;
+  return (
+    "0x" +
+    Array.from(bytes.slice(1, 33))
+      .map((b) => b.toString(16).padStart(2, "0"))
+      .join("")
+  );
+}
+
 export type TreasuryState = { idle: number; invested: number; reserve: number };
 
 /** Read live idle + invested + reserve USDC via the treasury's view functions. */

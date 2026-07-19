@@ -544,6 +544,26 @@ public fun approve_milestone<T>(cap: &StreamCap, stream: &mut Stream<T>, clock: 
     });
 }
 
+/// Payer-side start for a funded stream: move a LOCKED (or PENDING_REVIEW)
+/// stream straight to DRIPPING via the `StreamCap`. Payroll streams are funded
+/// by the org up front, so the org that holds the cap starts them — no
+/// freelancer `raise_completion` / review handshake required. Emits the same
+/// `MilestoneApproved` the indexer already maps to DRIPPING.
+public fun start_payroll<T>(cap: &StreamCap, stream: &mut Stream<T>, clock: &Clock) {
+    assert!(cap.stream_id == object::id(stream), ENotAuthorized);
+    assert!(
+        stream.state == STATE_LOCKED || stream.state == STATE_PENDING_REVIEW,
+        EWrongState,
+    );
+    stream.state = STATE_DRIPPING;
+    stream.last_drip_ms = clock.timestamp_ms();
+    stream.review_deadline_ms = 0;
+    event::emit(MilestoneApproved {
+        stream_id: object::id(stream),
+        milestone_index: stream.current_milestone,
+    });
+}
+
 /// Keeper auto-approves once the review deadline passes — silence ≠ blocking pay.
 public fun auto_approve<T>(stream: &mut Stream<T>, clock: &Clock) {
     assert!(stream.state == STATE_PENDING_REVIEW, EWrongState);

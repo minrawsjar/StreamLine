@@ -36,11 +36,16 @@ import {
   buildSuspendPayroll,
   buildResumePayroll,
   buildStopPayroll,
-  buildApproveMilestone,
+  buildStartPayroll,
+  buildCancel,
   buildCancelToTreasury,
   DEFAULT_STREAM_YIELD_BPS,
 } from "@/lib/streamline-tx";
-import { findCreatedTreasury, useTreasuryState } from "@/lib/treasury";
+import {
+  findCreatedTreasury,
+  readStreamTreasuryId,
+  useTreasuryState,
+} from "@/lib/treasury";
 import { USDC_BASE, toBaseUnits } from "@/lib/stream-math";
 import { onProAction } from "./pro-actions";
 import {
@@ -850,23 +855,35 @@ export function ProWorkspaceProvider({
     [mutate]
   );
 
-  // Approve a review-ready (PENDING_REVIEW) stream so it starts dripping —
-  // the payer's real on-chain "Start". Resolves the StreamCap the payer holds.
+  // Start a funded stream on-chain via the payer's StreamCap. `start_payroll`
+  // moves LOCKED *or* PENDING_REVIEW straight to DRIPPING, so this is the real
+  // "Start" for every not-yet-live stream (approve_milestone couldn't touch
+  // LOCKED). Surfaces failures so a revert isn't silent.
   const approveStream = useCallback(
     async (streamId: string): Promise<boolean> => {
       if (!address || !packageId || packageId === "0x0") return false;
       const capId = await findStreamCap(suiClient, address, originalPackageId, streamId);
-      if (!capId) return false;
-      const tx = buildApproveMilestone({ packageId, usdcType, streamId, capId });
+      if (!capId) {
+        window.alert(
+          "Couldn't find your control cap for this stream — it may belong to a different wallet."
+        );
+        return false;
+      }
+      const tx = buildStartPayroll({ packageId, usdcType, streamId, capId });
       let ok = false;
+      let err: Error | null = null;
       await execute(tx, {
         onSuccess: () => {
           ok = true;
           mutate((prev) =>
-            pushActivity(prev, { kind: "resumed", label: "Approved & started stream" })
+            pushActivity(prev, { kind: "resumed", label: "Started stream" })
           );
         },
+        onError: (e) => {
+          err = e;
+        },
       });
+      if (err) window.alert(`Couldn't start the stream: ${(err as Error).message}`);
       return ok;
     },
     [address, packageId, usdcType, originalPackageId, suiClient, execute, mutate]
@@ -877,29 +894,53 @@ export function ProWorkspaceProvider({
   const cancelStream = useCallback(
     async (streamId: string): Promise<boolean> => {
       if (!address || !packageId || packageId === "0x0") return false;
-      const tid = workspace.treasuryId;
-      if (!tid) return false;
       const capId = await findStreamCap(suiClient, address, originalPackageId, streamId);
-      if (!capId) return false;
-      const tx = buildCancelToTreasury({
+      if (!capId) {
+        window.alert(
+          "Couldn't find your control cap for this stream — it may belong to a different wallet."
+        );
+        return false;
+      }
+      // Route by funding source: payroll (treasury-funded) refunds to the pool;
+      // a wallet-funded stream refunds to the sender wallet. cancel_to_treasury
+      // aborts on a wallet-funded stream, so pick the right entry up front.
+      const streamTid = await readStreamTreasuryId(suiClient, {
         packageId,
         usdcType,
         streamId,
-        capId,
-        treasuryId: tid,
+        sender: address,
       });
+      const tx = streamTid
+        ? buildCancelToTreasury({
+            packageId,
+            usdcType,
+            streamId,
+            capId,
+            treasuryId: streamTid,
+          })
+        : buildCancel({ packageId, usdcType, streamId, capId });
       let ok = false;
+      let err: Error | null = null;
       await execute(tx, {
         onSuccess: () => {
           ok = true;
           mutate((prev) =>
-            pushActivity(prev, { kind: "stopped", label: "Canceled stream — refunded to pool" })
+            pushActivity(prev, {
+              kind: "stopped",
+              label: streamTid
+                ? "Canceled stream — refunded to pool"
+                : "Canceled stream — refunded to wallet",
+            })
           );
         },
+        onError: (e) => {
+          err = e;
+        },
       });
+      if (err) window.alert(`Couldn't cancel the stream: ${(err as Error).message}`);
       return ok;
     },
-    [address, packageId, usdcType, originalPackageId, suiClient, execute, mutate, workspace.treasuryId]
+    [address, packageId, usdcType, originalPackageId, suiClient, execute, mutate]
   );
 
   const resetDemo = useCallback(() => {

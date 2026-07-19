@@ -234,6 +234,22 @@ export function buildApproveMilestone(r: StreamRef & { capId: string }): Transac
   return tx;
 }
 
+/**
+ * Payer-side start via the StreamCap: move a LOCKED (or PENDING_REVIEW) payroll
+ * stream straight to DRIPPING — the org funded it, so the org starts it, no
+ * freelancer raise_completion needed. Covers both states `approve_milestone`
+ * can't (LOCKED), so the Start button uses this for every not-yet-live stream.
+ */
+export function buildStartPayroll(r: StreamRef & { capId: string }): Transaction {
+  const tx = new Transaction();
+  tx.moveCall({
+    target: `${r.packageId}::stream::start_payroll`,
+    typeArguments: [r.usdcType],
+    arguments: [tx.object(r.capId), tx.object(r.streamId), tx.object(CLOCK)],
+  });
+  return tx;
+}
+
 /** Permissionless settlement — the keeper (or anyone) pushes a drip. */
 export function buildDrip(r: StreamRef): Transaction {
   const tx = new Transaction();

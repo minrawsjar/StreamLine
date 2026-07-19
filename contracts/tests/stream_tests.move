@@ -76,6 +76,35 @@ fun full_milestone_flow() {
     ts::end(sc);
 }
 
+/// start_payroll: the cap holder starts a LOCKED stream directly (no freelancer
+/// raise_completion), moving it to DRIPPING so a keeper can settle it.
+#[test]
+fun start_payroll_from_locked() {
+    let mut sc = ts::begin(CLIENT);
+    let clk = clock::create_for_testing(ts::ctx(&mut sc));
+    let total = 200 * MIN_DRIP;
+    let amounts = vector[100 * MIN_DRIP, 100 * MIN_DRIP];
+    {
+        let pay = coin::mint_for_testing<SUI>(total, ts::ctx(&mut sc));
+        stream::create_stream<SUI>(
+            pay, FREELANCER, names(), amounts, 1_000, 1_000, true, &clk, ts::ctx(&mut sc),
+        );
+    };
+    // Cap holder starts it straight from LOCKED — no raise_completion.
+    ts::next_tx(&mut sc, CLIENT);
+    {
+        let cap = ts::take_from_sender<StreamCap>(&sc);
+        let mut s = ts::take_shared<Stream<SUI>>(&sc);
+        assert!(stream::state(&s) == 0, 0); // LOCKED
+        stream::start_payroll<SUI>(&cap, &mut s, &clk);
+        assert!(stream::state(&s) == 2, 1); // DRIPPING
+        ts::return_shared(s);
+        ts::return_to_sender(&sc, cap);
+    };
+    clock::destroy_for_testing(clk);
+    ts::end(sc);
+}
+
 /// create_stream_v3: an explicit multi-destination split routes each drip to the
 /// right address by weight. Two cash legs (60/40) to distinct wallets.
 #[test]
