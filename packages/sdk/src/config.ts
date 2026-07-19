@@ -10,11 +10,12 @@ function env(name: string): string | undefined {
 }
 
 // Latest package version (move-call target). Upgraded 2026-07-19 to add the
-// pos module (pos::pay — payment-QR settlement into a treasury). Type origin
-// stays 0x597f34fe… (ORIGINAL_PACKAGE_IDS), so object types + the indexer are
-// unaffected.
+// private_stream module (default-private engagements: shielded deposit + lazy
+// vesting) plus verify_private_settle / apply_private_settle. Type origin stays
+// 0x597f34fe… (ORIGINAL_PACKAGE_IDS), so object types + the indexer are
+// unaffected. pos::PosPaid's type origin stays 0x05affbed… (POS_DEFINING_PACKAGE).
 const TESTNET_PACKAGE =
-  "0x05affbed7e9e8836d49e60762ccd172a63876bfefaef6e384b4f6103db6e539d";
+  "0xb0110fff0dd7b62e447f16d4ffd0323c0cdf8472aead3eae182711f4e4937897";
 
 export const PACKAGE_IDS = {
   mainnet:
