@@ -70,7 +70,17 @@ export async function POST(req: Request) {
     `${CLAIM_PREFIX}${parsed.handle}:${address}:${network}`
   );
 
-  const client = new SuiClient({ url: FULLNODE_URLS[network] });
+  // zkLogin verification calls sui_verifyZkLoginSignature over RPC. Do NOT use
+  // FULLNODE_URLS here: server-side the SDK's dynamic process.env read can
+  // resolve to an RPC that lacks that method (→ HTTP 400) or the deprecated
+  // official fullnode. Suiscan serves it (and tx execution) — verified. Override
+  // with STREAMLINE_SUI_TESTNET_RPC.
+  const rpcUrl =
+    network === "testnet"
+      ? process.env.STREAMLINE_SUI_TESTNET_RPC?.trim() ||
+        "https://rpc-testnet.suiscan.xyz"
+      : FULLNODE_URLS[network];
+  const client = new SuiClient({ url: rpcUrl });
 
   try {
     // Pass { client, address } so zkLogin signatures verify too: a zkLogin
