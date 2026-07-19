@@ -73,13 +73,19 @@ function InvoicePayInner() {
       tx.transferObjects([out], tx.pure.address(invoice.to));
 
       setStatus("Confirm in wallet…");
-      await execute(tx, {
-        onSuccess: ({ digest: d }) => {
-          setDigest(d);
-          setStatus("Paid.");
+      await execute(
+        tx,
+        {
+          onSuccess: ({ digest: d }) => {
+            setDigest(d);
+            setStatus("Paid.");
+          },
+          onError: (e) => setStatus(e.message),
         },
-        onError: (e) => setStatus(e.message),
-      });
+        // The invoice transfers USDC straight to the payee, so the sponsor must
+        // allow-list that address as a transfer recipient.
+        { allowedRecipients: [invoice.to] }
+      );
     } catch (e) {
       setStatus(e instanceof Error ? e.message : String(e));
     }
