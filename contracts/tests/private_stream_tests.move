@@ -110,3 +110,30 @@ fun settle_rejects_future_now() {
     clock::destroy_for_testing(clk);
     ts::end(scen);
 }
+
+#[test]
+/// Pause freezes vesting: `frozen_secs` excludes paused time so `settle_vested`'s
+/// now_sec ceiling drops to the pause point. v1 engagements (no control) freeze 0.
+fun pause_freezes_vesting_math() {
+    let mut scen = ts::begin(@0xA);
+    // No control field → nothing frozen (v1 behaviour preserved).
+    let plain = ps::create_engagement_for_testing(C_PARAMS, CM_IN, ts::ctx(&mut scen));
+    assert!(ps::frozen_for_testing(&plain, 100) == 0, 0);
+    ps::share_engagement_for_testing(plain);
+
+    let mut e = ps::create_engagement_for_testing(C_PARAMS, CM_IN, ts::ctx(&mut scen));
+    ps::add_control_for_testing(&mut e, @0xA);
+    // Fresh control: not paused, nothing banked.
+    assert!(ps::frozen_for_testing(&e, 100) == 0, 1);
+    // Banked 30s from a prior pause, now running → exclude 30.
+    ps::set_control_for_testing(&mut e, false, 0, 30);
+    assert!(ps::frozen_for_testing(&e, 100) == 30, 2);
+    // Currently paused since t=60 with 30 banked → exclude 30 + (100-60) = 70,
+    // so the now_sec ceiling is 100-70 = 30 = pause point (60) minus banked (30).
+    ps::set_control_for_testing(&mut e, true, 60, 30);
+    assert!(ps::frozen_for_testing(&e, 100) == 70, 3);
+    // Settling with now_sec below the pause point banks only the prior 30.
+    assert!(ps::frozen_for_testing(&e, 50) == 30, 4);
+    ps::share_engagement_for_testing(e);
+    ts::end(scen);
+}
