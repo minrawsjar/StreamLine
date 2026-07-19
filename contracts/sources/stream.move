@@ -488,6 +488,37 @@ public fun create_stream_from_treasury_v2<T>(
     transfer::share_object(stream);
 }
 
+#[test_only]
+/// A LOCKED milestone stream with the default 100%→freelancer split. v1/v2
+/// `create_stream` now start DRIPPING (consumer/wallet streams), so tests that
+/// exercise the locked → raise_completion → review flow use this instead.
+public fun create_locked_stream_for_testing<T>(
+    payment: Coin<T>,
+    freelancer: address,
+    milestone_names: vector<String>,
+    milestone_amounts: vector<u64>,
+    duration_ms: u64,
+    dispute_window_ms: u64,
+    revocable: bool,
+    clock: &Clock,
+    ctx: &mut TxContext,
+) {
+    create_stream_v3<T>(
+        payment,
+        freelancer,
+        milestone_names,
+        milestone_amounts,
+        duration_ms,
+        dispute_window_ms,
+        revocable,
+        vector[freelancer],
+        vector[BPS_DENOM],
+        vector[false],
+        clock,
+        ctx,
+    );
+}
+
 /// Freelancer reconfigures where each drip is routed. Weights must sum to 10000.
 public fun set_splits<T>(
     stream: &mut Stream<T>,

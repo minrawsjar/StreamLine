@@ -20,7 +20,7 @@ fun dripping_stream(sc: &mut ts::Scenario, clk: &sui::clock::Clock) {
     let total = 200 * UNIT;
     {
         let pay = coin::mint_for_testing<SUI>(total, ts::ctx(sc));
-        stream::create_stream<SUI>(
+        stream::create_locked_stream_for_testing<SUI>(
             pay, FREELANCER, vector[string::utf8(b"only")], vector[total],
             10_000, 1_000, true, clk, ts::ctx(sc),
         );

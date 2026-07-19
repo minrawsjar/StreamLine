@@ -33,7 +33,7 @@ fun full_milestone_flow() {
     // create_stream (client locks funds, gets cap)
     {
         let pay = coin::mint_for_testing<SUI>(total, ts::ctx(&mut sc));
-        stream::create_stream<SUI>(
+        stream::create_locked_stream_for_testing<SUI>(
             pay, FREELANCER, names(), amounts, 1_000, 1_000, true, &clk, ts::ctx(&mut sc),
         );
     };
@@ -86,7 +86,7 @@ fun start_payroll_from_locked() {
     let amounts = vector[100 * MIN_DRIP, 100 * MIN_DRIP];
     {
         let pay = coin::mint_for_testing<SUI>(total, ts::ctx(&mut sc));
-        stream::create_stream<SUI>(
+        stream::create_locked_stream_for_testing<SUI>(
             pay, FREELANCER, names(), amounts, 1_000, 1_000, true, &clk, ts::ctx(&mut sc),
         );
     };
@@ -176,7 +176,7 @@ fun paused_stream(sc: &mut ts::Scenario, clk: &sui::clock::Clock) {
     let amounts = vector[100 * MIN_DRIP, 100 * MIN_DRIP];
     {
         let pay = coin::mint_for_testing<SUI>(total, ts::ctx(sc));
-        stream::create_stream<SUI>(
+        stream::create_locked_stream_for_testing<SUI>(
             pay, FREELANCER, names(), amounts, 1_000, 1_000, true, clk, ts::ctx(sc),
         );
     };
@@ -299,7 +299,7 @@ fun cannot_drip_while_locked() {
     let amounts = vector[100 * MIN_DRIP, 100 * MIN_DRIP];
     {
         let pay = coin::mint_for_testing<SUI>(total, ts::ctx(&mut sc));
-        stream::create_stream<SUI>(
+        stream::create_locked_stream_for_testing<SUI>(
             pay, FREELANCER, names(), amounts, 1_000, 1_000, true, &clk, ts::ctx(&mut sc),
         );
     };

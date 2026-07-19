@@ -32,9 +32,13 @@ fun drip_with_yield_auto_deposits() {
     ts::next_tx(&mut sc, CLIENT);
     {
         let pay = coin::mint_for_testing<SUI>(100 * UNIT, ts::ctx(&mut sc));
-        stream::create_stream_v2<SUI>(
+        // v3 locked stream with the same 70/30 direct/yield split v2's
+        // yield_bps=3000 produced, so the review flow (raise/approve) still runs.
+        stream::create_stream_v3<SUI>(
             pay, FREELANCER, vector[string::utf8(b"only")], vector[100 * UNIT],
-            1_000, 1_000, true, 3_000, &clk, ts::ctx(&mut sc),
+            1_000, 1_000, true,
+            vector[FREELANCER, FREELANCER], vector[7_000, 3_000], vector[false, true],
+            &clk, ts::ctx(&mut sc),
         );
     };
     // raise + approve → DRIPPING
