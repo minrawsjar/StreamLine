@@ -126,6 +126,22 @@ export function PhoneCreateStreamView({ onClose }: PhoneCreateStreamViewProps) {
       return;
     }
     if (step === 1) {
+      // A shielded receive address (sl1…) is the worker's private-note key —
+      // it needs no SuiNS/0x resolution and is only meaningful for a private
+      // engagement (the worker is paid via a note encrypted to this address).
+      const t = freelancer.trim();
+      if (/^sl1[A-Za-z0-9+/_-]+$/.test(t)) {
+        if (!isPrivate) {
+          setStepError(
+            "An sl1… receive address only works for a private stream — toggle Private, or use a @handle / 0x address."
+          );
+          return;
+        }
+        setStepError(null);
+        setStatus(null);
+        setStep(2);
+        return;
+      }
       try {
         setStepError(null);
         setStatus("Resolving recipient…");

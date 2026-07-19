@@ -101,6 +101,41 @@ export function ShieldedPanel() {
     pk(sk).then((pkv) => setMyAddr(myShieldedAddress(sk, pkv)));
   }, [address]);
 
+  // Copy the receive address. navigator.clipboard is gated in some browsers
+  // (Brave shields, non-focused contexts) — fall back to a hidden textarea so
+  // the button always works, and flash "Copied!" so the click is visible.
+  const [copied, setCopied] = useState(false);
+  const copyAddr = useCallback(async () => {
+    const ok = await (async () => {
+      try {
+        if (navigator.clipboard?.writeText) {
+          await navigator.clipboard.writeText(myAddr);
+          return true;
+        }
+      } catch {
+        /* fall through to legacy path */
+      }
+      try {
+        const ta = document.createElement("textarea");
+        ta.value = myAddr;
+        ta.style.position = "fixed";
+        ta.style.opacity = "0";
+        document.body.appendChild(ta);
+        ta.focus();
+        ta.select();
+        const done = document.execCommand("copy");
+        document.body.removeChild(ta);
+        return done;
+      } catch {
+        return false;
+      }
+    })();
+    if (ok) {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    }
+  }, [myAddr]);
+
   // Reconcile the local note store against chain: any note whose nullifier is
   // already spent on-chain (e.g. a prior spend whose local mark was lost) gets
   // flagged spent, so the balance / "Your notes" list is accurate and pickNote
@@ -597,10 +632,10 @@ export function ShieldedPanel() {
               </code>
               <button
                 type="button"
-                onClick={() => navigator.clipboard?.writeText(myAddr)}
+                onClick={copyAddr}
                 className="rounded-lg border border-black/10 px-2 py-1 text-[10px] font-semibold text-[#333]"
               >
-                Copy
+                {copied ? "Copied!" : "Copy"}
               </button>
             </div>
           </div>
