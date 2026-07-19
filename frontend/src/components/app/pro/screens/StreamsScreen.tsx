@@ -3,7 +3,7 @@
 import type { ReactNode } from "react";
 import { shortAddress } from "@/lib/format";
 import { useProWorkspace } from "../ProWorkspaceContext";
-import { HireModeBadge, RosterUnlockBanner } from "../RosterUnlockBanner";
+import { RosterUnlockBanner } from "../RosterUnlockBanner";
 import {
   bucketLabel,
   fmtUsd,
@@ -214,9 +214,8 @@ export function StreamsScreen() {
             Run the payroll pool
           </h1>
           <p className="mt-1 max-w-xl text-[13px] text-white/45">
-            Default hire is private (shielded pool). Public treasury hire is an
-            escape hatch for compliance demos. Pause/stop on-chain only for
-            public legs.
+            Fund the pool, hire people onto the roster, and start streaming
+            payroll. Pause, resume, and stop from here.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -346,7 +345,6 @@ export function StreamsScreen() {
                 <div className="min-w-0 flex-1">
                   <p className="flex items-center gap-2 truncate text-[13px] font-medium text-white">
                     {w.alias}
-                    <HireModeBadge mode={w.hireMode} />
                   </p>
                   <p className="truncate text-[11px] text-white/35">
                     {group?.name ?? "Ungrouped"} ·{" "}

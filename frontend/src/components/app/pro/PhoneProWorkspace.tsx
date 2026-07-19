@@ -23,7 +23,7 @@ import {
   type OnrampMode,
 } from "@/components/wallet/OnramperWidget";
 import { ProActionModals } from "./modals/ProActionModals";
-import { HireModeBadge, RosterUnlockBanner } from "./RosterUnlockBanner";
+import { RosterUnlockBanner } from "./RosterUnlockBanner";
 import { MonthlyRunBars, StatusPill } from "./ui";
 import { ReportsScreen } from "./screens/ReportsScreen";
 import { ToolsScreen } from "./screens/ToolsScreen";
@@ -763,7 +763,6 @@ function StreamsTab() {
                 <div className="min-w-0">
                   <p className="flex items-center gap-1.5 truncate text-[11px] font-medium text-white/85">
                     {w.alias}
-                    <HireModeBadge mode={w.hireMode} />
                   </p>
                   <p className="text-[8px] text-white/35">
                     {group?.name ?? "Ungrouped"} ·{" "}
@@ -983,7 +982,6 @@ function PeopleTab() {
               <div className="min-w-0 flex-1">
                 <p className="flex items-center gap-1.5 truncate text-[12px] font-semibold text-white">
                   {w.alias}
-                  <HireModeBadge mode={w.hireMode} />
                 </p>
                 <p className="truncate text-[9px] text-white/40">
                   {group?.name ?? "Ungrouped"} · {fmtUsd(w.monthlyUsd, 0)}/mo

@@ -677,7 +677,6 @@ function WorkerModal({
       </div>
       {existing ? (
         <p className="mt-3 text-[11px] text-white/30">
-          {(existing.hireMode ?? "private") === "private" ? "Private" : "Public"} ·{" "}
           {existing.shieldedAddress
             ? `${existing.shieldedAddress.slice(0, 10)}…`
             : shortAddress(existing.walletAddress)}{" "}

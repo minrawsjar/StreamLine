@@ -1369,15 +1369,13 @@ export function ProWorkspaceProvider({
     // on purpose: many workers can share a payout wallet and stale/done streams
     // reuse it, so matching by address bound fresh workers to finished streams
     // (showing "stopped", blocking Start) and risked Delete canceling an
-    // unrelated stream. A worker with no streamId stays local until hired; every
-    // real stream still surfaces as its own row in step 2.
-    const claimed = new Set<string>();
+    // unrelated stream. A worker with no streamId stays local until hired.
+    // Orphan on-chain streams are NOT auto-injected as "Public" roster cards.
     const workers = workspace.workers.map((w) => {
       const s = w.streamId
         ? streams.find((x) => x.id === w.streamId)
         : undefined;
       if (!s) return phantomGuard(w);
-      claimed.add(s.id);
       return {
         ...w,
         streamId: s.id,
@@ -1386,31 +1384,6 @@ export function ProWorkspaceProvider({
         status: streamStateToWorkerStatus(s.state),
       };
     });
-
-    // 2) Build roster rows from any remaining on-chain streams (real data,
-    // no local worker yet). Alias/group can be edited and will persist locally.
-    // Skip completed streams (state `done` → "stopped") — a finished payroll
-    // isn't an active roster member, and old test streams shouldn't pile up here.
-    for (const s of streams) {
-      if (claimed.has(s.id)) continue;
-      if (streamStateToWorkerStatus(s.state) === "stopped") continue;
-      claimed.add(s.id);
-      const total = s.total / USDC_BASE;
-      workers.push({
-        id: `chain:${s.id}`,
-        alias: `${s.freelancer.slice(0, 6)}…${s.freelancer.slice(-4)}`,
-        walletAddress: s.freelancer,
-        groupId: null,
-        monthlyUsd: total / Math.max(s.duration_ms / MONTH_MS, 1 / 30),
-        cadence: "MONTHLY",
-        budget: total,
-        streamedUsd: (s.total - s.remaining) / USDC_BASE,
-        status: streamStateToWorkerStatus(s.state),
-        hireMode: "public" as const,
-        streamId: s.id,
-        startedAt: s.created_at_ms,
-      });
-    }
 
     const streamed = workers.reduce(
       (sum, w) => sum + (w.streamId ? w.streamedUsd : 0),
