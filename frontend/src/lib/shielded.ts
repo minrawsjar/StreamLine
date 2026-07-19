@@ -5,6 +5,8 @@ import type { SuiClient } from "@mysten/sui/client";
 
 import { poseidon, prove, feToLeBytes, type ProofBytes } from "@/lib/confidential";
 import { deriveEnc, decryptNote } from "@/lib/shielded-address";
+import { ORIGINAL_PACKAGE_IDS } from "@/lib/constants";
+import { PACKAGE_IDS, type NetworkName } from "@streamline/sdk";
 
 export const SHIELDED_DEPTH = 20;
 const CLOCK_ID = "0x6";
@@ -67,32 +69,70 @@ export async function merklePath(
 
 // === Discovery: rebuild the commitment list (leaf order) from pool events ===
 
-/** All note commitments in insertion order (== leaf index), replayed from
- * Deposited/Spent/Withdrawn events. One pool per module for the demo. */
-export async function fetchCommitments(
+/**
+ * Events must be queried by their DEFINING package (type origin): shielded_pool
+ * structs originate in ORIGINAL_PACKAGE_IDS, while private_stream::EngagementSettled
+ * originates in the latest package that introduced it. The public testnet RPCs
+ * return NOTHING for the `MoveModule` filter against an upgraded package, so we
+ * query by `MoveEventType` with the right origin package instead.
+ */
+export function eventPkgs(latestPkg: string): { shielded: string; settle: string } {
+  let net: NetworkName = "testnet";
+  for (const n of ["testnet", "mainnet", "devnet"] as NetworkName[]) {
+    if (PACKAGE_IDS[n] === latestPkg) {
+      net = n;
+      break;
+    }
+  }
+  const orig = ORIGINAL_PACKAGE_IDS[net];
+  return { shielded: orig && orig !== "0x0" ? orig : latestPkg, settle: latestPkg };
+}
+
+type LeafEvent = { ts: bigint; seq: bigint; leaves: bigint[] };
+
+async function collectLeafEvents(
   client: SuiClient,
-  packageId: string
-): Promise<bigint[]> {
-  const out: bigint[] = [];
+  eventType: string,
+  extract: (pj: Record<string, string>) => bigint[],
+  sink: LeafEvent[]
+): Promise<void> {
   let cursor: Awaited<ReturnType<SuiClient["queryEvents"]>>["nextCursor"] = null;
   for (let page = 0; page < 20; page++) {
     const res = await client.queryEvents({
-      query: { MoveModule: { package: packageId, module: "shielded_pool" } },
+      query: { MoveEventType: eventType },
       order: "ascending",
       cursor,
       limit: 200,
     });
     for (const e of res.data) {
-      const pj = e.parsedJson as Record<string, string>;
-      if (e.type.endsWith("::Deposited")) out.push(BigInt(pj.commitment));
-      else if (e.type.endsWith("::Spent")) {
-        out.push(BigInt(pj.cm1));
-        out.push(BigInt(pj.cm2));
-      } else if (e.type.endsWith("::Withdrawn")) out.push(BigInt(pj.cm_change));
+      sink.push({
+        ts: BigInt(e.timestampMs ?? "0"),
+        seq: BigInt(e.id.eventSeq ?? "0"),
+        leaves: extract(e.parsedJson as Record<string, string>),
+      });
     }
     if (!res.hasNextPage) break;
     cursor = res.nextCursor;
   }
+}
+
+/** All note commitments in insertion order (== leaf index), replayed from every
+ * leaf-inserting event: Deposited (1 leaf), Spent / EngagementSettled (2), and
+ * Withdrawn (1). Each such op is its own tx, so ordering by (checkpoint time,
+ * event seq) reproduces the on-chain tree's leaf order. */
+export async function fetchCommitments(
+  client: SuiClient,
+  packageId: string
+): Promise<bigint[]> {
+  const { shielded, settle } = eventPkgs(packageId);
+  const evs: LeafEvent[] = [];
+  await collectLeafEvents(client, `${shielded}::shielded_pool::Deposited`, (pj) => [BigInt(pj.commitment)], evs);
+  await collectLeafEvents(client, `${shielded}::shielded_pool::Spent`, (pj) => [BigInt(pj.cm1), BigInt(pj.cm2)], evs);
+  await collectLeafEvents(client, `${shielded}::shielded_pool::Withdrawn`, (pj) => [BigInt(pj.cm_change)], evs);
+  await collectLeafEvents(client, `${settle}::private_stream::EngagementSettled`, (pj) => [BigInt(pj.cm1), BigInt(pj.cm2)], evs);
+  evs.sort((a, b) => (a.ts !== b.ts ? (a.ts < b.ts ? -1 : 1) : a.seq < b.seq ? -1 : a.seq > b.seq ? 1 : 0));
+  const out: bigint[] = [];
+  for (const e of evs) for (const l of e.leaves) out.push(l);
   return out;
 }
 
@@ -106,10 +146,11 @@ export async function scanIncoming(
 ): Promise<{ commitment: string; value: string; rho: string }[]> {
   const { secret, pub } = deriveEnc(sk);
   const out: { commitment: string; value: string; rho: string }[] = [];
+  const encType = `${eventPkgs(packageId).shielded}::shielded_pool::EncryptedNote`;
   let cursor: Awaited<ReturnType<SuiClient["queryEvents"]>>["nextCursor"] = null;
   for (let page = 0; page < 20; page++) {
     const res = await client.queryEvents({
-      query: { MoveModule: { package: packageId, module: "shielded_pool" } },
+      query: { MoveEventType: encType },
       order: "ascending",
       cursor,
       limit: 200,
