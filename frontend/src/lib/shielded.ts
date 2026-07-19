@@ -136,6 +136,40 @@ export async function fetchCommitments(
   return out;
 }
 
+/** Every nullifier ever consumed in the pool, as decimal strings. A local note
+ * whose nullifier is in this set is already spent on-chain — spending it again
+ * aborts with ENullifierUsed. Sourced from Spent / Withdrawn / EngagementSettled
+ * (all carry a `nullifier` field). Lets the client reconcile a stale note store
+ * against chain before selecting a note. */
+export async function fetchUsedNullifiers(
+  client: SuiClient,
+  packageId: string
+): Promise<Set<string>> {
+  const { shielded, settle } = eventPkgs(packageId);
+  const out = new Set<string>();
+  const collect = async (eventType: string) => {
+    let cursor: Awaited<ReturnType<SuiClient["queryEvents"]>>["nextCursor"] = null;
+    for (let page = 0; page < 20; page++) {
+      const res = await client.queryEvents({
+        query: { MoveEventType: eventType },
+        order: "ascending",
+        cursor,
+        limit: 200,
+      });
+      for (const e of res.data) {
+        const v = (e.parsedJson as Record<string, string>)?.nullifier;
+        if (v != null) out.add(BigInt(v).toString());
+      }
+      if (!res.hasNextPage) break;
+      cursor = res.nextCursor;
+    }
+  };
+  await collect(`${shielded}::shielded_pool::Spent`);
+  await collect(`${shielded}::shielded_pool::Withdrawn`);
+  await collect(`${settle}::private_stream::EngagementSettled`);
+  return out;
+}
+
 /** Scan EncryptedNote events for notes addressed to me (cross-party receive).
  * Returns openings whose recomputed commitment matches the on-chain event. */
 export async function scanIncoming(

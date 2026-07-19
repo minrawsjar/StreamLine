@@ -10,9 +10,11 @@ import { randomBlinding } from "@/lib/confidential";
 import { SHIELDED_POOL, type NetworkName } from "@/lib/constants";
 import {
   pk,
+  nullifier,
   noteCommit,
   merklePath,
   fetchCommitments,
+  fetchUsedNullifiers,
   proveDeposit,
   proveShielded,
   proveWithdraw,
@@ -98,6 +100,38 @@ export function ShieldedPanel() {
     const sk = getSpendKey(address);
     pk(sk).then((pkv) => setMyAddr(myShieldedAddress(sk, pkv)));
   }, [address]);
+
+  // Reconcile the local note store against chain: any note whose nullifier is
+  // already spent on-chain (e.g. a prior spend whose local mark was lost) gets
+  // flagged spent, so the balance / "Your notes" list is accurate and pickNote
+  // never selects a spent note (which aborts with ENullifierUsed). Runs on load
+  // and after each op (tick).
+  useEffect(() => {
+    if (!address || packageId === "0x0") return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const used = await fetchUsedNullifiers(client, packageId);
+        if (cancelled || used.size === 0) return;
+        const sk = getSpendKey(address);
+        let changed = false;
+        for (const n of loadNotes(address)) {
+          if (n.spent) continue;
+          const nf = await nullifier(sk, BigInt(n.rho));
+          if (used.has(nf.toString())) {
+            markSpent(address, n.commitment);
+            changed = true;
+          }
+        }
+        if (changed && !cancelled) bump();
+      } catch {
+        /* best-effort; a spend still dry-runs before submit */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [address, packageId, client, tick]);
 
   // Common prep: my spending key, its pk, and the current on-chain leaf list.
   const prep = useCallback(async () => {
