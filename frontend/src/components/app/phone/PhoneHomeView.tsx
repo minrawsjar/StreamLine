@@ -44,6 +44,10 @@ import { buildRaiseCompletion, buildApproveMilestone } from "@/lib/streamline-tx
 import { usePrivateStreams } from "@/lib/use-private-streams";
 import type { PrivateStreamOnChain } from "@/lib/private-streams";
 import {
+  loadEngagements,
+  type PrivateEngagementSecret,
+} from "@/lib/private-engagement-store";
+import {
   PhoneDashboardView,
   type PhoneTopStat,
   type StreamCardData,
@@ -152,6 +156,39 @@ function PrivateStreamCard({
         Tap to unlock &amp; drip →
       </p>
     </button>
+  );
+}
+
+/** A private engagement the connected wallet opened (default-private path).
+ * No parties on-chain — the value shown comes from the local opening secret;
+ * the pool only reveals the public boundary, so amounts stay hidden. */
+function EngagementCard({ e }: { e: PrivateEngagementSecret }) {
+  return (
+    <div className="w-full rounded-2xl border border-[#6c5ce7]/25 bg-white p-3.5 text-left shadow-[0_4px_20px_rgba(0,0,0,0.05)]">
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <p className="truncate text-[11px] font-semibold tracking-tight text-[#111]">
+            {e.label || "Private engagement"}
+          </p>
+          <p className="mt-0.5 text-[9px] font-medium uppercase tracking-[0.12em] text-[#888]">
+            Outgoing · you opened
+          </p>
+        </div>
+        <span className="shrink-0 rounded-full bg-[#6c5ce7]/12 px-2 py-0.5 text-[8px] font-bold uppercase tracking-[0.08em] text-[#6c5ce7]">
+          🔒 Private
+        </span>
+      </div>
+      <p className="mt-3 text-[18px] font-bold tabular-nums leading-none text-[#111]">
+        {usd(Number(e.fundingValue), 2)}
+        <span className="ml-1.5 text-[10px] font-medium text-[#888]">
+          work value
+        </span>
+      </p>
+      <p className="mt-2 text-[9px] leading-snug text-[#999]">
+        Deposited into the shielded pool — no sender, recipient, or amount is
+        on-chain. The worker claims it privately by scanning their notes.
+      </p>
+    </div>
   );
 }
 
@@ -311,6 +348,20 @@ export function PhoneHomeView({
     () => allStreams.filter(isActiveStream),
     [allStreams]
   );
+
+  // Private engagements live only in the local opening store (no on-chain
+  // parties, not indexed). Poll it so one opened moments ago shows up here.
+  const [engagements, setEngagements] = useState<PrivateEngagementSecret[]>([]);
+  useEffect(() => {
+    if (!addr) {
+      setEngagements([]);
+      return;
+    }
+    const load = () => setEngagements(loadEngagements(addr));
+    load();
+    const t = setInterval(load, 5000);
+    return () => clearInterval(t);
+  }, [addr]);
 
   const incomingDripping = useMemo(
     () => incoming.filter((s) => effectiveState(s) === "dripping"),
@@ -623,7 +674,9 @@ export function PhoneHomeView({
               Open a stream to see full details.
             </p>
           </div>
-          {activeStreams.length === 0 && privateStreams.length === 0 ? (
+          {activeStreams.length === 0 &&
+          privateStreams.length === 0 &&
+          engagements.length === 0 ? (
             <div className="rounded-2xl border border-dashed border-black/10 bg-white px-3 py-6 text-center">
               <p className="text-[12px] font-medium text-[#555]">No streams yet</p>
               <p className="mt-1 text-[11px] text-[#888]">
@@ -762,6 +815,9 @@ export function PhoneHomeView({
                 />
               );
             })}
+            {engagements.map((e) => (
+              <EngagementCard key={e.engagementId} e={e} />
+            ))}
             </>
           )}
         </div>
