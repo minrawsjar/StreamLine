@@ -12,7 +12,8 @@ import { PhoneField, phoneInputClass } from "./PhoneFormParts";
 
 type PhoneScanViewProps = {
   onResult: (request: StreamRequestParams) => void;
-  onGiftCard: (gift: GiftCardParams) => void;
+  /** When omitted, gift-card links show a hint instead of opening claim. */
+  onGiftCard?: (gift: GiftCardParams) => void;
   onCancel: () => void;
 };
 
@@ -49,6 +50,10 @@ export function PhoneScanView({
     (text: string): boolean => {
       const gift = parseGiftCardUrl(text);
       if (gift) {
+        if (!onGiftCard) {
+          setError("Gift cards open in the personal StreamLine app.");
+          return true;
+        }
         void stopScanner();
         setError(null);
         onGiftCard(gift);
