@@ -78,7 +78,7 @@ export type ProActivity = {
 };
 
 export type ProWorkspace = {
-  version: 2;
+  version: 3;
   orgName: string;
   groups: ProStreamGroup[];
   workers: ProWorker[];
@@ -235,45 +235,33 @@ export function averageCoverPct(points: MonthlyRunPoint[]) {
 }
 
 /**
- * Build a month-by-month payroll vs yield series.
- * Payroll sticks ease upward over time (small dip mid-run, then resume) —
- * no wild jumps. Yield cover % varies gently; series averages ~6.8%.
+ * Forward projection of payroll vs. yield, starting this month. Uses the real
+ * current monthly payroll and the real projected yield on the actual vault
+ * principal at YIELD_APY — no fabricated history. Held flat forward (constant
+ * rate), so every month reflects today's real cover ratio rather than invented
+ * month-to-month variance. (Testnet has no multi-month history to draw from.)
  */
 export function buildMonthlyRun(
   monthlyPayroll: number,
-  _vaultUsd: number,
+  vaultUsd: number,
   _yieldEarned: number,
   months = 9,
   now = new Date()
 ): MonthlyRunPoint[] {
-  const basePayroll = Math.max(0, monthlyPayroll);
+  const payroll = Math.max(0, monthlyPayroll);
+  const monthlyYield = monthlyYieldFromVault(vaultUsd);
+  const coverPct = payroll > 0 ? (monthlyYield / payroll) * 100 : 0;
 
-  // Smooth climb toward current roster: bit → more → more → slight dip → more…
-  const hireLoad = [0.52, 0.6, 0.68, 0.76, 0.84, 0.78, 0.87, 0.94, 1];
-  // Yield cover varies clearly 3–12%; still averages ~6.8 across the window.
-  const coverBySlot = [3.0, 5.8, 4.2, 8.8, 6.2, 12.0, 4.8, 9.5, 6.9];
-
-  const startOffset = -(months - 1);
   const points: MonthlyRunPoint[] = [];
-
   for (let i = 0; i < months; i++) {
-    const offset = startOffset + i;
-    const d = new Date(now.getFullYear(), now.getMonth() + offset, 1);
-    const label = d.toLocaleDateString(undefined, { month: "short" });
-    const isCurrent = offset === 0;
-    const slot = Math.min(i, hireLoad.length - 1);
-    const load = hireLoad[slot];
-    const payroll = Math.max(basePayroll > 0 ? basePayroll * load : 1, 1);
-    const coverPct = coverBySlot[slot];
-    const yieldUsd = payroll * (coverPct / 100);
-
+    const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
     points.push({
       key: `${d.getFullYear()}-${d.getMonth()}`,
-      label,
+      label: d.toLocaleDateString(undefined, { month: "short" }),
       payroll,
-      yieldUsd,
+      yieldUsd: monthlyYield,
       coverPct,
-      isCurrent,
+      isCurrent: i === 0,
     });
   }
   return points;

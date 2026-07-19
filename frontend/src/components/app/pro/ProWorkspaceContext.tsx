@@ -16,7 +16,7 @@ import {
   loadProWorkspace,
   pushActivity,
   saveProWorkspace,
-  seedWorkspace,
+  emptyWorkspace,
 } from "@/lib/pro-workspace-store";
 import { useStreams, type StreamRecord } from "@/lib/indexer";
 import { useGaslessExecute } from "@/lib/use-gasless";
@@ -158,9 +158,9 @@ export function ProWorkspaceProvider({
   const isDemo = demo && !address;
   const [workspace, setWorkspace] = useState<ProWorkspace>(() =>
     isDemo
-      ? seedWorkspace()
+      ? emptyWorkspace()
       : {
-          version: 2,
+          version: 3,
           orgName: "",
           groups: [],
           workers: [],
@@ -201,7 +201,7 @@ export function ProWorkspaceProvider({
 
   useEffect(() => {
     if (isDemo) {
-      setWorkspace(seedWorkspace());
+      setWorkspace(emptyWorkspace());
       setHydrated(true);
       return;
     }
@@ -932,7 +932,7 @@ export function ProWorkspaceProvider({
   );
 
   const resetDemo = useCallback(() => {
-    setWorkspace(seedWorkspace());
+    setWorkspace(emptyWorkspace());
   }, []);
 
   // Read overlay: fold real on-chain stream state onto the local workspace.
