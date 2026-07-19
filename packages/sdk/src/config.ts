@@ -57,7 +57,11 @@ export const FULLNODE_URLS = {
   testnet:
     env("STREAMLINE_SUI_TESTNET_RPC") ??
     env("NEXT_PUBLIC_SUI_TESTNET_RPC") ??
-    "https://fullnode.testnet.sui.io:443",
+    // Fallback for server routes: Next doesn't expose NEXT_PUBLIC_* to the
+    // dynamic env() read above at runtime, and the official testnet fullnode's
+    // JSON-RPC is deprecated (returns 400/404). Suiscan serves full JSON-RPC
+    // (reads, execute, and sui_verifyZkLoginSignature — all verified).
+    "https://rpc-testnet.suiscan.xyz",
   devnet:
     env("STREAMLINE_SUI_DEVNET_RPC") ??
     env("NEXT_PUBLIC_SUI_DEVNET_RPC") ??
