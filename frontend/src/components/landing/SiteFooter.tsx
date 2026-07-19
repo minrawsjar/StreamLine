@@ -14,7 +14,7 @@ export function SiteFooter() {
               programmable money looks like on Sui.
             </p>
           </div>
-          <Link href="/app" className="sl-btn sl-btn-primary w-fit">
+          <Link href="/app/user" className="sl-btn sl-btn-primary w-fit">
             Launch App
           </Link>
         </div>

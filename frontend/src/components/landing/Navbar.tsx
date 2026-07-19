@@ -64,7 +64,7 @@ export function Navbar() {
             <WalletButton />
           </div>
           <Link
-            href="/app"
+            href="/app/user"
             className="inline-flex items-center justify-center bg-[#5b54e6] px-4 py-2.5 text-[11px] uppercase tracking-[0.08em] text-white transition-opacity duration-300 ease-in-out hover:opacity-90"
           >
             launch app

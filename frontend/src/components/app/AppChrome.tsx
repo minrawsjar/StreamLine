@@ -16,7 +16,6 @@ export function AppChrome({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const account = useCurrentAccount();
   const { network } = useSuiClientContext();
-  const isLauncher = pathname === "/app" || pathname === "/app/";
   const isPro = pathname?.startsWith("/app/pro");
   const proDemo = useProDemoMode();
 
@@ -35,12 +34,12 @@ export function AppChrome({ children }: { children: React.ReactNode }) {
       >
         <div className="flex min-w-0 flex-1 items-center gap-3">
           <Link
-            href={isLauncher ? "/" : "/app"}
+            href="/"
             className={`shrink-0 text-[11px] uppercase tracking-[0.14em] transition-opacity hover:opacity-60 ${
               isPro ? "text-white/50" : "text-[#2b2a5e]/55"
             }`}
           >
-            {isLauncher ? "← Site" : "← Apps"}
+            ← Site
           </Link>
           <div className="flex min-w-0 items-center gap-2.5">
             <StreamLineMark size="sm" variant={isPro ? "pro" : "default"} />
