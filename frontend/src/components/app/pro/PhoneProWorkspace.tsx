@@ -823,7 +823,8 @@ function StreamsTab() {
 }
 
 function PeopleTab() {
-  const { workspace, setModal } = useProWorkspace();
+  const { workspace, setModal, createWorkerStream, creating } =
+    useProWorkspace();
   const [query, setQuery] = useState("");
   const [groupFilter, setGroupFilter] = useState<string>("all");
   const [status, setStatus] = useState<
@@ -976,25 +977,40 @@ function PeopleTab() {
         {rows.map((w) => {
           const group = workspace.groups.find((g) => g.id === w.groupId);
           return (
-            <button
+            <div
               key={w.id}
-              type="button"
-              onClick={() => setModal({ kind: "worker-edit", workerId: w.id })}
-              className="flex w-full items-center gap-2.5 px-3 py-2.5 text-left transition-colors active:bg-white/[0.04]"
+              className="flex w-full items-center gap-2.5 px-3 py-2.5"
             >
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/8 text-[11px] font-semibold text-white/80 ring-1 ring-white/10">
-                {w.alias.slice(0, 1).toUpperCase()}
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="flex items-center gap-1.5 truncate text-[12px] font-semibold text-white">
-                  {w.alias}
-                </p>
-                <p className="truncate text-[9px] text-white/40">
-                  {group?.name ?? "Ungrouped"} · {fmtUsd(w.monthlyUsd, 0)}/mo
-                </p>
-              </div>
-              <StatusPill status={w.status} compact />
-            </button>
+              <button
+                type="button"
+                onClick={() => setModal({ kind: "worker-edit", workerId: w.id })}
+                className="flex min-w-0 flex-1 items-center gap-2.5 text-left transition-opacity active:opacity-70"
+              >
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/8 text-[11px] font-semibold text-white/80 ring-1 ring-white/10">
+                  {w.alias.slice(0, 1).toUpperCase()}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="flex items-center gap-1.5 truncate text-[12px] font-semibold text-white">
+                    {w.alias}
+                  </p>
+                  <p className="truncate text-[9px] text-white/40">
+                    {group?.name ?? "Ungrouped"} · {fmtUsd(w.monthlyUsd, 0)}/mo
+                  </p>
+                </div>
+              </button>
+              {w.status === "pending" ? (
+                <button
+                  type="button"
+                  disabled={creating}
+                  onClick={() => void createWorkerStream(w.id)}
+                  className="inline-flex h-7 shrink-0 items-center rounded-full bg-white px-3 text-[10px] font-semibold text-[#0a0a0a] transition-opacity disabled:opacity-40"
+                >
+                  {creating ? "Starting…" : "Start"}
+                </button>
+              ) : (
+                <StatusPill status={w.status} compact />
+              )}
+            </div>
           );
         })}
         {rows.length === 0 ? (
