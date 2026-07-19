@@ -124,11 +124,8 @@ type ProWorkspaceContextValue = {
   ) => Promise<boolean>;
   /** True while a treasury/stream tx is in flight. */
   creating: boolean;
-  fundPool: (amount: number) => void;
   withdrawExcess: (amount: number) => void;
-  investIdle: (amount: number, bucket?: ProPoolBucket) => void;
   rebalance: (from: ProPoolBucket, to: ProPoolBucket, amount: number) => void;
-  simulateClaim: (workerId: string) => void;
   resetDemo: () => void;
   totals: {
     poolBalance: number;
@@ -761,50 +758,6 @@ export function ProWorkspaceProvider({
     [workspace.treasuryId, packageId, usdcType, address, yieldVaultId, runTreasuryTx, mutate]
   );
 
-  const fundPool = useCallback(
-    (amount: number) => {
-      if (amount <= 0) return;
-      mutate((prev) => {
-        const pending = prev.workers.filter((w) => w.status === "pending");
-        const now = Date.now();
-        const workers = prev.workers.map((w) => {
-          if (w.status !== "pending") return w;
-          const share =
-            pending.reduce((s, x) => s + x.monthlyUsd, 0) > 0
-              ? (w.monthlyUsd /
-                  pending.reduce((s, x) => s + x.monthlyUsd, 0)) *
-                amount *
-                0.35
-              : 0;
-          return {
-            ...w,
-            status: "dripping" as const,
-            startedAt: now,
-            budget: w.budget + share,
-          };
-        });
-        const next: ProWorkspace = {
-          ...prev,
-          workers,
-          pool: {
-            ...prev.pool,
-            funded: prev.pool.funded + amount,
-            allocation: {
-              ...prev.pool.allocation,
-              idle: prev.pool.allocation.idle + amount,
-            },
-          },
-        };
-        return pushActivity(next, {
-          kind: "funded",
-          label: "Funded payroll pool",
-          amount,
-        });
-      });
-    },
-    [mutate]
-  );
-
   const withdrawExcess = useCallback(
     (amount: number) => {
       mutate((prev) => {
@@ -833,36 +786,6 @@ export function ProWorkspaceProvider({
     [mutate]
   );
 
-  const investIdle = useCallback(
-    (amount: number, bucket: ProPoolBucket = "yield_vault") => {
-      mutate((prev) => {
-        const max = investableIdle(prev);
-        const take = Math.min(amount, max);
-        if (take <= 0 || bucket === "idle") return prev;
-        const next: ProWorkspace = {
-          ...prev,
-          pool: {
-            ...prev.pool,
-            allocation: {
-              ...prev.pool.allocation,
-              idle: prev.pool.allocation.idle - take,
-              [bucket]: prev.pool.allocation[bucket] + take,
-            },
-          },
-        };
-        return pushActivity(next, {
-          kind: "invested",
-          label:
-            bucket === "yield_vault"
-              ? "Routed idle capital into yield vault"
-              : "Moved capital into reserve",
-          amount: take,
-        });
-      });
-    },
-    [mutate]
-  );
-
   const rebalance = useCallback(
     (from: ProPoolBucket, to: ProPoolBucket, amount: number) => {
       mutate((prev) => {
@@ -884,47 +807,6 @@ export function ProWorkspaceProvider({
           kind: "rebalanced",
           label: `Rebalanced ${from} → ${to}`,
           amount: take,
-        });
-      });
-    },
-    [mutate]
-  );
-
-  const simulateClaim = useCallback(
-    (workerId: string) => {
-      mutate((prev) => {
-        const worker = prev.workers.find((w) => w.id === workerId);
-        if (!worker) return prev;
-        const claimable = workerClaimable(worker, Date.now());
-        if (claimable <= 0) return prev;
-        let remaining = claimable;
-        const alloc = { ...prev.pool.allocation };
-        const order: ProPoolBucket[] = ["idle", "reserve", "yield_vault"];
-        for (const b of order) {
-          const take = Math.min(remaining, alloc[b]);
-          alloc[b] -= take;
-          remaining -= take;
-          if (remaining <= 0) break;
-        }
-        if (remaining > 0) return prev;
-        const workers = prev.workers.map((w) =>
-          w.id === workerId
-            ? { ...w, streamedUsd: w.streamedUsd + claimable }
-            : w
-        );
-        const next: ProWorkspace = {
-          ...prev,
-          workers,
-          pool: {
-            ...prev.pool,
-            streamed: prev.pool.streamed + claimable,
-            allocation: alloc,
-          },
-        };
-        return pushActivity(next, {
-          kind: "claimed",
-          label: `${worker.alias} claimed earnings`,
-          amount: claimable,
         });
       });
     },
@@ -1084,11 +966,8 @@ export function ProWorkspaceProvider({
     divestTreasury,
     rebalanceReserve,
     creating,
-    fundPool,
     withdrawExcess,
-    investIdle,
     rebalance,
-    simulateClaim,
     resetDemo,
     totals,
   };
