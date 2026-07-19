@@ -9,6 +9,7 @@ const SCENE_COOLDOWN_MS = 700;
 /** Per-scene auto-progress duration (ms) while the scene is active. */
 const SCENE_PROGRESS_MS: Partial<Record<string, number>> = {
   how: 6200,
+  work: 4800,
 };
 
 type UseSceneNavigationOptions = {

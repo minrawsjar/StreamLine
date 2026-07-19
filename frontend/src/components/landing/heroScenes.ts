@@ -7,6 +7,8 @@ export type PhoneScene =
   | "privacy"
   | "pro"
   | "names"
+  | "work"
+  | "scale"
   | "launch";
 
 export type SceneTheme = "light" | "pro";
@@ -123,6 +125,26 @@ export const HERO_SCENES: HeroScene[] = [
     },
   },
   {
+    id: "names",
+    phone: "names",
+    theme: "light",
+    left: {
+      label: "built for people",
+      headline: "The name you can",
+      accent: "Remember",
+      body: "Pay and get paid without pasting a 64-character address — human-readable, on-chain.",
+      bullets: [],
+      headlineLarge: true,
+    },
+    right: {
+      label: "…and for the machines",
+      headline: "SDK & API",
+      accent: "machines can use",
+      body: "Program streams from code, agents, and backends on the same rails — one identity layer for humans and machines.",
+      bullets: [],
+    },
+  },
+  {
     id: "pro",
     phone: "pro",
     theme: "pro",
@@ -157,22 +179,42 @@ export const HERO_SCENES: HeroScene[] = [
     },
   },
   {
-    id: "names",
-    phone: "names",
-    theme: "light",
+    id: "work",
+    phone: "work",
+    theme: "pro",
     left: {
-      label: "built for people",
-      headline: "The name you can",
-      accent: "Remember",
-      body: "Pay and get paid without pasting a 64-character address — human-readable, on-chain.",
+      label: "for professionals",
+      headline: "Empowering",
+      accent: "professionals.",
+      body: "Freelancers, contractors, creatives — get paid as you deliver. Raise when you ship, drip by the second, borrow against what’s already streaming. Your work, your cash flow.",
       bullets: [],
       headlineLarge: true,
     },
     right: {
-      label: "…and for the machines",
-      headline: "SDK & API",
-      accent: "machines can use",
-      body: "Program streams from code, agents, and backends on the same rails — one identity layer for humans and machines.",
+      label: "for teams",
+      headline: "And",
+      accent: "Organizations.",
+      body: "Fund engagements once, unlock by milestone, run contractor payroll without wires or waiting. Same rails from one hire to a full roster — private when you need it, auditable when you don’t.",
+      bullets: [],
+    },
+  },
+  {
+    id: "scale",
+    phone: "scale",
+    theme: "pro",
+    left: {
+      label: "get started",
+      headline: "Start for",
+      accent: "Free.",
+      body: "Open a stream, claim your name, get paid in seconds. No card, no minimums — just work money on day one.",
+      bullets: [],
+      headlineLarge: true,
+    },
+    right: {
+      label: "grow with you",
+      headline: "Scale just when",
+      accent: "You are Ready.",
+      body: "Graduate to Pro when you need payroll, invoices, POS, and compliance — same rails, bigger surface. Pay for power only when the work demands it.",
       bullets: [],
     },
   },

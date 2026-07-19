@@ -50,14 +50,21 @@ export function SceneTextPanel({
   const isTiles = panelMode === "tiles";
 
   const titleSize = isPro
-    ? stacked
-      ? "text-[2.4rem] lg:text-[2.85rem]"
-      : "text-[2.85rem] lg:text-[3.6rem]"
+    ? content.headlineLarge
+      ? "text-[3.1rem] lg:text-[4.1rem]"
+      : stacked
+        ? "text-[2.4rem] lg:text-[2.85rem]"
+        : "text-[2.85rem] lg:text-[3.6rem]"
     : content.headlineLarge
       ? "text-[2.9rem] lg:text-[4rem]"
       : stacked
         ? "text-[2rem] lg:text-[2.35rem]"
         : "text-[2.65rem] lg:text-[3.35rem]";
+
+  const accentSize =
+    isPro && content.headlineLarge
+      ? "text-[3.6rem] lg:text-[4.75rem]"
+      : undefined;
 
   const bodySize = isPro
     ? stacked
@@ -156,8 +163,11 @@ export function SceneTextPanel({
           isPro ? "font-medium text-white" : "font-bold text-[#111]"
         }`}
       >
-        {content.headline}{" "}
-        <AccentText isPro={isPro}>{content.accent}</AccentText>
+        {content.headline}
+        {accentSize ? <br /> : " "}
+        <span className={accentSize ? `inline-block leading-[1.02] ${accentSize}` : undefined}>
+          <AccentText isPro={isPro}>{content.accent}</AccentText>
+        </span>
       </h2>
 
       {!compact && (

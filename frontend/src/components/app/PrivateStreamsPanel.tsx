@@ -38,6 +38,7 @@ import {
   type PrivateStreamSecret,
 } from "@/lib/confidential-store";
 import { Card, StateBadge } from "./dashboard-ui";
+import { usePhoneEmbedded } from "@/components/app/phone/PhoneEmbeddedContext";
 
 const STATE_LABELS = [
   "locked",
@@ -50,6 +51,58 @@ const STATE_LABELS = [
 const usd = (base: bigint) => `$${(Number(base) / 1e6).toFixed(2)}`;
 const short = (a: string) => `${a.slice(0, 8)}…${a.slice(-4)}`;
 const scan = (id: string) => `https://suiscan.xyz/testnet/object/${id}`;
+
+const btnPrimary =
+  "w-full rounded-2xl bg-[#111] px-4 py-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-white disabled:opacity-40";
+const btnSoft =
+  "w-full rounded-2xl border border-black/12 bg-white px-4 py-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-[#111] disabled:opacity-40";
+const btnAccent =
+  "w-full rounded-2xl bg-[#1d9e75] px-4 py-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-white disabled:opacity-40";
+const btnDanger =
+  "w-full rounded-2xl border border-[#c0533a]/35 bg-[#c0533a]/[0.06] px-4 py-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-[#c0533a] disabled:opacity-40";
+const btnLegacy =
+  "border border-[#2b2a5e]/30 px-4 py-2 text-[11px] uppercase tracking-[0.1em] text-[#2b2a5e]/80 hover:border-[#5b54e6] disabled:opacity-40";
+const btnLegacyPrimary =
+  "bg-[#2b2a5e] px-4 py-2 text-[11px] uppercase tracking-[0.1em] text-white hover:opacity-90 disabled:opacity-40";
+const btnLegacyAccent =
+  "bg-[#1d9e75] px-4 py-2 text-[11px] uppercase tracking-[0.1em] text-white hover:opacity-90 disabled:opacity-40";
+const btnLegacyOutline =
+  "border border-[#5b54e6] px-4 py-2 text-[11px] uppercase tracking-[0.1em] text-[#5b54e6] hover:bg-[#5b54e6]/[0.06] disabled:opacity-40";
+const btnLegacyDanger =
+  "border border-[#c0533a] px-4 py-2 text-[11px] uppercase tracking-[0.1em] text-[#c0533a] hover:bg-[#c0533a]/[0.06] disabled:opacity-40";
+
+function PhoneStatePill({ state }: { state: string }) {
+  const tone =
+    state === "dripping"
+      ? "border-[#1d9e75]/30 bg-[#1d9e75]/12 text-[#1d9e75]"
+      : state === "pending_review"
+        ? "border-[#d98a2b]/30 bg-[#d98a2b]/12 text-[#d98a2b]"
+        : state === "paused"
+          ? "border-[#c0533a]/30 bg-[#c0533a]/12 text-[#c0533a]"
+          : state === "done"
+            ? "border-[#7f77dd]/30 bg-[#7f77dd]/12 text-[#7f77dd]"
+            : "border-black/10 bg-[#fafafa] text-[#888]";
+  return (
+    <span
+      className={`shrink-0 rounded-full border px-3 py-1.5 text-[9px] font-semibold uppercase tracking-[0.1em] ${tone}`}
+    >
+      {state.replace("_", " ")}
+    </span>
+  );
+}
+
+function MiniStat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-xl border border-black/10 bg-white px-3 py-2.5">
+      <p className="text-[8px] font-semibold uppercase tracking-[0.14em] text-[#888]">
+        {label}
+      </p>
+      <p className="mt-1 text-[12px] font-semibold tabular-nums leading-snug text-[#111]">
+        {value}
+      </p>
+    </div>
+  );
+}
 
 /** Reject after `ms` so a hung Seal/wallet call can't pin the UI in "busy". */
 function withTimeout<T>(p: Promise<T>, ms: number, message: string): Promise<T> {
@@ -456,10 +509,162 @@ export function PrivateStreamsPanel({
   );
 
   const shown = (streams ?? []).filter((s) => (only ? s.id === only : true));
+  const embedded = usePhoneEmbedded();
 
   if (!addr) return null;
   if (isLoading) return null;
   if (shown.length === 0) return null;
+
+  if (embedded) {
+    return (
+      <div className="flex flex-col gap-3 pb-2">
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <h2 className="text-[15px] font-semibold tracking-tight text-[#111]">
+              Private stream
+            </h2>
+            <p className="mt-1 text-[12px] leading-snug text-[#666]">
+              Amounts hidden on-chain — decrypted locally on this device
+              {role === "freelancer" ? " via Seal" : ""}.
+            </p>
+          </div>
+          {shown.length === 1 ? (
+            <PhoneStatePill
+              state={STATE_LABELS[shown[0]!.state] ?? "locked"}
+            />
+          ) : null}
+        </div>
+
+        {shown.map((s) => {
+          const payload = unlocked.get(s.id);
+          const working = busy === s.id || isPending;
+          const stateLabel = STATE_LABELS[s.state] ?? "locked";
+          const remaining = payload
+            ? usd(BigInt(payload.remainingBase))
+            : "••••";
+          const earned = payload ? usd(BigInt(payload.earnedBase)) : "••••";
+
+          return (
+            <div key={s.id} className="flex flex-col gap-3">
+              <section className="rounded-2xl border border-black/10 bg-white p-4">
+                <p className="text-[9px] font-semibold uppercase tracking-[0.16em] text-[#888]">
+                  {payload ? "Remaining · " : "Encrypted · "}
+                  <a
+                    href={scan(s.id)}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="font-mono text-[#5b54e6]"
+                  >
+                    {short(s.id)}
+                  </a>
+                </p>
+                <p className="mt-2 text-[2rem] font-bold tabular-nums leading-none text-[#111]">
+                  {remaining}
+                </p>
+                <p className="mt-1.5 text-[11px] tabular text-[#888]">
+                  Earned{" "}
+                  <span className="font-semibold text-[#111]">{earned}</span>
+                  <span className="text-[#888]"> · </span>
+                  Reserve{" "}
+                  <span className="font-semibold text-[#111]">
+                    {usd(s.reserve)}
+                  </span>
+                </p>
+                <p className="mt-2 text-[11px] font-medium text-[#666]">
+                  Milestone{" "}
+                  {Math.min(s.currentMilestone + 1, s.nMilestones)}/
+                  {s.nMilestones}
+                  {!payload ? " · unlock to reveal amounts" : ""}
+                </p>
+              </section>
+
+              <div className="grid grid-cols-2 gap-2">
+                <MiniStat label="Status" value={stateLabel.replace("_", " ")} />
+                <MiniStat
+                  label="Role"
+                  value={role === "freelancer" ? "Receiver" : "Sender"}
+                />
+                <MiniStat label="Reserve" value={usd(s.reserve)} />
+                <MiniStat
+                  label="Milestone"
+                  value={`${Math.min(s.currentMilestone + 1, s.nMilestones)}/${s.nMilestones}`}
+                />
+              </div>
+
+              <div className="flex flex-col gap-2">
+                {!payload && (
+                  <button
+                    type="button"
+                    onClick={() => unlock(s)}
+                    disabled={working}
+                    className={btnPrimary}
+                  >
+                    {working ? "Unlocking…" : "Decrypt amounts"}
+                  </button>
+                )}
+                {payload && s.state === 2 && (
+                  <button
+                    type="button"
+                    onClick={() => onDrip(s, payload)}
+                    disabled={working}
+                    className={btnSoft}
+                  >
+                    {working ? "Working…" : "Drip hidden"}
+                  </button>
+                )}
+                {role === "freelancer" && s.state === 2 && (
+                  <button
+                    type="button"
+                    onClick={() => onRaise(s)}
+                    disabled={working}
+                    className={btnSoft}
+                  >
+                    Raise milestone
+                  </button>
+                )}
+                {role === "freelancer" && payload && (
+                  <button
+                    type="button"
+                    onClick={() => onClaim(s, payload)}
+                    disabled={working || BigInt(payload.earnedBase) <= 0n}
+                    className={btnAccent}
+                  >
+                    Claim {usd(BigInt(payload.earnedBase))}
+                  </button>
+                )}
+                {role === "sender" && s.state === 1 && (
+                  <button
+                    type="button"
+                    onClick={() => onApprove(s)}
+                    disabled={working}
+                    className={btnAccent}
+                  >
+                    {working ? "Approving…" : "Approve milestone"}
+                  </button>
+                )}
+                {(s.state === 1 || s.state === 2) && (
+                  <button
+                    type="button"
+                    onClick={() => onDispute(s)}
+                    disabled={working}
+                    className={btnDanger}
+                  >
+                    Dispute
+                  </button>
+                )}
+              </div>
+            </div>
+          );
+        })}
+
+        {status && (
+          <p className="rounded-2xl border border-black/8 bg-[#fafafa] px-3 py-2.5 text-[11px] leading-snug text-[#555]">
+            {status}
+          </p>
+        )}
+      </div>
+    );
+  }
 
   return (
     <Card title="Private streams 🔒" padded={false}>
@@ -528,7 +733,7 @@ export function PrivateStreamsPanel({
                   <button
                     onClick={() => unlock(s)}
                     disabled={working}
-                    className="bg-[#2b2a5e] px-4 py-2 text-[11px] uppercase tracking-[0.1em] text-white hover:opacity-90 disabled:opacity-40"
+                    className={btnLegacyPrimary}
                   >
                     {working ? "…" : "decrypt 🔓"}
                   </button>
@@ -537,7 +742,7 @@ export function PrivateStreamsPanel({
                   <button
                     onClick={() => onDrip(s, payload)}
                     disabled={working}
-                    className="border border-[#5b54e6] px-4 py-2 text-[11px] uppercase tracking-[0.1em] text-[#5b54e6] hover:bg-[#5b54e6]/[0.06] disabled:opacity-40"
+                    className={btnLegacyOutline}
                   >
                     drip hidden
                   </button>
@@ -546,7 +751,7 @@ export function PrivateStreamsPanel({
                   <button
                     onClick={() => onRaise(s)}
                     disabled={working}
-                    className="border border-[#2b2a5e]/30 px-4 py-2 text-[11px] uppercase tracking-[0.1em] text-[#2b2a5e]/80 hover:border-[#5b54e6] disabled:opacity-40"
+                    className={btnLegacy}
                   >
                     raise milestone
                   </button>
@@ -555,7 +760,7 @@ export function PrivateStreamsPanel({
                   <button
                     onClick={() => onClaim(s, payload)}
                     disabled={working || BigInt(payload.earnedBase) <= 0n}
-                    className="bg-[#1d9e75] px-4 py-2 text-[11px] uppercase tracking-[0.1em] text-white hover:opacity-90 disabled:opacity-40"
+                    className={btnLegacyAccent}
                   >
                     claim {usd(BigInt(payload.earnedBase))}
                   </button>
@@ -564,7 +769,7 @@ export function PrivateStreamsPanel({
                   <button
                     onClick={() => onApprove(s)}
                     disabled={working}
-                    className="bg-[#1d9e75] px-4 py-2 text-[11px] uppercase tracking-[0.1em] text-white hover:opacity-90 disabled:opacity-40"
+                    className={btnLegacyAccent}
                   >
                     {working ? "…" : "approve"}
                   </button>
@@ -573,7 +778,7 @@ export function PrivateStreamsPanel({
                   <button
                     onClick={() => onDispute(s)}
                     disabled={working}
-                    className="border border-[#c0533a] px-4 py-2 text-[11px] uppercase tracking-[0.1em] text-[#c0533a] hover:bg-[#c0533a]/[0.06] disabled:opacity-40"
+                    className={btnLegacyDanger}
                   >
                     dispute
                   </button>

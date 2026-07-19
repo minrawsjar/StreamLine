@@ -173,7 +173,11 @@ export function Card({
   const embedded = usePhoneEmbedded();
 
   return (
-    <section className={`border border-[#2b2a5e]/15 bg-white ${className}`}>
+    <section
+      className={`border border-[#2b2a5e]/15 bg-white ${
+        embedded ? "overflow-hidden rounded-2xl border-black/10" : ""
+      } ${className}`}
+    >
       {title && (
         <div
           className={`flex items-center justify-between ${
@@ -316,6 +320,7 @@ export function DonutProgress({
 /* ── State badge ──────────────────────────────────────────────────────── */
 
 export function StateBadge({ state }: { state: string }) {
+  const embedded = usePhoneEmbedded();
   const tone =
     state === "dripping"
       ? "bg-[#1d9e75] text-white"
@@ -327,7 +332,11 @@ export function StateBadge({ state }: { state: string }) {
             ? "bg-[#7f77dd] text-white"
             : "bg-[#2b2a5e] text-white";
   return (
-    <span className={`px-2 py-0.5 text-[10px] uppercase tracking-[0.14em] ${tone}`}>
+    <span
+      className={`px-2 py-0.5 text-[10px] uppercase tracking-[0.14em] ${tone} ${
+        embedded ? "rounded-full" : ""
+      }`}
+    >
       {state.replace("_", " ")}
     </span>
   );
