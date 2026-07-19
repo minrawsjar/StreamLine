@@ -47,7 +47,6 @@ import {
   loadEngagements,
   type PrivateEngagementSecret,
 } from "@/lib/private-engagement-store";
-import { PrivateReceiveCard } from "@/components/app/PrivateReceiveCard";
 import {
   PhoneDashboardView,
   type PhoneTopStat,
@@ -883,11 +882,6 @@ export function PhoneHomeView({
         onShiftCards={shiftCards}
         onPrimaryCardClick={openActiveCard}
         onPrimaryCardDetails={openActiveCard}
-        trailing={
-          <div className="mx-3 mt-1">
-            <PrivateReceiveCard variant="light" />
-          </div>
-        }
       />
       {selectedActivity && addr && (
         <PhoneActivityDetailModal
