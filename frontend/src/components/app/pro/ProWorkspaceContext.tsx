@@ -946,12 +946,12 @@ export function ProWorkspaceProvider({
     // Real pool float from the on-chain treasury (idle + invested in the vault).
     const poolOverride = treasury
       ? {
-          funded: treasury.idle + treasury.invested,
+          funded: treasury.idle + treasury.invested + treasury.reserve,
           allocation: {
             ...workspace.pool.allocation,
             idle: treasury.idle,
             yield_vault: treasury.invested,
-            reserve: 0,
+            reserve: treasury.reserve,
           },
         }
       : null;

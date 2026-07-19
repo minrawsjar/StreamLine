@@ -37,9 +37,9 @@ export async function findCreatedTreasury(
   }
 }
 
-export type TreasuryState = { idle: number; invested: number };
+export type TreasuryState = { idle: number; invested: number; reserve: number };
 
-/** Read live idle + invested USDC via the treasury's view functions. */
+/** Read live idle + invested + reserve USDC via the treasury's view functions. */
 export async function readTreasuryState(
   client: SuiClient,
   a: {
@@ -65,13 +65,23 @@ export async function readTreasuryState(
       tx.pure.u64(BigInt(Date.now())),
     ],
   });
+  tx.moveCall({
+    target: `${a.packageId}::treasury::reserve_value`,
+    typeArguments: [a.usdcType],
+    arguments: [tx.object(a.treasuryId)],
+  });
   const res = await client.devInspectTransactionBlock({
     sender: a.sender,
     transactionBlock: tx,
   });
   const idleBytes = res.results?.[0]?.returnValues?.[0]?.[0] ?? [];
   const investedBytes = res.results?.[1]?.returnValues?.[0]?.[0] ?? [];
-  return { idle: u64ToUsdc(idleBytes), invested: u64ToUsdc(investedBytes) };
+  const reserveBytes = res.results?.[2]?.returnValues?.[0]?.[0] ?? [];
+  return {
+    idle: u64ToUsdc(idleBytes),
+    invested: u64ToUsdc(investedBytes),
+    reserve: u64ToUsdc(reserveBytes),
+  };
 }
 
 export function useTreasuryState(
