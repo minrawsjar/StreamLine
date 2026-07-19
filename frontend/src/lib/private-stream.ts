@@ -94,7 +94,9 @@ export function buildOpenEngagement(a: {
   const tx = new Transaction();
   tx.setSenderIfNotSet(a.sender);
   tx.moveCall({
-    target: `${a.packageId}::private_stream::open_engagement`,
+    // v2 attaches opener-gated pause control (EngagementControl), so the hire
+    // can be frozen on-chain. Identical args to v1.
+    target: `${a.packageId}::private_stream::open_engagement_v2`,
     typeArguments: [a.coinType],
     arguments: [
       tx.object(a.poolId),
@@ -104,6 +106,32 @@ export function buildOpenEngagement(a: {
       tx.pure.u256(a.paramsCommitment),
       u8(tx, a.ciphertext ?? new Uint8Array()),
     ],
+  });
+  return tx;
+}
+
+/** Freeze vesting on a private engagement (opener-gated `pause_engagement`). */
+export function buildPauseEngagement(a: {
+  packageId: string;
+  engagementId: string;
+}): Transaction {
+  const tx = new Transaction();
+  tx.moveCall({
+    target: `${a.packageId}::private_stream::pause_engagement`,
+    arguments: [tx.object(a.engagementId), tx.object(CLOCK_ID)],
+  });
+  return tx;
+}
+
+/** Resume vesting on a paused private engagement (`resume_engagement`). */
+export function buildResumeEngagement(a: {
+  packageId: string;
+  engagementId: string;
+}): Transaction {
+  const tx = new Transaction();
+  tx.moveCall({
+    target: `${a.packageId}::private_stream::resume_engagement`,
+    arguments: [tx.object(a.engagementId), tx.object(CLOCK_ID)],
   });
   return tx;
 }

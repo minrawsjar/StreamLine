@@ -9,13 +9,13 @@ function env(name: string): string | undefined {
   return v || undefined;
 }
 
-// Latest package version (move-call target). Upgraded 2026-07-19 to add the
-// private_stream module (default-private engagements: shielded deposit + lazy
-// vesting) plus verify_private_settle / apply_private_settle. Type origin stays
-// 0x597f34fe… (ORIGINAL_PACKAGE_IDS), so object types + the indexer are
-// unaffected. pos::PosPaid's type origin stays 0x05affbed… (POS_DEFINING_PACKAGE).
+// Latest package version (move-call target). Upgraded 2026-07-20 (v7) to add
+// private_stream::open_engagement_v2 + pause_engagement / resume_engagement
+// (on-chain vesting freeze for private hires). Type origin stays 0x597f34fe…
+// (ORIGINAL_PACKAGE_IDS), so object types + the indexer are unaffected.
+// pos::PosPaid's type origin stays 0x05affbed… (POS_DEFINING_PACKAGE).
 const TESTNET_PACKAGE =
-  "0xb0110fff0dd7b62e447f16d4ffd0323c0cdf8472aead3eae182711f4e4937897";
+  "0x67b337d6f054594cd983a4490a5f346900caf09db0e334d349b2a9babcbd2811";
 
 export const PACKAGE_IDS = {
   mainnet:

@@ -6,7 +6,7 @@ version = "0.1.0"
 # then the `pos` module (pos::pay — payment-QR settlement into a treasury).
 # `published-at` = latest version (upgrade from); the [addresses] streamline =
 # ORIGINAL package (type origin, unchanged across upgrades).
-published-at = "0xb0110fff0dd7b62e447f16d4ffd0323c0cdf8472aead3eae182711f4e4937897"
+published-at = "0x67b337d6f054594cd983a4490a5f346900caf09db0e334d349b2a9babcbd2811"
 
 # The Sui / MoveStdlib framework dependencies are managed automatically by the
 # Sui CLI, pinned to the active environment's framework version.

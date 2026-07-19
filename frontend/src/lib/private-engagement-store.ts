@@ -19,6 +19,8 @@ export type PrivateEngagementSecret = {
   paramsCommitment: string;
   /** Shielded address of the worker (sl1…), if known. */
   workerShielded?: string;
+  /** True when opened via open_engagement_v2 (has on-chain pause control). */
+  pausable?: boolean;
   label?: string;
   createdAt: number;
 };

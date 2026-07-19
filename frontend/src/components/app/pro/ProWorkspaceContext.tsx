@@ -57,6 +57,8 @@ import {
 import {
   prepareOpenEngagement,
   prepareSettleVested,
+  buildPauseEngagement,
+  buildResumeEngagement,
   findCreatedEngagement,
 } from "@/lib/private-stream";
 import { proveSplitAfterDeposit } from "@/lib/overfund-split";
@@ -636,13 +638,52 @@ export function ProWorkspaceProvider({
         !packageId ||
         packageId === "0x0"
       ) {
-        if (isPrivate && !isDemo && worker.engagementId) {
-          // Honest: private legs have no suspend_payroll on-chain.
-          if (status === "paused" || status === "stopped") {
-            const ok = window.confirm(
-              "Private hire has no on-chain HR pause/stop yet — this only updates your local roster. Continue?"
-            );
+        // Real on-chain freeze/resume for pausable (v2) private engagements:
+        // pause_engagement / resume_engagement excludes paused time from vesting.
+        let onChainHr = false;
+        if (isPrivate && !isDemo && worker.engagementId && poolId) {
+          const eng = loadEngagements(address).find(
+            (e) => e.engagementId === worker.engagementId
+          );
+          const wasRunning = worker.status === "dripping";
+          const wasFrozen =
+            worker.status === "paused" || worker.status === "stopped";
+          let tx: ReturnType<typeof buildPauseEngagement> | null = null;
+          if ((status === "paused" || status === "stopped") && wasRunning) {
+            tx = buildPauseEngagement({ packageId, engagementId: worker.engagementId });
+          } else if (status === "dripping" && wasFrozen) {
+            tx = buildResumeEngagement({ packageId, engagementId: worker.engagementId });
+          }
+          if (tx && eng?.pausable) {
+            let ok = false;
+            let hrErr: Error | null = null;
+            await execute(tx, {
+              onSuccess: () => {
+                ok = true;
+              },
+              onError: (e) => {
+                hrErr = e;
+              },
+            });
+            if (hrErr) {
+              window.alert(
+                `Couldn't ${status === "dripping" ? "resume" : "freeze"} ${
+                  worker.alias
+                } on-chain: ${(hrErr as Error).message}`
+              );
+              return false;
+            }
             if (!ok) return false;
+            onChainHr = true;
+          } else if (tx && !eng?.pausable) {
+            // Legacy engagement opened before the pause upgrade → local only.
+            if (
+              !window.confirm(
+                `${worker.alias} was hired before on-chain pause existed — this only updates your local roster. Continue?`
+              )
+            ) {
+              return false;
+            }
           }
         }
         mutate((prev) => {
@@ -676,7 +717,7 @@ export function ProWorkspaceProvider({
                   : status === "dripping"
                     ? "resumed"
                     : "stopped",
-              label: `${status === "dripping" ? "Resumed" : status === "paused" ? "Paused" : "Stopped"} ${worker.alias}${isPrivate ? " (local)" : ""}`,
+              label: `${status === "dripping" ? "Resumed" : status === "paused" ? "Paused" : "Stopped"} ${worker.alias}${isPrivate && !onChainHr ? " (local)" : ""}`,
             }
           );
         });
@@ -913,6 +954,7 @@ export function ProWorkspaceProvider({
             rParams: prepared.rParams.toString(),
             paramsCommitment: prepared.paramsCommitment.toString(),
             workerShielded: shielded,
+            pausable: true, // opened via open_engagement_v2 → on-chain pause
             label: worker.alias,
             createdAt: Date.now(),
           });
