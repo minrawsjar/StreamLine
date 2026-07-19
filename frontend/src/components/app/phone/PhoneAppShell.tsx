@@ -22,6 +22,9 @@ import { PhoneFulfillRequestView } from "./PhoneFulfillRequestView";
 import { PhoneRequestStreamView } from "./PhoneRequestStreamView";
 import { PhoneCreateStreamView } from "./PhoneCreateStreamView";
 import { PhoneClaimGiftCardView } from "./PhoneClaimGiftCardView";
+import { LazyStreamPanel } from "@/components/app/LazyStreamPanel";
+import { ShieldedPanel } from "@/components/app/ShieldedPanel";
+import { ConfidentialBalancePanel } from "@/components/app/ConfidentialBalancePanel";
 import { PhoneExportActivityModal } from "./PhoneExportActivityModal";
 import {
   DEMO_NAV_EVENT,
@@ -60,6 +63,8 @@ export function PhoneAppShell({ route, onNavigate }: PhoneAppShellProps) {
   const isClaimGift = route === "claim-gift";
   const isRequest = route === "request";
   const isCreate = route === "create";
+  const isPrivacyApp =
+    route === "lazy" || route === "shielded" || route === "confidential";
   /** Full-bleed onboarding — hide shell chrome until wallet + name step done. */
   const proOnboarding = isPro && !proDemo && (!account || needsStep);
   const userOnboarding = route === "user" && (!account || needsStep);
@@ -225,7 +230,8 @@ export function PhoneAppShell({ route, onNavigate }: PhoneAppShellProps) {
               !isFulfill &&
               !isClaimGift &&
               !isRequest &&
-              !isCreate && (
+              !isCreate &&
+              !isPrivacyApp && (
               <ScanIconButton onClick={openScan} />
             )}
             <WalletButton
@@ -262,6 +268,46 @@ export function PhoneAppShell({ route, onNavigate }: PhoneAppShellProps) {
           <PhoneUserApp onNavigate={onNavigate} />
         )}
         {route === "pro" && <PhoneProApp />}
+        {isPrivacyApp && (
+          <div className="min-h-0 flex-1 overflow-y-auto pb-6">
+            {route === "lazy" && (
+              <>
+                <h2 className="mb-1 text-[15px] font-semibold text-[#111]">
+                  Lazy private streams
+                </h2>
+                <p className="mb-4 text-[11px] leading-snug text-[#666]">
+                  Confidential streams that vest linearly and settle in one proof
+                  — no per-drip transactions, no keeper.
+                </p>
+                <LazyStreamPanel />
+              </>
+            )}
+            {route === "shielded" && (
+              <>
+                <h2 className="mb-1 text-[15px] font-semibold text-[#111]">
+                  Shielded pool
+                </h2>
+                <p className="mb-4 text-[11px] leading-snug text-[#666]">
+                  Deposit, then transfer and withdraw privately. Notes +
+                  nullifiers hide who pays whom — every op Groth16-verified.
+                </p>
+                <ShieldedPanel />
+              </>
+            )}
+            {route === "confidential" && (
+              <>
+                <h2 className="mb-1 text-[15px] font-semibold text-[#111]">
+                  Confidential balance
+                </h2>
+                <p className="mb-4 text-[11px] leading-snug text-[#666]">
+                  Hold USDC with the amount hidden behind a Poseidon commitment —
+                  every wrap and withdraw is Groth16-verified.
+                </p>
+                <ConfidentialBalancePanel />
+              </>
+            )}
+          </div>
+        )}
         {route === "scan" && (
           <PhoneScanView
             onResult={handleScanResult}
