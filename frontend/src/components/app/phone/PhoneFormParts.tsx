@@ -26,6 +26,7 @@ export function PhoneToggleRow({
   disabled = false,
   onChange,
   children,
+  "data-demo": dataDemo,
 }: {
   title: string;
   subtitle: string;
@@ -33,9 +34,11 @@ export function PhoneToggleRow({
   disabled?: boolean;
   onChange: (v: boolean) => void;
   children?: ReactNode;
+  "data-demo"?: string;
 }) {
   return (
     <div
+      data-demo={dataDemo}
       className={`rounded-2xl border border-white/70 bg-white/75 backdrop-blur-md ${
         disabled ? "opacity-45" : ""
       }`}

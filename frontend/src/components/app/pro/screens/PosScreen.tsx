@@ -99,6 +99,7 @@ export function PosScreen() {
             </p>
             <button
               type="button"
+              data-demo-action="pro-pos-create-back"
               onClick={() => setView("list")}
               className="rounded-full border border-white/10 px-2 py-0.5 text-[9px] text-white/45"
             >
@@ -112,6 +113,7 @@ export function PosScreen() {
             </span>
             <input
               type="text"
+              data-demo="pro-pos-label"
               value={draftLabel}
               onChange={(e) => setDraftLabel(e.target.value.slice(0, 32))}
               placeholder="Counter, Table 3, Merch…"
@@ -174,6 +176,7 @@ export function PosScreen() {
 
           <button
             type="button"
+            data-demo-action="pro-pos-create-submit"
             onClick={createQr}
             disabled={noTreasury || (!openAmount && !(Number(draftAmount) > 0))}
             className="mt-4 flex w-full items-center justify-center rounded-2xl bg-[#22c55e] px-4 py-3.5 text-[14px] font-semibold text-white shadow-[0_8px_24px_rgba(34,197,94,0.35)] transition-transform enabled:active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-35 disabled:shadow-none"
@@ -198,6 +201,7 @@ export function PosScreen() {
             </p>
             <button
               type="button"
+              data-demo-action="pro-pos-detail-back"
               onClick={() => {
                 setSelectedId(null);
                 setView("list");
@@ -286,6 +290,7 @@ export function PosScreen() {
 
       <button
         type="button"
+        data-demo-action="pro-pos-new"
         onClick={openCreate}
         className="flex w-full items-center justify-center gap-2 rounded-2xl bg-[#22c55e] px-4 py-3.5 text-[14px] font-semibold tracking-tight text-white shadow-[0_8px_24px_rgba(34,197,94,0.35)] transition-transform active:scale-[0.98]"
       >

@@ -178,11 +178,20 @@ export function ConnectModal({
                 No wallets detected — install Slush, or set Google zkLogin env →
               </a>
             ) : (
-              standardWallets.map((w) => (
+              standardWallets.map((w, i) => (
                 <button
                   key={w.name}
+                  type="button"
                   disabled={isPending}
                   onClick={() => onConnect(w)}
+                  data-demo-action={`connect-wallet-${i}`}
+                  data-demo-wallet={
+                    /slush/i.test(w.name)
+                      ? "slush"
+                      : /sui/i.test(w.name)
+                        ? "sui"
+                        : undefined
+                  }
                   className={
                     pro
                       ? "flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.04] px-3.5 py-3 text-left text-[13px] text-white transition-colors hover:border-[#fbbf24]/40 hover:bg-white/[0.07] disabled:opacity-50"

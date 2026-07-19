@@ -141,6 +141,7 @@ export function PhoneScanView({
 
         <PhoneField label="Or paste link">
           <input
+            data-demo="scan-link"
             value={manualLink}
             onChange={(e) => {
               setManualLink(e.target.value);
@@ -157,6 +158,7 @@ export function PhoneScanView({
           type="button"
           onClick={onManualSubmit}
           disabled={!manualLink.trim()}
+          data-demo-action="scan-use-link"
           className="mt-2 w-full rounded-2xl bg-[#111] px-4 py-2.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-white disabled:opacity-40"
         >
           Use link

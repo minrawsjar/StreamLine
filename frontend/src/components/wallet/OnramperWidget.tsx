@@ -125,7 +125,12 @@ function OnramperIframe({ mode, address }: { mode: OnrampMode; address: string }
 }
 
 const FEE_RATE = 0.01; // 1% spread, so the quote looks like a real aggregator
-const QUICK = [50, 100, 300];
+const QUICK = [50, 100, 300, 500];
+
+/** Buy tile: testnet mock always works; mainnet needs Onramper API key. */
+export function isOnrampUiAvailable(network: string): boolean {
+  return network === "testnet" || !!API_KEY;
+}
 
 function refreshBalances(queryClient: ReturnType<typeof useQueryClient>) {
   void queryClient.invalidateQueries({
@@ -240,7 +245,10 @@ function TestnetCheckout({
 
   if (status === "done") {
     return (
-      <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 px-6 text-center">
+      <div
+        className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 px-6 text-center"
+        data-demo="onramp-success"
+      >
         <div className="flex h-14 w-14 items-center justify-center rounded-full bg-[#eafbea] text-[26px] text-[#2f9e44]">
           ✓
         </div>
@@ -266,6 +274,7 @@ function TestnetCheckout({
         )}
         <button
           type="button"
+          data-demo-action="onramp-done"
           onClick={onClose}
           className="mt-2 rounded-xl bg-[#111] px-6 py-2.5 text-[13px] font-semibold text-white"
         >
@@ -284,6 +293,7 @@ function TestnetCheckout({
         </p>
         <div className="flex items-center justify-between gap-2">
           <input
+            data-demo="onramp-spend"
             type="number"
             min={1}
             value={spend}
@@ -357,6 +367,7 @@ function TestnetCheckout({
 
       <button
         type="button"
+        data-demo-action="onramp-buy"
         onClick={submit}
         disabled={status === "busy" || spend <= 0}
         className="mt-1 rounded-2xl bg-[#111] px-5 py-3.5 text-[14px] font-semibold text-white disabled:opacity-40"

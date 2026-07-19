@@ -8,6 +8,7 @@ export function ScanIconButton({ pro = false, onClick }: ScanIconButtonProps) {
     <button
       type="button"
       onClick={onClick}
+      data-demo-action="scan"
       className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full border backdrop-blur-md transition-colors ${
         pro
           ? "border-white/15 bg-white/8 text-white/70 hover:bg-white/12"

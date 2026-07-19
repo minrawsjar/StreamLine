@@ -140,6 +140,13 @@ export function PhoneRequestStreamView({ onClose }: PhoneRequestStreamViewProps)
     }
     setStepError(null);
     setCreated(true);
+    try {
+      if (shareLink) {
+        sessionStorage.setItem("sl-demo-request-link", shareLink);
+      }
+    } catch {
+      /* ignore */
+    }
   };
 
   const onCopy = async () => {
@@ -180,13 +187,18 @@ export function PhoneRequestStreamView({ onClose }: PhoneRequestStreamViewProps)
             <button type="button" onClick={onCopy} className={btnPrimary}>
               {copied ? "Copied ✓" : "Copy link"}
             </button>
-            <button type="button" onClick={onDone} className={btnSecondary}>
+            <button
+              type="button"
+              onClick={onDone}
+              className={btnSecondary}
+              data-demo-action="request-done"
+            >
               Done
             </button>
           </>
         }
       >
-        <div className="flex flex-col items-center gap-4">
+        <div className="flex flex-col items-center gap-4" data-demo="request-share">
           <div className={`${phoneGlassCard} p-3`}>
             <QRCodeSVG value={shareLink || "https://streamline.app/app"} size={132} />
           </div>
@@ -203,7 +215,12 @@ export function PhoneRequestStreamView({ onClose }: PhoneRequestStreamViewProps)
       footer={
         <>
           {step < 3 ? (
-            <button type="button" onClick={goNext} className={btnPrimary}>
+            <button
+              type="button"
+              onClick={goNext}
+              className={btnPrimary}
+              data-demo-action="request-continue"
+            >
               Continue
             </button>
           ) : (
@@ -212,6 +229,7 @@ export function PhoneRequestStreamView({ onClose }: PhoneRequestStreamViewProps)
               onClick={onCreateRequest}
               disabled={!recipient}
               className={`${btnPrimary} disabled:opacity-40`}
+              data-demo-action="request-create"
             >
               Create request link
             </button>
@@ -232,6 +250,7 @@ export function PhoneRequestStreamView({ onClose }: PhoneRequestStreamViewProps)
         <>
           <PhoneField label="Stream name">
             <input
+              data-demo="request-name"
               value={streamName}
               onChange={(e) => setStreamName(e.target.value)}
               placeholder="Design sprint"
@@ -241,6 +260,7 @@ export function PhoneRequestStreamView({ onClose }: PhoneRequestStreamViewProps)
 
           <PhoneField label="Amount (USDC)">
             <input
+              data-demo="request-amount"
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
               className={phoneInputClass}
@@ -259,6 +279,7 @@ export function PhoneRequestStreamView({ onClose }: PhoneRequestStreamViewProps)
       {step === 2 && (
         <>
           <PhoneToggleRow
+            data-demo="request-private"
             title="Private request"
             subtitle="Hide amounts on-chain"
             checked={isPrivate}
@@ -269,6 +290,7 @@ export function PhoneRequestStreamView({ onClose }: PhoneRequestStreamViewProps)
           />
 
           <PhoneToggleRow
+            data-demo="request-milestones"
             title="Use milestones"
             subtitle="Define payment stages"
             checked={useMilestones}
@@ -280,21 +302,16 @@ export function PhoneRequestStreamView({ onClose }: PhoneRequestStreamViewProps)
                   <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#111] text-[10px] font-semibold text-white">
                     {i + 1}
                   </span>
-                  {i === 0 ? (
-                    <span className="min-w-0 flex-1 rounded-xl border border-black/10 bg-white/60 px-3 py-2 text-[12px] text-[#444] backdrop-blur-sm">
-                      request start
-                    </span>
-                  ) : (
-                    <input
-                      value={m}
-                      onChange={(e) =>
-                        setMilestones((prev) =>
-                          prev.map((item, idx) => (idx === i ? e.target.value : item))
-                        )
-                      }
-                      className="w-full rounded-xl border border-black/15 bg-white/80 px-3 py-2 text-[12px] outline-none backdrop-blur-sm focus:border-[#5b54e6]"
-                    />
-                  )}
+                  <input
+                    data-demo={`request-milestone-${i}`}
+                    value={m}
+                    onChange={(e) =>
+                      setMilestones((prev) =>
+                        prev.map((item, idx) => (idx === i ? e.target.value : item))
+                      )
+                    }
+                    className="w-full rounded-xl border border-black/15 bg-white/80 px-3 py-2 text-[12px] outline-none backdrop-blur-sm focus:border-[#5b54e6]"
+                  />
                   {i > 0 && (
                     <button
                       type="button"
@@ -311,6 +328,7 @@ export function PhoneRequestStreamView({ onClose }: PhoneRequestStreamViewProps)
               ))}
               <button
                 type="button"
+                data-demo-action="request-add-milestone"
                 onClick={() =>
                   setMilestones((prev) => [...prev, `Milestone ${prev.length + 1}`])
                 }

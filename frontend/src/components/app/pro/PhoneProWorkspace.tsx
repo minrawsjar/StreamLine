@@ -92,7 +92,10 @@ function ProPhoneDock({
   ];
 
   return (
-    <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 px-1.5 pb-1 pt-8">
+    <div
+      className="pointer-events-none absolute inset-x-0 bottom-0 z-20 px-1.5 pb-1 pt-8"
+      data-demo="pro-home"
+    >
       <div
         className="pointer-events-none absolute inset-x-3 bottom-0 h-12 rounded-[1.75rem] bg-black/70 blur-2xl"
         aria-hidden
@@ -108,6 +111,7 @@ function ProPhoneDock({
             active={tab === item.id}
             label={item.label}
             icon={item.icon}
+            demoAction={`pro-tab-${item.id}`}
             onClick={() => onTab(item.id)}
           />
         ))}
@@ -121,16 +125,19 @@ function DockTab({
   label,
   icon,
   onClick,
+  demoAction,
 }: {
   active: boolean;
   label: string;
   icon: ReactNode;
   onClick: () => void;
+  demoAction?: string;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
+      data-demo-action={demoAction}
       className={`flex min-w-0 flex-1 flex-col items-center gap-0.5 rounded-xl px-1 py-1 transition-colors ${
         active ? "text-white" : "text-white/35 active:text-white/70"
       }`}
@@ -730,6 +737,7 @@ function StreamsTab() {
         <button
           type="button"
           onClick={() => setModal("worker")}
+          data-demo-action="pro-add-stream"
           className="sl-pro-card sl-pro-card--flush flex w-full items-center gap-2.5 px-2.5 py-2.5 text-left transition-colors active:bg-white/[0.04]"
         >
           <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-dashed border-white/25 text-[16px] text-white/45">
@@ -948,6 +956,7 @@ function PeopleTab() {
         <button
           type="button"
           onClick={() => setModal("worker")}
+          data-demo-action="pro-add-person"
           className="flex w-full items-center gap-2.5 px-3 py-3 text-left transition-colors active:bg-white/[0.04]"
         >
           <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-dashed border-white/25 text-[16px] text-white/45">
@@ -1100,6 +1109,7 @@ function TreasuryTab({ onRamp }: { onRamp: (mode: OnrampMode) => void }) {
           <div className="grid grid-cols-3 gap-1.5">
             <button
               type="button"
+              data-demo-action="pro-fund"
               onClick={() => setModal("fund")}
               className="flex flex-col items-center gap-1 rounded-2xl bg-[#22c55e] px-2 py-3 text-[11px] font-semibold tracking-tight text-white shadow-[0_8px_24px_rgba(34,197,94,0.28)] transition-transform active:scale-[0.98]"
             >
@@ -1116,6 +1126,7 @@ function TreasuryTab({ onRamp }: { onRamp: (mode: OnrampMode) => void }) {
             </button>
             <button
               type="button"
+              data-demo-action="pro-rebalance"
               onClick={() => setModal("invest")}
               className="flex flex-col items-center gap-1 rounded-2xl border border-white/12 bg-white/[0.06] px-2 py-3 text-[11px] font-semibold tracking-tight text-white transition-colors active:bg-white/[0.1]"
             >

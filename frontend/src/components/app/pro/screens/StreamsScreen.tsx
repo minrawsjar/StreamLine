@@ -76,6 +76,11 @@ function ActionIconBtn({
       aria-label={label}
       title={label}
       disabled={disabled}
+      data-demo-action={
+        label === "Start" || label === "Restart" || label === "Resume"
+          ? "pro-start"
+          : undefined
+      }
       onClick={(e) => {
         e.stopPropagation();
         onClick();

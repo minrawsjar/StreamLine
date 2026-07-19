@@ -131,6 +131,7 @@ function ActionRow({
       <button
         type="button"
         onClick={onContinue}
+        data-demo-action="onboard-continue"
         className="flex h-12 flex-1 items-center justify-center rounded-full bg-[#1a1a1a] text-[14px] font-medium text-white ring-1 ring-white/10 transition-colors hover:bg-[#222] active:scale-[0.99]"
       >
         {label}

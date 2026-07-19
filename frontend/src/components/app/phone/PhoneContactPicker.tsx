@@ -50,12 +50,13 @@ export function PhoneContactPicker({ selected, onSelect }: PhoneContactPickerPro
         Saved contacts
       </p>
       <div className="flex flex-col gap-1.5">
-        {contacts.map((contact) => {
+        {contacts.map((contact, index) => {
           const active = selected.trim() === contact.address;
           return (
             <button
               key={contact.id}
               type="button"
+              data-demo-action={`contact-${index}`}
               onClick={() => onSelect(contact.address)}
               className={`rounded-2xl border px-3 py-2.5 text-left transition-colors backdrop-blur-sm ${
                 active

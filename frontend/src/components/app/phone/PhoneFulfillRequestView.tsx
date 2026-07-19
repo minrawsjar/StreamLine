@@ -40,7 +40,10 @@ export function PhoneFulfillRequestView({
     : validationErrors[0];
 
   return (
-    <div className="sl-scrollbar-hidden flex min-h-0 flex-1 flex-col overflow-y-auto px-1 pb-4 pt-6">
+    <div
+      className="sl-scrollbar-hidden flex min-h-0 flex-1 flex-col overflow-y-auto px-1 pb-4 pt-6"
+      data-demo="fulfill-review"
+    >
       <div className="flex flex-col gap-4">
         <div>
           <h2 className="text-[15px] font-semibold tracking-tight text-[#111]">
@@ -74,6 +77,7 @@ export function PhoneFulfillRequestView({
             <button
               type="button"
               onClick={onAccepted}
+              data-demo-action="fulfill-done"
               className="w-full rounded-2xl bg-[#111] px-4 py-2.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-white"
             >
               Done
@@ -84,6 +88,7 @@ export function PhoneFulfillRequestView({
                 type="button"
                 onClick={onAccept}
                 disabled={!!blockReason || busy}
+                data-demo-action="fulfill-accept"
                 className="w-full rounded-2xl bg-[#111] px-4 py-2.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-white disabled:opacity-40"
               >
                 {busy ? "Processing…" : "Accept & fund"}

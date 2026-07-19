@@ -258,6 +258,7 @@ export function PhoneTransferModal({ open, onClose }: PhoneTransferModalProps) {
             ))}
             <button
               type="button"
+              data-demo-action="transfer-close"
               onClick={onClose}
               className="mt-1 w-full rounded-2xl border border-black/12 bg-white px-4 py-2.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-[#111]"
             >

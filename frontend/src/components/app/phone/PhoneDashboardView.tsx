@@ -2,8 +2,9 @@
 
 import type { ReactNode } from "react";
 
-import { onramperConfigured } from "@/components/wallet/OnramperWidget";
 import type { UserActivityItem } from "@/lib/user-activity";
+import { useSuiClientContext } from "@mysten/dapp-kit";
+import { isOnrampUiAvailable } from "@/components/wallet/OnramperWidget";
 
 const SECTION_GAP = "mb-5";
 
@@ -324,6 +325,8 @@ export function PhoneDashboardView({
   onPrimaryCardDetails,
   trailing,
 }: PhoneDashboardViewProps) {
+  const { network } = useSuiClientContext();
+  const showBuy = isOnrampUiAvailable(network);
   const normalizedCards = cards.length
     ? cards
     : [{ id: "macro-empty", label: "Total balance", amount: "$0.00", subtitle: "" }];
@@ -404,14 +407,17 @@ export function PhoneDashboardView({
         </SoftLift>
       </div>
 
-      {/* Keep actions outside the scroll clip so soft lifts aren’t truncated. */}
-      <div className={`relative z-10 mt-0.5 grid shrink-0 grid-cols-4 gap-1.5 px-0.5 ${SECTION_GAP}`}>
+      <div
+        className={`relative z-10 mt-0.5 grid shrink-0 grid-cols-4 gap-1.5 px-0.5 ${SECTION_GAP}`}
+        data-demo="home-quick"
+      >
         {PHONE_QUICK_ACTIONS.filter(
-          (a) => a.id !== "buy" || onramperConfigured
+          (a) => a.id !== "buy" || showBuy
         ).map((action) => (
           <SoftLift key={action.id} tone="action">
             <button
               type="button"
+              data-demo-action={action.id}
               onClick={() => onQuickAction?.(action.id)}
               className="relative flex w-full flex-col items-center justify-center gap-1 rounded-[0.85rem] border border-white/60 bg-gradient-to-b from-white/78 to-white/42 px-1 py-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.9)] backdrop-blur-xl transition-[transform,background-color,border-color,box-shadow] duration-150 ease-out hover:-translate-y-0.5 hover:from-white/92 hover:to-white/60 hover:border-white/80 hover:shadow-[inset_0_1px_0_rgba(255,255,255,1),0_6px_14px_rgba(0,0,0,0.08)] active:translate-y-0 active:scale-[0.97] active:from-white/70 active:to-white/40"
             >

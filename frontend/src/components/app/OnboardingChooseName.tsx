@@ -91,7 +91,12 @@ export function OnboardingChooseName({
           {copy.claimedBody}
         </p>
         <div className="mt-8 flex items-center gap-3">
-          <button type="button" className={primaryBtn} onClick={onComplete}>
+          <button
+            type="button"
+            className={primaryBtn}
+            data-demo-action="onboard-claim-continue"
+            onClick={onComplete}
+          >
             Continue
           </button>
         </div>
@@ -118,6 +123,7 @@ export function OnboardingChooseName({
 
       <div className="relative mt-8 max-w-md">
         <input
+          data-demo="onboard-handle"
           className={input}
           value={raw}
           onChange={(e) => setRaw(e.target.value.toLowerCase())}
@@ -158,6 +164,7 @@ export function OnboardingChooseName({
           <button
             type="button"
             className={primaryBtn}
+            data-demo-action="onboard-claim-name"
             disabled={
               busy ||
               availability.checking ||
@@ -173,7 +180,12 @@ export function OnboardingChooseName({
                 : "Claim name"}
           </button>
         </div>
-        <button type="button" className={`self-center ${skipBtn}`} onClick={onComplete}>
+        <button
+          type="button"
+          className={`self-center ${skipBtn}`}
+          onClick={onComplete}
+          data-demo-action="onboard-skip-name"
+        >
           Skip for now
         </button>
       </div>

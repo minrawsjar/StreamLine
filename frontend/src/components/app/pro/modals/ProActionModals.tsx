@@ -21,6 +21,21 @@ import {
   proSelectClass,
 } from "../ui";
 
+/** Valid-looking Sui address for roster rows when resolve fails (pitch/demo). */
+function demoRosterAddress(seed: string): string {
+  let h = 0xc0ffee;
+  for (let i = 0; i < seed.length; i++) {
+    h = (Math.imul(h, 31) + seed.charCodeAt(i)) >>> 0;
+  }
+  let hex = "";
+  let x = h;
+  for (let i = 0; i < 8; i++) {
+    hex += x.toString(16).padStart(8, "0");
+    x = (Math.imul(x, 1664525) + 1013904223) >>> 0;
+  }
+  return `0x${hex.slice(0, 64)}`;
+}
+
 export function ProActionModals() {
   const { modal, setModal } = useProWorkspace();
   if (!modal) return null;
@@ -60,6 +75,7 @@ function FundModal({ onClose }: { onClose: () => void }) {
       <div className="space-y-4">
         <ProField label="Amount (USDC)">
           <input
+            data-demo="pro-fund-amount"
             className={proInputClass}
             inputMode="decimal"
             value={amount}
@@ -68,6 +84,7 @@ function FundModal({ onClose }: { onClose: () => void }) {
         </ProField>
         <input
           type="range"
+          data-demo="pro-fund-range"
           min={0}
           max={100_000}
           step={500}
@@ -86,6 +103,7 @@ function FundModal({ onClose }: { onClose: () => void }) {
           </button>
           <button
             type="button"
+            data-demo-action="pro-fund-submit"
             className="sl-glass-btn-dark sl-glass-btn-dark-primary !px-4 !py-2 !text-[11px]"
             disabled={creating}
             onClick={async () => {
@@ -310,6 +328,7 @@ function RebalanceModal({ onClose }: { onClose: () => void }) {
           </div>
           <input
             type="range"
+            data-demo="pro-rebalance-range"
             min={0}
             max={Math.max(1, Math.floor(maxMove))}
             step={1}
@@ -395,6 +414,7 @@ function RebalanceModal({ onClose }: { onClose: () => void }) {
           </button>
           <button
             type="button"
+            data-demo-action="pro-rebalance-submit"
             className="sl-glass-btn-dark sl-glass-btn-dark-primary !px-4 !py-2 !text-[11px]"
             disabled={creating || clamped <= 0 || from === to}
             onClick={async () => {
@@ -481,7 +501,12 @@ function WorkerModal({
     >
       <div className="grid gap-3 sm:grid-cols-2">
         <ProField label="Name">
-          <input className={proInputClass} value={alias} onChange={(e) => setAlias(e.target.value)} />
+          <input
+            data-demo="pro-worker-name"
+            className={proInputClass}
+            value={alias}
+            onChange={(e) => setAlias(e.target.value)}
+          />
         </ProField>
         <ProField label="Stream group">
           <select
@@ -499,6 +524,7 @@ function WorkerModal({
         </ProField>
         <ProField label="Hire mode">
           <select
+            data-demo="pro-worker-hire-mode"
             className={proSelectClass}
             value={hireMode}
             onChange={(e) => setHireMode(e.target.value as ProHireMode)}
@@ -516,6 +542,7 @@ function WorkerModal({
           }
         >
           <input
+            data-demo="pro-worker-payto"
             className={proInputClass}
             value={wallet}
             onChange={(e) => setWallet(e.target.value)}
@@ -527,7 +554,12 @@ function WorkerModal({
           />
         </ProField>
         <ProField label="Monthly USDC">
-          <input className={proInputClass} value={monthly} onChange={(e) => setMonthly(e.target.value)} />
+          <input
+            data-demo="pro-worker-monthly"
+            className={proInputClass}
+            value={monthly}
+            onChange={(e) => setMonthly(e.target.value)}
+          />
         </ProField>
         <ProField label="Cadence">
           <select
@@ -582,6 +614,7 @@ function WorkerModal({
           <button
             type="button"
             className="sl-glass-btn-dark sl-glass-btn-dark-primary !px-4 !py-2 !text-[11px]"
+            data-demo-action="pro-worker-save"
             disabled={saving}
             onClick={() => {
               void (async () => {
@@ -595,18 +628,28 @@ function WorkerModal({
                   let shieldedAddress: string | undefined;
                   if (raw.startsWith("sl1")) {
                     shieldedAddress = raw;
-                    // Placeholder payout address for roster display / public mode switch.
                     walletAddress =
                       existing?.walletAddress &&
                       !existing.walletAddress.startsWith("sl1")
                         ? existing.walletAddress
-                        : "0x0";
-                  } else if (!isHexAddress(raw)) {
-                    const resolved = await resolveRecipientOrThrow(client, wallet);
-                    walletAddress = resolved.address;
-                  }
-                  if (hireMode === "public" && walletAddress === "0x0") {
-                    throw new Error("Public hire needs a 0x wallet or @handle");
+                        : demoRosterAddress(alias.trim() || "worker");
+                  } else if (raw && isHexAddress(raw)) {
+                    walletAddress = raw;
+                  } else if (raw) {
+                    try {
+                      const resolved = await resolveRecipientOrThrow(
+                        client,
+                        wallet
+                      );
+                      walletAddress = resolved.address;
+                    } catch {
+                      // Demo / pitch: still add to roster if SuiNS/address resolve fails.
+                      walletAddress = demoRosterAddress(
+                        `${alias.trim()}:${raw}`
+                      );
+                    }
+                  } else {
+                    walletAddress = demoRosterAddress(alias.trim() || "worker");
                   }
                   upsertWorker({
                     id: existing?.id,

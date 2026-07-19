@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useCurrentAccount } from "@mysten/dapp-kit";
 
 import { WalletButton } from "@/components/wallet/WalletButton";
@@ -23,6 +23,10 @@ import { PhoneRequestStreamView } from "./PhoneRequestStreamView";
 import { PhoneCreateStreamView } from "./PhoneCreateStreamView";
 import { PhoneClaimGiftCardView } from "./PhoneClaimGiftCardView";
 import { PhoneExportActivityModal } from "./PhoneExportActivityModal";
+import {
+  DEMO_NAV_EVENT,
+  type DemoNavigate,
+} from "@/lib/app-demo-tour";
 import type { PhoneAppRoute } from "./types";
 import type { GiftCardParams } from "@/lib/giftcard";
 
@@ -109,9 +113,19 @@ export function PhoneAppShell({ route, onNavigate }: PhoneAppShellProps) {
     onNavigate("user");
   };
 
+  useEffect(() => {
+    const onNav = (e: Event) => {
+      const detail = (e as CustomEvent<DemoNavigate>).detail;
+      if (!detail || detail.kind !== "phone") return;
+      onNavigate(detail.route);
+    };
+    window.addEventListener(DEMO_NAV_EVENT, onNav);
+    return () => window.removeEventListener(DEMO_NAV_EVENT, onNav);
+  }, [onNavigate]);
+
   return (
     <div className="relative flex min-h-0 flex-1 flex-col">
-      <div className="flex shrink-0 items-center justify-between">
+      <div className="flex shrink-0 items-center justify-between" data-demo="wallet">
         {isScan ? (
           <button
             type="button"

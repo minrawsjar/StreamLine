@@ -51,7 +51,7 @@ export function ToolsScreen() {
     : "mx-auto max-w-lg space-y-5";
 
   return (
-    <div className={shell}>
+    <div className={shell} data-demo="pro-tools-hub">
       {!embedded ? (
         <div>
           <ProEyebrow>Tools</ProEyebrow>
@@ -182,10 +182,11 @@ function ToolSubpanel({
   children: ReactNode;
 }) {
   return (
-    <div className="flex flex-col gap-2">
+    <div className="flex flex-col gap-2" data-demo="pro-tools-subpanel">
       <button
         type="button"
         onClick={onBack}
+        data-demo-action="pro-tools-back"
         className="self-start px-0.5 text-[11px] text-white/40 transition-colors hover:text-white/70"
         aria-label="Back"
       >
@@ -213,6 +214,13 @@ function ToolCard({
     <button
       type="button"
       onClick={onClick}
+      data-demo-action={
+        title === "POS"
+          ? "pro-tools-pos"
+          : title === "Invoices"
+            ? "pro-tools-invoices"
+            : undefined
+      }
       className={`sl-pro-tool-card ${
         embedded ? "px-3.5 py-3.5" : "px-5 py-5"
       }`}

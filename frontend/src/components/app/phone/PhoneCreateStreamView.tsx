@@ -51,7 +51,6 @@ import {
   resolveRecipientOrThrow,
 } from "@/lib/use-resolve-recipient";
 import { suinsBrand } from "@/lib/handle";
-
 type PhoneCreateStreamViewProps = {
   onClose: () => void;
 };
@@ -420,21 +419,28 @@ export function PhoneCreateStreamView({ onClose }: PhoneCreateStreamViewProps) {
 
   if (created) {
     return (
+      <div data-demo="create-done">
       <PhoneFlowShell
         step={3}
         totalSteps={3}
         title="Stream created"
         footer={
-          <button type="button" onClick={onDone} className={btnPrimary}>
+          <button
+            type="button"
+            onClick={onDone}
+            className={btnPrimary}
+            data-demo-action="create-done-btn"
+          >
             Done
           </button>
         }
       >
         <p className="text-center text-[12px] leading-snug text-[#666]">
           {status ??
-            "Funds are locked and earning yield. Approve request start when the recipient submits it."}
+            "Funds are locked. Share the stream with the recipient — private by default."}
         </p>
       </PhoneFlowShell>
+      </div>
     );
   }
 
@@ -446,7 +452,12 @@ export function PhoneCreateStreamView({ onClose }: PhoneCreateStreamViewProps) {
       footer={
         <>
           {step < 3 ? (
-            <button type="button" onClick={goNext} className={btnPrimary}>
+            <button
+              type="button"
+              onClick={goNext}
+              className={btnPrimary}
+              data-demo-action="create-continue"
+            >
               Continue
             </button>
           ) : (
@@ -455,6 +466,7 @@ export function PhoneCreateStreamView({ onClose }: PhoneCreateStreamViewProps) {
               onClick={onCreate}
               disabled={!account || !deployed || busy}
               className={btnPrimary}
+              data-demo="create-submit"
             >
               {busy ? "Creating…" : "Create stream"}
             </button>
@@ -475,6 +487,7 @@ export function PhoneCreateStreamView({ onClose }: PhoneCreateStreamViewProps) {
         <>
           <PhoneField label="Recipient">
             <input
+              data-demo="create-recipient"
               value={freelancer}
               onChange={(e) => setFreelancer(e.target.value)}
               placeholder={`@${suinsBrand()} or 0x…`}
@@ -506,6 +519,7 @@ export function PhoneCreateStreamView({ onClose }: PhoneCreateStreamViewProps) {
 
           <PhoneField label="Amount (USDC)">
             <input
+              data-demo="create-amount"
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
               className={phoneInputClass}
@@ -535,6 +549,7 @@ export function PhoneCreateStreamView({ onClose }: PhoneCreateStreamViewProps) {
       {step === 3 && (
         <>
           <PhoneToggleRow
+            data-demo="create-private"
             title="Private stream"
             subtitle="Hide amount, who & when"
             checked={isPrivate}

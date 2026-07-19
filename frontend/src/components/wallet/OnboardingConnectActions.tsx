@@ -153,6 +153,7 @@ export function OnboardingConnectActions({
           type="button"
           disabled={isPending}
           onClick={onOpenWalletModal}
+          data-demo-action="connect-sui"
           className={cardBtn}
         >
           <WalletGlyph className={`h-4 w-4 shrink-0 ${iconTone}`} />
