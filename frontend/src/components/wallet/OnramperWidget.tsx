@@ -1,7 +1,18 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useCurrentAccount, useSuiClientContext } from "@mysten/dapp-kit";
+import {
+  useCurrentAccount,
+  useSuiClient,
+  useSuiClientContext,
+} from "@mysten/dapp-kit";
+import { Transaction, coinWithBalance } from "@mysten/sui/transactions";
+import { useQueryClient } from "@tanstack/react-query";
+
+import { TEST_USDC, useNetworkVariable } from "@/lib/networks";
+import { buildMintTestUsdc } from "@/lib/streamline-tx";
+import { toBaseUnits } from "@/lib/stream-math";
+import { useGaslessExecute } from "@/lib/use-gasless";
 
 /**
  * Fiat ⇄ USDC via the Onramper aggregator widget (30+ providers, one iframe).
@@ -13,11 +24,16 @@ import { useCurrentAccount, useSuiClientContext } from "@mysten/dapp-kit";
  *   NEXT_PUBLIC_ONRAMPER_CRYPTO  — Onramper token id, default "usdc_sui".
  *
  * Onramper aggregates real providers on mainnet — actual buys/sells settle in
- * mainnet USDC. On a testnet app the widget is the demoable flow; it flips to
- * live by using a Sui *mainnet* address. No backend, no new dependency.
+ * mainnet USDC. On testnet the checkout UI is mocked, but balances move for real:
+ *   buy  → same permissionless `mock_usdc::faucet` as profile "Mint 1k USDC"
+ *   sell → user transfers USDC to a void address (demo off-ramp sink)
  *
  * Sell mode uses `sell_`-prefixed params; `apiKey` + `wallets` are shared.
  */
+
+/** Testnet off-ramp sink — coins leave the wallet and are effectively burned. */
+const RAMP_VOID =
+  "0x000000000000000000000000000000000000000000000000000000000000dead";
 
 export type OnrampMode = "buy" | "sell";
 
@@ -111,12 +127,24 @@ function OnramperIframe({ mode, address }: { mode: OnrampMode; address: string }
 const FEE_RATE = 0.01; // 1% spread, so the quote looks like a real aggregator
 const QUICK = [50, 100, 300];
 
+function refreshBalances(queryClient: ReturnType<typeof useQueryClient>) {
+  void queryClient.invalidateQueries({
+    predicate: (q) => q.queryKey[1] === "getBalance",
+  });
+  // Chain indexing can lag a beat behind the digest.
+  window.setTimeout(() => {
+    void queryClient.invalidateQueries({
+      predicate: (q) => q.queryKey[1] === "getBalance",
+    });
+  }, 2500);
+}
+
 /**
  * Testnet checkout — mirrors an on-ramp aggregator widget (You spend / You get /
- * Pay using / Buy) but the delivery leg is our keeper faucet: on "Buy", the
- * keeper mints test USDC straight to the buyer's Sui wallet (no signature), so
- * the buy *feels* real and USDC actually lands. Testnet demo only; mainnet uses
- * the real ramp above. Deliberately unbranded — not "Powered by Onramper".
+ * Pay using / Buy). Balances move for real on testnet:
+ *   Buy  → same `mock_usdc::faucet` as profile mint (user-signed / gasless)
+ *   Sell → user signs a transfer of USDC to a void address
+ * Mainnet uses the real Onramper iframe above.
  */
 function TestnetCheckout({
   mode,
@@ -127,6 +155,10 @@ function TestnetCheckout({
   address: string;
   onClose: () => void;
 }) {
+  const client = useSuiClient();
+  const usdcType = useNetworkVariable("usdcType");
+  const { execute } = useGaslessExecute();
+  const queryClient = useQueryClient();
   const [spend, setSpend] = useState(300);
   const [status, setStatus] = useState<"idle" | "busy" | "done" | "error">("idle");
   const [digest, setDigest] = useState<string | null>(null);
@@ -138,21 +170,68 @@ function TestnetCheckout({
   const submit = async () => {
     setStatus("busy");
     setErr(null);
-    if (!buy) {
-      // Sell is a display-only confirmation (no token movement).
-      setTimeout(() => setStatus("done"), 1100);
-      return;
-    }
     try {
-      const res = await fetch("/api/faucet/deliver", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ address, amount: receive }),
+      if (buy) {
+        if (receive <= 0) throw new Error("Enter a valid amount");
+        await new Promise<void>((resolve, reject) => {
+          void execute(
+            buildMintTestUsdc({
+              packageId: TEST_USDC.packageId,
+              treasuryId: TEST_USDC.treasuryId,
+              amountBase: toBaseUnits(receive),
+            }),
+            {
+              onSuccess: async ({ digest: d }) => {
+                try {
+                  await client.waitForTransaction({ digest: d });
+                  setDigest(d);
+                  refreshBalances(queryClient);
+                  setStatus("done");
+                  resolve();
+                } catch (e) {
+                  reject(e);
+                }
+              },
+              onError: (e) => reject(e),
+            }
+          );
+        });
+        return;
+      }
+
+      // Off-ramp: pull USDC out of the wallet into the void sink.
+      const amountBase = BigInt(Math.round(spend * 1_000_000));
+      if (amountBase <= 0n) throw new Error("Enter a valid amount");
+      const bal = await client.getBalance({ owner: address, coinType: usdcType });
+      if (BigInt(bal.totalBalance) < amountBase) {
+        throw new Error("Not enough USDC balance");
+      }
+      const tx = new Transaction();
+      tx.setSenderIfNotSet(address);
+      tx.transferObjects(
+        [coinWithBalance({ type: usdcType, balance: amountBase })],
+        RAMP_VOID
+      );
+      await new Promise<void>((resolve, reject) => {
+        void execute(
+          tx,
+          {
+            onSuccess: async ({ digest: d }) => {
+              try {
+                await client.waitForTransaction({ digest: d });
+                setDigest(d);
+                refreshBalances(queryClient);
+                setStatus("done");
+                resolve();
+              } catch (e) {
+                reject(e);
+              }
+            },
+            onError: (e) => reject(e),
+          },
+          { allowedRecipients: [RAMP_VOID] }
+        );
       });
-      const data = (await res.json()) as { digest?: string; error?: string };
-      if (!res.ok || !data.digest) throw new Error(data.error || "delivery failed");
-      setDigest(data.digest);
-      setStatus("done");
     } catch (e) {
       setErr(e instanceof Error ? e.message : "delivery failed");
       setStatus("error");
@@ -168,11 +247,11 @@ function TestnetCheckout({
         <p className="text-[14px] font-semibold text-[#111]">
           {buy
             ? `${receive} USDC delivered to your Sui wallet`
-            : `Testnet demo — sell $${receive}`}
+            : `${spend} USDC sent off-wallet`}
         </p>
         {!buy ? (
           <p className="-mt-1 text-[11px] text-[#888]">
-            Off-ramp to a real bank is mainnet-only; no tokens moved.
+            Testnet demo · tokens moved to void (bank payout is mainnet-only).
           </p>
         ) : null}
         {digest && (
@@ -289,21 +368,26 @@ function TestnetCheckout({
             : "Cash out"}
       </button>
       <p className="text-center text-[10px] text-[#bbb]">
-        Testnet demo · delivered from faucet
+        {buy
+          ? "Testnet demo · same faucet as profile mint"
+          : "Testnet demo · USDC leaves your wallet (void sink)"}
       </p>
     </div>
   );
 }
 
-/** Full-screen modal: testnet → mock checkout (faucet delivery), mainnet → Onramper. */
+/** In-shell or floating modal: testnet → mock checkout, mainnet → Onramper. */
 export function OnramperModal({
   open,
   mode,
   onClose,
+  /** When true, fills the phone/app shell (no black page overlay). */
+  contained = false,
 }: {
   open: boolean;
   mode: OnrampMode;
   onClose: () => void;
+  contained?: boolean;
 }) {
   const account = useCurrentAccount();
   const { network } = useSuiClientContext();
@@ -313,16 +397,42 @@ export function OnramperModal({
   if (!testnet && !API_KEY) return null; // mainnet needs a configured ramp
   const title = mode === "buy" ? "Buy USDC" : "Cash out USDC";
 
+  const body = testnet ? (
+    <TestnetCheckout mode={mode} address={account.address} onClose={onClose} />
+  ) : (
+    <OnramperIframe mode={mode} address={account.address} />
+  );
+
+  if (contained) {
+    return (
+      <div className="absolute inset-0 z-40 flex flex-col bg-white/92 backdrop-blur-xl">
+        <div className="flex shrink-0 items-center justify-between border-b border-black/8 px-4 py-3">
+          <span className="text-[15px] font-semibold tracking-tight text-[#111]">
+            {title}
+          </span>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-xl border border-black/10 bg-white/80 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-[#111]"
+          >
+            Close
+          </button>
+        </div>
+        <div className="flex min-h-0 flex-1 flex-col">{body}</div>
+      </div>
+    );
+  }
+
   return (
     <div
-      className="fixed inset-0 z-[120] flex items-center justify-center bg-black/50 p-4"
+      className="fixed inset-0 z-[120] flex items-center justify-center bg-[#2b2a5e]/25 p-4 backdrop-blur-sm"
       onClick={onClose}
     >
       <div
-        className="relative flex h-[680px] max-h-[90vh] w-[420px] max-w-full flex-col overflow-hidden rounded-2xl bg-white shadow-2xl"
+        className="relative flex h-[min(680px,90vh)] w-[min(420px,100%)] flex-col overflow-hidden rounded-[1.5rem] border border-white/60 bg-white/95 shadow-[0_24px_60px_rgba(43,42,94,0.18)] backdrop-blur-xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between border-b border-black/10 px-4 py-2.5">
+        <div className="flex items-center justify-between border-b border-black/8 px-4 py-2.5">
           <span className="text-[12px] font-semibold text-[#111]">{title}</span>
           <button
             type="button"
@@ -332,11 +442,7 @@ export function OnramperModal({
             Close
           </button>
         </div>
-        {testnet ? (
-          <TestnetCheckout mode={mode} address={account.address} onClose={onClose} />
-        ) : (
-          <OnramperIframe mode={mode} address={account.address} />
-        )}
+        {body}
       </div>
     </div>
   );

@@ -355,6 +355,7 @@ export function PhoneTransferModal({ open, onClose }: PhoneTransferModalProps) {
         open={sellOpen}
         mode="sell"
         onClose={() => setSellOpen(false)}
+        contained
       />
     </div>
   );

@@ -163,7 +163,6 @@ type PhoneHomeViewProps = {
   onRequest?: () => void;
   onTransfer?: () => void;
   onBuy?: () => void;
-  onCashOut?: () => void;
 };
 
 type HomeDetailsView =
@@ -180,7 +179,6 @@ export function PhoneHomeView({
   onRequest,
   onTransfer,
   onBuy,
-  onCashOut,
 }: PhoneHomeViewProps) {
   const account = useCurrentAccount();
   const usdcType = useNetworkVariable("usdcType");
@@ -555,7 +553,6 @@ export function PhoneHomeView({
     if (id === "request") onRequest?.();
     if (id === "transfer") onTransfer?.();
     if (id === "buy") onBuy?.();
-    if (id === "cashout") onCashOut?.();
   };
 
   const onRaiseCompletion = (streamId: string) => {

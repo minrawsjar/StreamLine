@@ -41,24 +41,13 @@ export const PHONE_QUICK_ACTIONS = [
   },
   {
     // On-ramp (fiat → USDC). Only shown when Onramper is configured.
+    // Off-ramp lives under Transfer → Bank (no separate Cash out tile).
     id: "buy",
     label: "Buy",
     icon: (
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
         <rect x="2" y="5" width="20" height="14" rx="2" />
         <path d="M2 10h20" />
-      </svg>
-    ),
-  },
-  {
-    // Off-ramp (USDC → fiat). Only shown when Onramper is configured.
-    id: "cashout",
-    label: "Cash out",
-    icon: (
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-        <path d="M12 3v12" />
-        <path d="m7 12 5 5 5-5" />
-        <path d="M4 21h16" />
       </svg>
     ),
   },
@@ -416,20 +405,20 @@ export function PhoneDashboardView({
       </div>
 
       {/* Keep actions outside the scroll clip so soft lifts aren’t truncated. */}
-      <div className={`relative z-10 mt-0.5 grid shrink-0 grid-cols-3 gap-2.5 px-1 ${SECTION_GAP}`}>
+      <div className={`relative z-10 mt-0.5 grid shrink-0 grid-cols-4 gap-1.5 px-0.5 ${SECTION_GAP}`}>
         {PHONE_QUICK_ACTIONS.filter(
-          (a) => (a.id !== "buy" && a.id !== "cashout") || onramperConfigured
+          (a) => a.id !== "buy" || onramperConfigured
         ).map((action) => (
           <SoftLift key={action.id} tone="action">
             <button
               type="button"
               onClick={() => onQuickAction?.(action.id)}
-              className="relative flex w-full flex-col items-center justify-center gap-1.5 rounded-[0.85rem] border border-white/60 bg-gradient-to-b from-white/78 to-white/42 px-1.5 py-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.9)] backdrop-blur-xl transition-[transform,background-color,border-color,box-shadow] duration-150 ease-out hover:-translate-y-0.5 hover:from-white/92 hover:to-white/60 hover:border-white/80 hover:shadow-[inset_0_1px_0_rgba(255,255,255,1),0_6px_14px_rgba(0,0,0,0.08)] active:translate-y-0 active:scale-[0.97] active:from-white/70 active:to-white/40"
+              className="relative flex w-full flex-col items-center justify-center gap-1 rounded-[0.85rem] border border-white/60 bg-gradient-to-b from-white/78 to-white/42 px-1 py-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.9)] backdrop-blur-xl transition-[transform,background-color,border-color,box-shadow] duration-150 ease-out hover:-translate-y-0.5 hover:from-white/92 hover:to-white/60 hover:border-white/80 hover:shadow-[inset_0_1px_0_rgba(255,255,255,1),0_6px_14px_rgba(0,0,0,0.08)] active:translate-y-0 active:scale-[0.97] active:from-white/70 active:to-white/40"
             >
               <span className="flex h-6 w-6 items-center justify-center text-[#111]">
                 {action.icon}
               </span>
-              <span className="text-[8px] font-semibold uppercase tracking-[0.11em] text-[#222]">
+              <span className="text-[7px] font-semibold uppercase tracking-[0.08em] text-[#222]">
                 {action.label}
               </span>
             </button>

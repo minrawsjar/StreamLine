@@ -35,7 +35,6 @@ export function PhoneUserShell({ onNavigate }: PhoneUserShellProps) {
         onRequest={() => onNavigate("request")}
         onTransfer={() => setTransferOpen(true)}
         onBuy={() => setRampMode("buy")}
-        onCashOut={() => setRampMode("sell")}
       />
       <PhoneTransferModal
         open={transferOpen}
@@ -45,6 +44,7 @@ export function PhoneUserShell({ onNavigate }: PhoneUserShellProps) {
         open={rampMode !== null}
         mode={rampMode ?? "buy"}
         onClose={() => setRampMode(null)}
+        contained
       />
     </div>
   );

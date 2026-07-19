@@ -1,20 +1,26 @@
 "use client";
 
 import { useCallback, useEffect, useId, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
 import { Html5Qrcode } from "html5-qrcode";
 
 import { parseStreamRequestLink, type StreamRequestParams } from "@/lib/request-link";
-import { parseGiftCardUrl } from "@/lib/giftcard";
+import {
+  parseGiftCardUrl,
+  type GiftCardParams,
+} from "@/lib/giftcard";
 import { PhoneField, phoneInputClass } from "./PhoneFormParts";
 
 type PhoneScanViewProps = {
   onResult: (request: StreamRequestParams) => void;
+  onGiftCard: (gift: GiftCardParams) => void;
   onCancel: () => void;
 };
 
-export function PhoneScanView({ onResult, onCancel }: PhoneScanViewProps) {
-  const router = useRouter();
+export function PhoneScanView({
+  onResult,
+  onGiftCard,
+  onCancel,
+}: PhoneScanViewProps) {
   const scannerId = useId().replace(/:/g, "");
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const [manualLink, setManualLink] = useState("");
@@ -38,16 +44,14 @@ export function PhoneScanView({ onResult, onCancel }: PhoneScanViewProps) {
   }, []);
 
   // Accept both link kinds: a stream-funding request (handled in-app) or a
-  // gift-card claim link (its own /g/… route → navigate there). Returns false
-  // if the text is neither.
+  // gift-card claim (stays in the phone shell — no /g/ navigation).
   const routeLink = useCallback(
     (text: string): boolean => {
       const gift = parseGiftCardUrl(text);
       if (gift) {
         void stopScanner();
         setError(null);
-        const u = new URL(text.trim());
-        router.push(u.pathname + u.search);
+        onGiftCard(gift);
         return true;
       }
       const parsed = parseStreamRequestLink(text);
@@ -59,7 +63,7 @@ export function PhoneScanView({ onResult, onCancel }: PhoneScanViewProps) {
       }
       return false;
     },
-    [onResult, router, stopScanner]
+    [onGiftCard, onResult, stopScanner]
   );
 
   const handleDecoded = useCallback(

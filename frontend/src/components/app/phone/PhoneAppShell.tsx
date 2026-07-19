@@ -21,8 +21,10 @@ import { PhoneScanView } from "./PhoneScanView";
 import { PhoneFulfillRequestView } from "./PhoneFulfillRequestView";
 import { PhoneRequestStreamView } from "./PhoneRequestStreamView";
 import { PhoneCreateStreamView } from "./PhoneCreateStreamView";
+import { PhoneClaimGiftCardView } from "./PhoneClaimGiftCardView";
 import { PhoneExportActivityModal } from "./PhoneExportActivityModal";
 import type { PhoneAppRoute } from "./types";
+import type { GiftCardParams } from "@/lib/giftcard";
 
 type PhoneAppShellProps = {
   route: PhoneAppRoute;
@@ -51,6 +53,7 @@ export function PhoneAppShell({ route, onNavigate }: PhoneAppShellProps) {
   const isPro = route === "pro";
   const isScan = route === "scan";
   const isFulfill = route === "fulfill";
+  const isClaimGift = route === "claim-gift";
   const isRequest = route === "request";
   const isCreate = route === "create";
   /** Full-bleed onboarding — hide shell chrome until wallet + name step done. */
@@ -61,6 +64,7 @@ export function PhoneAppShell({ route, onNavigate }: PhoneAppShellProps) {
     route !== "launcher" &&
     !isScan &&
     !isFulfill &&
+    !isClaimGift &&
     !isRequest &&
     !isCreate &&
     !appOnboarding;
@@ -68,6 +72,7 @@ export function PhoneAppShell({ route, onNavigate }: PhoneAppShellProps) {
   const [exportOpen, setExportOpen] = useState(false);
   const [pendingRequest, setPendingRequestState] =
     useState<StreamRequestParams | null>(readStoredRequest);
+  const [pendingGift, setPendingGift] = useState<GiftCardParams | null>(null);
 
   const setPendingRequest = (req: StreamRequestParams | null) => {
     setPendingRequestState(req);
@@ -89,8 +94,18 @@ export function PhoneAppShell({ route, onNavigate }: PhoneAppShellProps) {
     onNavigate("fulfill");
   };
 
+  const handleGiftCard = (gift: GiftCardParams) => {
+    setPendingGift(gift);
+    onNavigate("claim-gift");
+  };
+
   const clearRequest = () => {
     setPendingRequest(null);
+    onNavigate("user");
+  };
+
+  const clearGift = () => {
+    setPendingGift(null);
     onNavigate("user");
   };
 
@@ -119,6 +134,18 @@ export function PhoneAppShell({ route, onNavigate }: PhoneAppShellProps) {
             <StreamLineMark size="sm" variant="default" />
             <span className="truncate text-sm font-bold tracking-tight text-[#111]">
               Review
+            </span>
+          </button>
+        ) : isClaimGift ? (
+          <button
+            type="button"
+            onClick={clearGift}
+            className="flex min-w-0 cursor-pointer items-center gap-2 text-left"
+            aria-label="Back"
+          >
+            <StreamLineMark size="sm" variant="default" />
+            <span className="truncate text-sm font-bold tracking-tight text-[#111]">
+              Gift card
             </span>
           </button>
         ) : isRequest ? (
@@ -179,7 +206,12 @@ export function PhoneAppShell({ route, onNavigate }: PhoneAppShellProps) {
           </button>
         ) : !appOnboarding && route !== "launcher" ? (
           <div className="flex shrink-0 items-center gap-1.5">
-            {!isPro && !isScan && !isFulfill && !isRequest && !isCreate && (
+            {!isPro &&
+              !isScan &&
+              !isFulfill &&
+              !isClaimGift &&
+              !isRequest &&
+              !isCreate && (
               <ScanIconButton onClick={openScan} />
             )}
             <WalletButton
@@ -219,6 +251,7 @@ export function PhoneAppShell({ route, onNavigate }: PhoneAppShellProps) {
         {route === "scan" && (
           <PhoneScanView
             onResult={handleScanResult}
+            onGiftCard={handleGiftCard}
             onCancel={() => onNavigate(scanReturnRoute)}
           />
         )}
@@ -228,6 +261,30 @@ export function PhoneAppShell({ route, onNavigate }: PhoneAppShellProps) {
             onAccepted={clearRequest}
             onDecline={clearRequest}
           />
+        )}
+        {route === "claim-gift" && pendingGift && (
+          <PhoneClaimGiftCardView gift={pendingGift} onDone={clearGift} />
+        )}
+        {route === "claim-gift" && !pendingGift && (
+          <div className="flex flex-1 flex-col items-center justify-center gap-3 px-6 text-center">
+            <p className="text-[12px] leading-snug text-[#666]">
+              No gift card loaded.
+            </p>
+            <button
+              type="button"
+              onClick={openScan}
+              className="w-full max-w-[220px] rounded-2xl bg-[#111] px-4 py-2.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-white"
+            >
+              Scan a gift card
+            </button>
+            <button
+              type="button"
+              onClick={() => onNavigate("user")}
+              className="w-full max-w-[220px] rounded-2xl border border-black/12 bg-white px-4 py-2.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-[#111]"
+            >
+              Back to wallet
+            </button>
+          </div>
         )}
         {route === "request" && (
           <PhoneRequestStreamView onClose={() => onNavigate("user")} />

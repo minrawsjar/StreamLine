@@ -33,6 +33,7 @@ type PhoneTab = "overview" | "streams" | "people" | "treasury" | "tools" | "repo
 export function PhoneProWorkspace() {
   const [tab, setTab] = useState<PhoneTab>("overview");
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const [rampMode, setRampMode] = useState<OnrampMode | null>(null);
 
   useEffect(() => {
     return onProAction((action) => {
@@ -53,7 +54,7 @@ export function PhoneProWorkspace() {
         )}
         {tab === "streams" && <StreamsTab />}
         {tab === "people" && <PeopleTab />}
-        {tab === "treasury" && <TreasuryTab />}
+        {tab === "treasury" && <TreasuryTab onRamp={setRampMode} />}
         {tab === "tools" && <ToolsScreen />}
         {tab === "reports" && (
           <ReportsTab onBack={() => setTab("overview")} />
@@ -63,6 +64,12 @@ export function PhoneProWorkspace() {
       <ProPhoneDock tab={tab} onTab={setTab} />
 
       <ProActionModals />
+      <OnramperModal
+        open={rampMode !== null}
+        mode={rampMode ?? "buy"}
+        onClose={() => setRampMode(null)}
+        contained
+      />
     </div>
   );
 }
@@ -981,10 +988,9 @@ function ReportsTab({ onBack }: { onBack: () => void }) {
   return <ReportsScreen onBack={onBack} />;
 }
 
-function TreasuryTab() {
+function TreasuryTab({ onRamp }: { onRamp: (mode: OnrampMode) => void }) {
   const { workspace, totals, setModal } = useProWorkspace();
   const account = useCurrentAccount();
-  const [rampMode, setRampMode] = useState<OnrampMode | null>(null);
   const alloc = workspace.pool.allocation;
   const total = alloc.idle + alloc.yield_vault + alloc.reserve || 1;
   const canRamp = onramperConfigured && !!account;
@@ -1115,14 +1121,14 @@ function TreasuryTab() {
               <div className="grid grid-cols-2 gap-1.5">
                 <button
                   type="button"
-                  onClick={() => setRampMode("buy")}
+                  onClick={() => onRamp("buy")}
                   className="rounded-xl border border-white/[0.08] bg-transparent px-2 py-2 text-[10px] font-medium text-white/50 transition-colors active:text-white/80"
                 >
                   Buy USDC
                 </button>
                 <button
                   type="button"
-                  onClick={() => setRampMode("sell")}
+                  onClick={() => onRamp("sell")}
                   className="rounded-xl border border-white/[0.08] bg-transparent px-2 py-2 text-[10px] font-medium text-white/50 transition-colors active:text-white/80"
                 >
                   Sell USDC
@@ -1132,12 +1138,6 @@ function TreasuryTab() {
           ) : null}
         </div>
       </section>
-
-      <OnramperModal
-        open={rampMode !== null}
-        mode={rampMode ?? "buy"}
-        onClose={() => setRampMode(null)}
-      />
     </div>
   );
 }

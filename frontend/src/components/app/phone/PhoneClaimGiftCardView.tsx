@@ -99,7 +99,8 @@ export function PhoneClaimGiftCardView({
           await client.waitForTransaction({ digest });
           setClaimed(true);
           setStatus(`Claimed — ${digest.slice(0, 12)}…`);
-          onDone?.();
+          // Brief beat so the success state is visible, then back to home.
+          window.setTimeout(() => onDone?.(), 900);
         },
         onError: (e) => setStatus(e.message),
       });
@@ -148,15 +149,17 @@ export function PhoneClaimGiftCardView({
           )}
         </div>
 
-        {!account && (
-          <div className="mt-4 flex justify-center">
+        {!account ? (
+          <div className="mt-4 flex h-11 items-center justify-center">
             <WalletButton className="sl-glass-btn sl-glass-btn-primary !px-6 !py-2.5 !text-[11px]" />
           </div>
+        ) : (
+          <div className="mt-4 h-11" aria-hidden />
         )}
 
-        {status && (
-          <p className="mt-3 text-[11px] leading-snug text-[#555]">{status}</p>
-        )}
+        <p className="mt-3 min-h-[2.5rem] text-[11px] leading-snug text-[#555]">
+          {status ?? ""}
+        </p>
       </div>
       <div className={phoneFlowFooter}>
         <button
