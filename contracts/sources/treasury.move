@@ -16,6 +16,7 @@ module streamline::treasury;
 use sui::balance::{Self, Balance};
 use sui::clock::Clock;
 use sui::coin::{Self, Coin};
+use sui::dynamic_field as df;
 use sui::event;
 use streamline::yield_vault::{Self, YieldVault, VaultReceipt};
 
@@ -23,6 +24,12 @@ const ENotOwner: u64 = 0;
 const EZeroAmount: u64 = 1;
 const EInsufficientIdle: u64 = 2;
 const ENotInvested: u64 = 3;
+const EInsufficientReserve: u64 = 4;
+
+/// Dynamic-field key for the earmarked reserve balance. Held as a dynamic field
+/// (not a struct field) so it can be added by an upgrade — struct layouts are
+/// frozen across upgrades, dynamic fields are not.
+public struct ReserveKey has copy, drop, store {}
 
 /// An org's capital pool. Shared so the keeper / sponsor can co-sign; `owner`
 /// gates every value-removing call.
@@ -40,6 +47,8 @@ public struct Funded has copy, drop { treasury_id: ID, amount: u64 }
 public struct Withdrawn has copy, drop { treasury_id: ID, amount: u64 }
 public struct Invested has copy, drop { treasury_id: ID, amount: u64 }
 public struct Divested has copy, drop { treasury_id: ID, amount: u64 }
+public struct Reserved has copy, drop { treasury_id: ID, amount: u64 }
+public struct Unreserved has copy, drop { treasury_id: ID, amount: u64 }
 
 /// Open an empty treasury for coin `T`, owned by the caller.
 public fun open<T>(ctx: &mut TxContext) {
@@ -116,6 +125,35 @@ public fun divest<T>(
     event::emit(Divested { treasury_id: object::id(t), amount });
 }
 
+/// Park `amount` of idle float into an earmarked reserve cushion. Reserve stays
+/// liquid (no yield) but is held apart from the investable idle float — a payroll
+/// buffer the owner sets aside. Stored as a dynamic-field `Balance<T>`.
+public fun to_reserve<T>(t: &mut Treasury<T>, amount: u64, ctx: &mut TxContext) {
+    assert!(ctx.sender() == t.owner, ENotOwner);
+    assert!(amount > 0, EZeroAmount);
+    assert!(t.idle.value() >= amount, EInsufficientIdle);
+    let part = t.idle.split(amount);
+    if (df::exists_with_type<ReserveKey, Balance<T>>(&t.id, ReserveKey {})) {
+        let r: &mut Balance<T> = df::borrow_mut(&mut t.id, ReserveKey {});
+        r.join(part);
+    } else {
+        df::add(&mut t.id, ReserveKey {}, part);
+    };
+    event::emit(Reserved { treasury_id: object::id(t), amount });
+}
+
+/// Release `amount` from the reserve cushion back into investable idle float.
+public fun from_reserve<T>(t: &mut Treasury<T>, amount: u64, ctx: &mut TxContext) {
+    assert!(ctx.sender() == t.owner, ENotOwner);
+    assert!(amount > 0, EZeroAmount);
+    assert!(df::exists_with_type<ReserveKey, Balance<T>>(&t.id, ReserveKey {}), EInsufficientReserve);
+    let r: &mut Balance<T> = df::borrow_mut(&mut t.id, ReserveKey {});
+    assert!(r.value() >= amount, EInsufficientReserve);
+    let part = r.split(amount);
+    t.idle.join(part);
+    event::emit(Unreserved { treasury_id: object::id(t), amount });
+}
+
 /// Make sure at least `amount` sits in idle float, divesting the yield position
 /// if needed. Used before payroll hires so a single PTB can fund a stream from
 /// the pool even when capital is earning.
@@ -148,6 +186,14 @@ public fun invested_value<T>(
 ): u64 {
     if (t.invested.is_some()) {
         yield_vault::receipt_value(vault, t.invested.borrow(), now)
+    } else { 0 }
+}
+
+/// Earmarked reserve cushion value (0 if none set aside).
+public fun reserve_value<T>(t: &Treasury<T>): u64 {
+    if (df::exists_with_type<ReserveKey, Balance<T>>(&t.id, ReserveKey {})) {
+        let r: &Balance<T> = df::borrow(&t.id, ReserveKey {});
+        r.value()
     } else { 0 }
 }
 

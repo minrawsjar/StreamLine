@@ -180,8 +180,15 @@ function WithdrawModal({ onClose }: { onClose: () => void }) {
 }
 
 function RebalanceModal({ onClose }: { onClose: () => void }) {
-  const { investTreasury, divestTreasury, rebalance, totals, workspace, creating } =
-    useProWorkspace();
+  const {
+    investTreasury,
+    divestTreasury,
+    rebalanceReserve,
+    rebalance,
+    totals,
+    workspace,
+    creating,
+  } = useProWorkspace();
   const [from, setFrom] = useState<ProPoolBucket>("idle");
   const [to, setTo] = useState<ProPoolBucket>("yield_vault");
   const [amount, setAmount] = useState(0);
@@ -409,6 +416,16 @@ function RebalanceModal({ onClose }: { onClose: () => void }) {
               if (from === "yield_vault" && to === "idle") {
                 try {
                   if (await divestTreasury()) onClose();
+                } catch (e) {
+                  setErr(e instanceof Error ? e.message : String(e));
+                }
+                return;
+              }
+              // Any leg touching Reserve: real on-chain to_reserve/from_reserve
+              // (with an invest/divest PTB for the yield legs).
+              if (from === "reserve" || to === "reserve") {
+                try {
+                  if (await rebalanceReserve(from, to, clamped)) onClose();
                 } catch (e) {
                   setErr(e instanceof Error ? e.message : String(e));
                 }

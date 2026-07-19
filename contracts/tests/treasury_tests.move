@@ -88,3 +88,49 @@ fun outsider_cannot_withdraw() {
     clock::destroy_for_testing(clk);
     ts::end(sc);
 }
+
+#[test]
+fun reserve_round_trip() {
+    let mut sc = ts::begin(OWNER);
+    tr::open<SUI>(ts::ctx(&mut sc));
+
+    ts::next_tx(&mut sc, OWNER);
+    {
+        let mut t = ts::take_shared<Treasury<SUI>>(&sc);
+        tr::deposit<SUI>(&mut t, coin::mint_for_testing<SUI>(100 * UNIT, ts::ctx(&mut sc)));
+        assert!(tr::reserve_value<SUI>(&t) == 0, 0);
+
+        // Park 30 → idle 70, reserve 30. Park 10 more → reserve 40, idle 60.
+        tr::to_reserve<SUI>(&mut t, 30 * UNIT, ts::ctx(&mut sc));
+        assert!(tr::idle_value<SUI>(&t) == 70 * UNIT, 1);
+        assert!(tr::reserve_value<SUI>(&t) == 30 * UNIT, 2);
+        tr::to_reserve<SUI>(&mut t, 10 * UNIT, ts::ctx(&mut sc));
+        assert!(tr::reserve_value<SUI>(&t) == 40 * UNIT, 3);
+        assert!(tr::idle_value<SUI>(&t) == 60 * UNIT, 4);
+
+        // Release 25 → reserve 15, idle 85. Nothing left the treasury.
+        tr::from_reserve<SUI>(&mut t, 25 * UNIT, ts::ctx(&mut sc));
+        assert!(tr::reserve_value<SUI>(&t) == 15 * UNIT, 5);
+        assert!(tr::idle_value<SUI>(&t) == 85 * UNIT, 6);
+        assert!(tr::idle_value<SUI>(&t) + tr::reserve_value<SUI>(&t) == 100 * UNIT, 7);
+        ts::return_shared(t);
+    };
+
+    ts::end(sc);
+}
+
+#[test]
+#[expected_failure(abort_code = streamline::treasury::EInsufficientReserve)]
+fun cannot_over_release_reserve() {
+    let mut sc = ts::begin(OWNER);
+    tr::open<SUI>(ts::ctx(&mut sc));
+    ts::next_tx(&mut sc, OWNER);
+    {
+        let mut t = ts::take_shared<Treasury<SUI>>(&sc);
+        tr::deposit<SUI>(&mut t, coin::mint_for_testing<SUI>(100 * UNIT, ts::ctx(&mut sc)));
+        tr::to_reserve<SUI>(&mut t, 20 * UNIT, ts::ctx(&mut sc));
+        tr::from_reserve<SUI>(&mut t, 25 * UNIT, ts::ctx(&mut sc)); // over-release → abort
+        ts::return_shared(t);
+    };
+    ts::end(sc);
+}

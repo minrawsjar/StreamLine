@@ -73,6 +73,9 @@ export function allowedMoveCallTargets(
     targets.push(`${pkg}::treasury::invest`);
     targets.push(`${pkg}::treasury::divest`);
     targets.push(`${pkg}::treasury::ensure_idle`);
+    // Earmarked reserve cushion (gasless park/release).
+    targets.push(`${pkg}::treasury::to_reserve`);
+    targets.push(`${pkg}::treasury::from_reserve`);
     // Yield adapter allow-list (native vault today; more adapters on mainnet).
     targets.push(`${pkg}::protocol_registry::create`);
     targets.push(`${pkg}::protocol_registry::approve_native`);

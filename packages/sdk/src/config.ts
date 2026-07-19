@@ -13,7 +13,7 @@ function env(name: string): string | undefined {
 // create_stream_v3. Type origin stays 0x597f34fe… (ORIGINAL_PACKAGE_IDS), so
 // object types + the indexer are unaffected.
 const TESTNET_PACKAGE =
-  "0x350a5dfabed5304b50f779a788973b2dddb0e8a0ebe15320775217c71ee0f9ff";
+  "0xef73396f40e121ed8775ff93f7a5aa44f209d1aa3e7e710a1324fd9cb9348410";
 
 export const PACKAGE_IDS = {
   mainnet:

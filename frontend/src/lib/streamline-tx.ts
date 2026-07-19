@@ -450,6 +450,78 @@ export function buildTreasuryDivest(
   return tx;
 }
 
+/** Park `amountBase` of idle float into the earmarked reserve (Liquid → Reserve). */
+export function buildTreasuryToReserve(
+  a: TreasuryRef & { amountBase: bigint }
+): Transaction {
+  const tx = new Transaction();
+  tx.setSenderIfNotSet(a.sender);
+  tx.moveCall({
+    target: `${a.packageId}::treasury::to_reserve`,
+    typeArguments: [a.usdcType],
+    arguments: [tx.object(a.treasuryId), tx.pure.u64(a.amountBase)],
+  });
+  return tx;
+}
+
+/** Release `amountBase` from reserve back to idle float (Reserve → Liquid). */
+export function buildTreasuryFromReserve(
+  a: TreasuryRef & { amountBase: bigint }
+): Transaction {
+  const tx = new Transaction();
+  tx.setSenderIfNotSet(a.sender);
+  tx.moveCall({
+    target: `${a.packageId}::treasury::from_reserve`,
+    typeArguments: [a.usdcType],
+    arguments: [tx.object(a.treasuryId), tx.pure.u64(a.amountBase)],
+  });
+  return tx;
+}
+
+/** Reserve → Yield: release from reserve, then invest it — one atomic PTB. */
+export function buildReserveToYield(
+  a: TreasuryRef & { vaultId: string; amountBase: bigint }
+): Transaction {
+  const tx = new Transaction();
+  tx.setSenderIfNotSet(a.sender);
+  tx.moveCall({
+    target: `${a.packageId}::treasury::from_reserve`,
+    typeArguments: [a.usdcType],
+    arguments: [tx.object(a.treasuryId), tx.pure.u64(a.amountBase)],
+  });
+  tx.moveCall({
+    target: `${a.packageId}::treasury::invest`,
+    typeArguments: [a.usdcType],
+    arguments: [
+      tx.object(a.treasuryId),
+      tx.object(a.vaultId),
+      tx.pure.u64(a.amountBase),
+      tx.object(CLOCK),
+    ],
+  });
+  return tx;
+}
+
+/** Yield → Reserve: divest the whole vault position back to idle, then park
+ *  `amountBase` of it into reserve — one atomic PTB (divest is all-or-nothing). */
+export function buildYieldToReserve(
+  a: TreasuryRef & { vaultId: string; amountBase: bigint }
+): Transaction {
+  const tx = new Transaction();
+  tx.setSenderIfNotSet(a.sender);
+  tx.moveCall({
+    target: `${a.packageId}::treasury::divest`,
+    typeArguments: [a.usdcType],
+    arguments: [tx.object(a.treasuryId), tx.object(a.vaultId), tx.object(CLOCK)],
+  });
+  tx.moveCall({
+    target: `${a.packageId}::treasury::to_reserve`,
+    typeArguments: [a.usdcType],
+    arguments: [tx.object(a.treasuryId), tx.pure.u64(a.amountBase)],
+  });
+  return tx;
+}
+
 /**
  * Redeem the whole vault position back to idle, then withdraw `amountBase` to the
  * wallet — one atomic PTB. Used when a withdrawal exceeds the liquid balance.

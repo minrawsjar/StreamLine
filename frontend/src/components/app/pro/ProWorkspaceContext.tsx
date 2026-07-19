@@ -28,6 +28,10 @@ import {
   buildTreasuryWithdraw,
   buildTreasuryDivestWithdraw,
   buildTreasuryDivest,
+  buildTreasuryToReserve,
+  buildTreasuryFromReserve,
+  buildReserveToYield,
+  buildYieldToReserve,
   buildTreasuryInvest,
   buildSuspendPayroll,
   buildResumePayroll,
@@ -112,6 +116,12 @@ type ProWorkspaceContextValue = {
   investTreasury: (amount: number) => Promise<boolean>;
   /** Redeem the whole yield-vault position back to liquid on-chain. */
   divestTreasury: () => Promise<boolean>;
+  /** Real on-chain reserve legs of Rebalance (any leg touching `reserve`). */
+  rebalanceReserve: (
+    from: ProPoolBucket,
+    to: ProPoolBucket,
+    amount: number
+  ) => Promise<boolean>;
   /** True while a treasury/stream tx is in flight. */
   creating: boolean;
   fundPool: (amount: number) => void;
@@ -697,6 +707,60 @@ export function ProWorkspaceProvider({
     return true;
   }, [workspace.treasuryId, runTreasuryTx, packageId, usdcType, address, yieldVaultId, mutate]);
 
+  // Reserve legs of Rebalance — all real on-chain now (treasury::to_reserve /
+  // from_reserve, plus PTB combos for the yield legs). Liquid↔Reserve are exact
+  // amount; a Yield leg rides on divest (all-or-nothing) so it folds the whole
+  // vault position back to idle first.
+  const rebalanceReserve = useCallback(
+    async (
+      from: ProPoolBucket,
+      to: ProPoolBucket,
+      amount: number
+    ): Promise<boolean> => {
+      if (amount <= 0) return false;
+      if (!workspace.treasuryId) throw new Error("Fund the pool first");
+      const ref = {
+        packageId,
+        usdcType,
+        sender: address,
+        treasuryId: workspace.treasuryId,
+      };
+      const base = toBaseUnits(amount);
+      const vref = { ...ref, vaultId: yieldVaultId };
+      const tx =
+        from === "idle" && to === "reserve"
+          ? buildTreasuryToReserve({ ...ref, amountBase: base })
+          : from === "reserve" && to === "idle"
+            ? buildTreasuryFromReserve({ ...ref, amountBase: base })
+            : from === "reserve" && to === "yield_vault"
+              ? buildReserveToYield({ ...vref, amountBase: base })
+              : from === "yield_vault" && to === "reserve"
+                ? buildYieldToReserve({ ...vref, amountBase: base })
+                : null;
+      if (!tx) throw new Error("Unsupported reserve leg");
+      await runTreasuryTx(tx, {
+        kind: "rebalanced",
+        label: `Rebalanced ${from} → ${to}`,
+        amount,
+      });
+      mutate((prev) => {
+        const alloc = { ...prev.pool.allocation };
+        let src = from;
+        if (from === "yield_vault") {
+          alloc.idle += alloc.yield_vault;
+          alloc.yield_vault = 0;
+          src = "idle";
+        }
+        const take = Math.min(amount, alloc[src]);
+        alloc[src] -= take;
+        alloc[to] += take;
+        return { ...prev, pool: { ...prev.pool, allocation: alloc } };
+      });
+      return true;
+    },
+    [workspace.treasuryId, packageId, usdcType, address, yieldVaultId, runTreasuryTx, mutate]
+  );
+
   const fundPool = useCallback(
     (amount: number) => {
       if (amount <= 0) return;
@@ -1018,6 +1082,7 @@ export function ProWorkspaceProvider({
     withdrawTreasury,
     investTreasury,
     divestTreasury,
+    rebalanceReserve,
     creating,
     fundPool,
     withdrawExcess,
