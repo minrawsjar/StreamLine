@@ -102,21 +102,26 @@ export function TreasuryScreen() {
             </button>
           </div>
           {canRamp ? (
-            <div className="mt-2 grid grid-cols-2 gap-2 border-t border-white/[0.06] pt-2">
-              <button
-                type="button"
-                className="sl-glass-btn-dark !w-full !px-3 !py-2.5 !text-[11px]"
-                onClick={() => setRampMode("buy")}
-              >
-                Add funds
-              </button>
-              <button
-                type="button"
-                className="sl-glass-btn-dark !w-full !px-3 !py-2.5 !text-[11px]"
-                onClick={() => setRampMode("sell")}
-              >
-                Cash out
-              </button>
+            <div className="mt-2 border-t border-white/[0.06] pt-2">
+              <p className="mb-1.5 px-0.5 text-[8px] font-medium uppercase tracking-[0.14em] text-white/25">
+                Fiat on/off-ramp · card or bank
+              </p>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  className="sl-glass-btn-dark !w-full !px-3 !py-2.5 !text-[11px]"
+                  onClick={() => setRampMode("buy")}
+                >
+                  Buy USDC
+                </button>
+                <button
+                  type="button"
+                  className="sl-glass-btn-dark !w-full !px-3 !py-2.5 !text-[11px]"
+                  onClick={() => setRampMode("sell")}
+                >
+                  Sell USDC
+                </button>
+              </div>
             </div>
           ) : null}
         </div>

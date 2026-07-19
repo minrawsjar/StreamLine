@@ -1108,21 +1108,26 @@ function TreasuryTab() {
             </button>
           </div>
           {canRamp ? (
-            <div className="mt-2 grid grid-cols-2 gap-1.5 border-t border-white/[0.06] pt-2">
-              <button
-                type="button"
-                onClick={() => setRampMode("buy")}
-                className="rounded-xl border border-white/[0.08] bg-transparent px-2 py-2 text-[10px] font-medium text-white/50 transition-colors active:text-white/80"
-              >
-                Add funds
-              </button>
-              <button
-                type="button"
-                onClick={() => setRampMode("sell")}
-                className="rounded-xl border border-white/[0.08] bg-transparent px-2 py-2 text-[10px] font-medium text-white/50 transition-colors active:text-white/80"
-              >
-                Cash out
-              </button>
+            <div className="mt-2 border-t border-white/[0.06] pt-2">
+              <p className="mb-1.5 px-0.5 text-[8px] font-medium uppercase tracking-[0.14em] text-white/25">
+                Fiat on/off-ramp · card or bank
+              </p>
+              <div className="grid grid-cols-2 gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setRampMode("buy")}
+                  className="rounded-xl border border-white/[0.08] bg-transparent px-2 py-2 text-[10px] font-medium text-white/50 transition-colors active:text-white/80"
+                >
+                  Buy USDC
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setRampMode("sell")}
+                  className="rounded-xl border border-white/[0.08] bg-transparent px-2 py-2 text-[10px] font-medium text-white/50 transition-colors active:text-white/80"
+                >
+                  Sell USDC
+                </button>
+              </div>
             </div>
           ) : null}
         </div>

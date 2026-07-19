@@ -168,8 +168,13 @@ function TestnetCheckout({
         <p className="text-[14px] font-semibold text-[#111]">
           {buy
             ? `${receive} USDC delivered to your Sui wallet`
-            : `$${receive} on its way to your bank`}
+            : `Testnet demo — sell $${receive}`}
         </p>
+        {!buy ? (
+          <p className="-mt-1 text-[11px] text-[#888]">
+            Off-ramp to a real bank is mainnet-only; no tokens moved.
+          </p>
+        ) : null}
         {digest && (
           <a
             href={`https://suiscan.xyz/testnet/tx/${digest}`}
