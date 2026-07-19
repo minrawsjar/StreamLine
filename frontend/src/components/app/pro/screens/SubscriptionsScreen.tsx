@@ -331,9 +331,9 @@ export function SubscriptionsScreen() {
               <button
                 type="button"
                 onClick={() => markActive(selected.id)}
-                className="rounded-2xl bg-[#22c55e] px-3 py-3 text-[12px] font-semibold text-white"
+                className="rounded-2xl border border-white/12 bg-white/[0.06] px-3 py-3 text-[12px] font-semibold text-white"
               >
-                Mark active
+                Mark active (manual)
               </button>
               <button
                 type="button"
@@ -353,8 +353,8 @@ export function SubscriptionsScreen() {
             </button>
           ) : null}
           <p className="mt-2 text-center text-[9px] text-white/35">
-            Customer opens the link and creates a real payment stream to you.
-            Mark active after they subscribe (manual for now).
+            The subscribe link creates a real on-chain payment stream to your
+            wallet. Confirm it in Streams (recipient = you), then mark it active.
           </p>
         </section>
       </div>
