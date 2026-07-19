@@ -70,17 +70,30 @@ export async function POST(req: Request) {
     `${CLAIM_PREFIX}${parsed.handle}:${address}:${network}`
   );
 
+  const client = new SuiClient({ url: FULLNODE_URLS[network] });
+
   try {
-    const pub = await verifyPersonalMessageSignature(message, signature);
-    const signer = pub.toSuiAddress().toLowerCase();
-    if (signer !== address) {
+    // Pass { client, address } so zkLogin signatures verify too: a zkLogin
+    // signature can't be checked offline (it needs current epoch + JWKs from
+    // the network), so without the client a Google zkLogin claim fails as
+    // invalid_signature. ed25519 (extension) signatures still verify fine.
+    const pub = await verifyPersonalMessageSignature(message, signature, {
+      client,
+      address,
+    });
+    if (pub.toSuiAddress().toLowerCase() !== address) {
       return NextResponse.json({ error: "signature_mismatch" }, { status: 401 });
     }
-  } catch {
-    return NextResponse.json({ error: "invalid_signature" }, { status: 401 });
+  } catch (e) {
+    return NextResponse.json(
+      {
+        error: "invalid_signature",
+        detail: e instanceof Error ? e.message : String(e),
+      },
+      { status: 401 }
+    );
   }
 
-  const client = new SuiClient({ url: FULLNODE_URLS[network] });
   if (await isHandleTakenOnChain(client, parsed.handle)) {
     return NextResponse.json({ error: "taken" }, { status: 409 });
   }
