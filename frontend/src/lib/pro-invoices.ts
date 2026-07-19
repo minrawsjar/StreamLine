@@ -19,6 +19,10 @@ export type ProInvoice = {
   createdAtMs: number;
   paidAtMs?: number;
   paidDigest?: string;
+  /** Org treasury the pay link settles into (POS `pos::pay`). */
+  treasuryId?: string;
+  /** True when settled by hand rather than reconciled from a PosPaid event. */
+  paidManual?: boolean;
 };
 
 const KEY_PREFIX = "sl-pro-invoices";
@@ -149,6 +153,33 @@ export function buildInvoiceShareUrl(
   if (inv.dueAtMs != null) p.set("due", String(inv.dueAtMs));
   if (orgName.trim()) p.set("org", orgName.trim());
   return `${base}/pay/invoice?${p.toString()}`;
+}
+
+/**
+ * Customer-facing pay link. Routes through the real POS pay page so the payment
+ * runs `pos::pay` — depositing USDC into the org treasury and emitting a
+ * `PosPaid` event tagged with `qr_id = invoice.id`. Pro reconciles those events
+ * to auto-settle the bill (real, verifiable), instead of a manual mark.
+ */
+export function buildInvoicePayUrl(
+  inv: ProInvoice,
+  treasuryId: string,
+  orgName: string,
+  origin?: string
+): string {
+  const base =
+    origin ??
+    (typeof window !== "undefined"
+      ? window.location.origin
+      : "https://strmln.space");
+  const p = new URLSearchParams({
+    t: treasuryId,
+    q: inv.id,
+    l: `${inv.number} · ${inv.customer}`,
+    a: String(inv.amountUsd),
+  });
+  if (orgName.trim()) p.set("org", orgName.trim());
+  return `${base}/pay/qr?${p.toString()}`;
 }
 
 export function parseInvoiceShareSearch(

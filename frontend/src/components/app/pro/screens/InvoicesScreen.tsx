@@ -2,12 +2,14 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { QRCodeSVG } from "qrcode.react";
-import { useCurrentAccount } from "@mysten/dapp-kit";
+import { useCurrentAccount, useSuiClient } from "@mysten/dapp-kit";
 
 import { usePhoneEmbedded } from "@/components/app/phone/PhoneEmbeddedContext";
 import { copyToClipboard, shortAddress } from "@/lib/format";
+import { usePosStats } from "@/lib/pro-pos";
 import {
   DEMO_INVOICE_KEY,
+  buildInvoicePayUrl,
   buildInvoiceShareUrl,
   effectiveStatus,
   loadInvoices,
@@ -28,7 +30,9 @@ type View = "list" | "create" | "detail";
 export function InvoicesScreen() {
   const embedded = usePhoneEmbedded();
   const account = useCurrentAccount();
+  const client = useSuiClient();
   const { workspace, isDemo, nowMs } = useProWorkspace();
+  const treasuryId = workspace.treasuryId;
   // Logged-in wallet only — never fall back to the demo bucket while connected.
   const ownerKey = account?.address ?? (isDemo ? DEMO_INVOICE_KEY : "");
   const payee =
@@ -36,7 +40,8 @@ export function InvoicesScreen() {
     (isDemo
       ? "0x0000000000000000000000000000000000000000000000000000000000d00001"
       : null);
-  const canCreate = !!payee;
+  // Real bills settle into the org treasury via pos::pay, so one must exist.
+  const canCreate = !!payee && (!!treasuryId || isDemo);
 
   const [invoices, setInvoices] = useState<ProInvoice[]>([]);
   const [view, setView] = useState<View>("list");
@@ -54,6 +59,34 @@ export function InvoicesScreen() {
     }
     setInvoices(loadInvoices(ownerKey));
   }, [ownerKey]);
+
+  // Auto-settle: reconcile open bills against real on-chain PosPaid events.
+  // A bill whose qr_id (its invoice id) has accumulated ≥ its amount is paid,
+  // stamped with the actual tx digest — no manual mark, no fabricated digest.
+  const { data: posStats } = usePosStats(client, treasuryId);
+  useEffect(() => {
+    if (!posStats || !ownerKey) return;
+    setInvoices((prev) => {
+      let changed = false;
+      const next = prev.map((i) => {
+        if (i.status !== "open") return i;
+        const stat = posStats.byQr[i.id];
+        if (stat && stat.totalUsd + 1e-6 >= i.amountUsd) {
+          changed = true;
+          return {
+            ...i,
+            status: "paid" as const,
+            paidAtMs: stat.lastAtMs ?? Date.now(),
+            paidDigest: stat.lastDigest,
+            paidManual: false,
+          };
+        }
+        return i;
+      });
+      if (changed) saveInvoices(ownerKey, next);
+      return changed ? next : prev;
+    });
+  }, [posStats, ownerKey]);
 
   const persist = (next: ProInvoice[]) => {
     setInvoices(next);
@@ -93,6 +126,7 @@ export function InvoicesScreen() {
           : null,
       status: "open",
       createdAtMs: Date.now(),
+      treasuryId,
     };
     persist([inv, ...invoices]);
     setCustomer("");
@@ -103,16 +137,13 @@ export function InvoicesScreen() {
     setView("detail");
   };
 
-  const markPaid = (id: string, digest?: string) => {
+  // Off-chain override — settled outside StreamLine (bank, cash). No fabricated
+  // digest: it's flagged as manual so it never looks like an on-chain payment.
+  const markPaidManual = (id: string) => {
     persist(
       invoices.map((i) =>
         i.id === id
-          ? {
-              ...i,
-              status: "paid" as const,
-              paidAtMs: Date.now(),
-              paidDigest: digest ?? i.paidDigest ?? `0xlocal${Date.now().toString(16)}`,
-            }
+          ? { ...i, status: "paid" as const, paidAtMs: Date.now(), paidManual: true }
           : i
       )
     );
@@ -194,11 +225,20 @@ export function InvoicesScreen() {
             onClick={create}
             className="mt-4 flex w-full items-center justify-center rounded-2xl bg-[#22c55e] px-4 py-3.5 text-[14px] font-semibold text-white shadow-[0_8px_24px_rgba(34,197,94,0.35)] transition-transform enabled:active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-35 disabled:shadow-none"
           >
-            {canCreate ? "Create & share" : "Connect wallet to create"}
+            {canCreate
+              ? "Create & share"
+              : !payee
+                ? "Connect wallet to create"
+                : "Fund a treasury first"}
           </button>
           {canCreate ? (
             <p className="mt-2 text-center text-[9px] text-white/35">
-              Pays to {shortAddress(payee, 6, 4)} · customer settles USDC on-chain
+              Settles into your treasury {shortAddress(treasuryId ?? "", 6, 4)} ·
+              auto-reconciled from the on-chain payment
+            </p>
+          ) : payee && !treasuryId ? (
+            <p className="mt-2 text-center text-[9px] text-white/35">
+              Open a treasury first (Treasury → Fund) so bills can settle on-chain.
             </p>
           ) : null}
         </section>
@@ -207,7 +247,12 @@ export function InvoicesScreen() {
   }
 
   if (view === "detail" && selected) {
-    const url = buildInvoiceShareUrl(selected, workspace.orgName || "Org");
+    const org = workspace.orgName || "Org";
+    const payTid = selected.treasuryId ?? treasuryId;
+    // Real POS pay link when we know the treasury; legacy transfer link otherwise.
+    const url = payTid
+      ? buildInvoicePayUrl(selected, payTid, org)
+      : buildInvoiceShareUrl(selected, org);
     const status = effectiveStatus(selected, nowMs);
     return (
       <div className={shell}>
@@ -273,10 +318,10 @@ export function InvoicesScreen() {
             {selected.status === "open" ? (
               <button
                 type="button"
-                onClick={() => markPaid(selected.id)}
-                className="rounded-2xl bg-[#22c55e] px-3 py-3 text-[12px] font-semibold text-white"
+                onClick={() => markPaidManual(selected.id)}
+                className="rounded-2xl border border-white/12 bg-white/[0.06] px-3 py-3 text-[12px] font-semibold text-white"
               >
-                Mark paid
+                Mark paid (manual)
               </button>
             ) : (
               <button
@@ -288,10 +333,22 @@ export function InvoicesScreen() {
               </button>
             )}
           </div>
-          <p className="mt-2 text-center text-[9px] text-white/35">
-            Customer opens the link and transfers USDC on-chain. Mark paid after
-            you see the transfer (manual for now).
-          </p>
+          {selected.status === "paid" ? (
+            selected.paidDigest ? (
+              <p className="mt-2 text-center text-[9px] text-[#1d9e75]">
+                Settled on-chain ✓ · {selected.paidDigest.slice(0, 10)}…
+              </p>
+            ) : (
+              <p className="mt-2 text-center text-[9px] text-white/40">
+                Marked paid manually (off-chain).
+              </p>
+            )
+          ) : (
+            <p className="mt-2 text-center text-[9px] text-white/35">
+              Customer pays the link with USDC — the bill auto-settles from the
+              on-chain payment. Use “Mark paid (manual)” only for off-chain money.
+            </p>
+          )}
           {selected.status === "open" ? (
             <button
               type="button"
@@ -342,12 +399,16 @@ export function InvoicesScreen() {
           className="flex w-full items-center justify-center gap-2 rounded-2xl bg-[#22c55e] px-4 py-3.5 text-[14px] font-semibold tracking-tight text-white shadow-[0_8px_24px_rgba(34,197,94,0.35)] transition-transform active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-35 disabled:shadow-none"
         >
           <span className="text-[18px] leading-none">+</span>
-          {canCreate || isDemo ? "New invoice" : "Connect to create"}
+          {canCreate || isDemo
+            ? "New invoice"
+            : !payee
+              ? "Connect to create"
+              : "Fund a treasury first"}
         </button>
         <p className="mt-2 text-center text-[9px] leading-snug text-white/35">
           {isDemo
-            ? "Explore-demo sample bills. Sign in for invoices paid to your wallet."
-            : "Creating a bill is local. Paying the share link sends real USDC to you."}
+            ? "Explore-demo sample bills. Sign in for invoices that settle into your treasury."
+            : "Creating a bill is local. Paying the link runs pos::pay into your treasury and auto-settles the bill on-chain."}
         </p>
       </div>
 

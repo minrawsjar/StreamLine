@@ -97,7 +97,14 @@ export function parsePosPayParams(
   };
 }
 
-export type PosQrStat = { uses: number; totalUsd: number };
+export type PosQrStat = {
+  uses: number;
+  totalUsd: number;
+  /** Newest payment's tx digest / time / payer — evidence for invoice settle. */
+  lastDigest?: string;
+  lastAtMs?: number;
+  lastPayer?: string;
+};
 export type PosStats = {
   byQr: Record<string, PosQrStat>;
   totalUses: number;
@@ -139,6 +146,12 @@ export async function readPosStats(
       const cur = byQr[j.qr_id] ?? { uses: 0, totalUsd: 0 };
       cur.uses += 1;
       cur.totalUsd += amt / USDC_BASE;
+      // Descending order → first event seen for a qr is the newest.
+      if (cur.lastDigest === undefined) {
+        cur.lastDigest = ev.id?.txDigest;
+        cur.lastAtMs = ev.timestampMs ? Number(ev.timestampMs) : undefined;
+        cur.lastPayer = j.payer;
+      }
       byQr[j.qr_id] = cur;
       totalUses += 1;
       totalBase += amt;
