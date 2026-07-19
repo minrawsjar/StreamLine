@@ -269,7 +269,7 @@ function PrivateVaultPanel() {
         ))}
       </div>
 
-      <div className="rounded-[1.25rem] bg-[#f6f7f8] p-3 text-[#111]">
+      <div className="sl-vault">
         {seg === "shielded" && <ShieldedPanel />}
         {seg === "lazy" && <LazyStreamPanel />}
         {seg === "confidential" && <ConfidentialBalancePanel />}

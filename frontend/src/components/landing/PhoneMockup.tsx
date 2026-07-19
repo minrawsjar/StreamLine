@@ -21,7 +21,6 @@ import { NamesPhonePreview } from "./NamesPhonePreview";
 import { WorkPhonePreview } from "./WorkPhonePreview";
 import { ScalePhonePreview } from "./ScalePhonePreview";
 import { useNeedsHandleOnboarding } from "@/lib/use-handle-onboarding";
-import { AppDemoTour } from "@/components/app/AppDemoTour";
 
 /** iPhone 15 proportions: 393 × 852 pt → screen aspect 9:19.5 */
 const SCREEN_ASPECT = "9 / 19.5";
@@ -561,7 +560,6 @@ export function PhoneMockup({
             : "w-[min(88vw,300px,calc((100dvh-9rem)*9/19.5))] sm:w-[min(320px,calc((100dvh-9rem)*9/19.5))] lg:w-[min(340px,calc((100dvh-9rem)*9/19.5))]"
       }`}
     >
-      {inApp ? <AppDemoTour /> : null}
       <div className="sl-levitate relative">{shell}</div>
     </div>
   );

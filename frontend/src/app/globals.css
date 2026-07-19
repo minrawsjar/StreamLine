@@ -1506,3 +1506,23 @@ body {
 .sl-scrollbar-hidden::-webkit-scrollbar {
   display: none;
 }
+
+/* Private vault: darken the light-themed privacy panels so they match the Pro
+ * shell. Scoped to `.sl-vault` (Pro → Tools → Private vault) via attribute
+ * substring selectors, so the panels' own inline Tailwind classes are overridden
+ * only inside the vault — the deprecated /app/* pages are untouched. */
+.sl-vault [class*="text-[#111]"] { color: #f5f6f8 !important; }
+.sl-vault [class*="text-[#333]"] { color: rgb(255 255 255 / 0.85) !important; }
+.sl-vault [class*="text-[#666]"] { color: rgb(255 255 255 / 0.55) !important; }
+.sl-vault [class*="text-[#888]"] { color: rgb(255 255 255 / 0.45) !important; }
+.sl-vault [class*="text-[#999]"] { color: rgb(255 255 255 / 0.4) !important; }
+.sl-vault [class*="text-[#aaa]"] { color: rgb(255 255 255 / 0.35) !important; }
+.sl-vault [class*="bg-white"] { background-color: rgb(255 255 255 / 0.05) !important; }
+.sl-vault [class*="border-black"] { border-color: rgb(255 255 255 / 0.12) !important; }
+.sl-vault input,
+.sl-vault textarea {
+  color: #fff !important;
+  background-color: rgb(255 255 255 / 0.04);
+}
+.sl-vault input::placeholder,
+.sl-vault textarea::placeholder { color: rgb(255 255 255 / 0.3) !important; }
