@@ -1009,10 +1009,19 @@ export function ProWorkspaceProvider({
           })(),
         }
       : null;
+    // A local worker with no bound on-chain stream must never render as live:
+    // downgrade a stale "dripping"/"paused" (e.g. a phantom left by an old
+    // failed Start) to "pending" so it can't masquerade as a real stream.
+    const phantomGuard = (w: ProWorker): ProWorker =>
+      !w.streamId && (w.status === "dripping" || w.status === "paused")
+        ? { ...w, status: "pending" }
+        : w;
+
     if (streams.length === 0) {
-      if (!poolOverride) return workspace;
+      const base = { ...workspace, workers: workspace.workers.map(phantomGuard) };
+      if (!poolOverride) return base;
       return {
-        ...workspace,
+        ...base,
         pool: { ...workspace.pool, ...poolOverride },
         ...yieldOverride,
       };
@@ -1029,7 +1038,7 @@ export function ProWorkspaceProvider({
       const s = w.streamId
         ? streams.find((x) => x.id === w.streamId)
         : undefined;
-      if (!s) return w;
+      if (!s) return phantomGuard(w);
       claimed.add(s.id);
       return {
         ...w,
