@@ -284,6 +284,66 @@ function vec(tx: Transaction, bytes: Uint8Array) {
   return tx.pure.vector("u8", Array.from(bytes));
 }
 
+// === Confidential balances (Tier 1: hide amounts) ===
+
+/**
+ * Wrap `amountBase` USDC into a confidential balance: deposit the coin and bind
+ * it to `commitment` = Poseidon(amount, blinding), proven by `proof` (wrap.circom)
+ * to open to that amount. On-chain only the commitment + aggregate reserve are
+ * visible — the individual balance is hidden.
+ */
+export function buildConfWrap(args: {
+  packageId: string;
+  coinType: string;
+  sender: string;
+  poolId: string;
+  amountBase: bigint;
+  commitment: Uint8Array;
+  proof: Uint8Array;
+}): Transaction {
+  const tx = new Transaction();
+  tx.setSenderIfNotSet(args.sender);
+  tx.moveCall({
+    target: `${args.packageId}::confidential_balance::wrap`,
+    typeArguments: [args.coinType],
+    arguments: [
+      tx.object(args.poolId),
+      coinWithBalance({ type: args.coinType, balance: args.amountBase }),
+      vec(tx, args.commitment),
+      vec(tx, args.proof),
+    ],
+  });
+  return tx;
+}
+
+/**
+ * Unwrap: reveal `valueBase`, prove (unwrap.circom) it opens your on-chain
+ * commitment, withdraw it from the reserve, and close the account. The returned
+ * coin is sent back to the caller.
+ */
+export function buildConfUnwrap(args: {
+  packageId: string;
+  coinType: string;
+  sender: string;
+  poolId: string;
+  valueBase: bigint;
+  proof: Uint8Array;
+}): Transaction {
+  const tx = new Transaction();
+  tx.setSenderIfNotSet(args.sender);
+  const coin = tx.moveCall({
+    target: `${args.packageId}::confidential_balance::unwrap`,
+    typeArguments: [args.coinType],
+    arguments: [
+      tx.object(args.poolId),
+      tx.pure.u64(args.valueBase),
+      vec(tx, args.proof),
+    ],
+  });
+  tx.transferObjects([coin], args.sender);
+  return tx;
+}
+
 export function buildCreateConfidentialStream(args: {
   packageId: string;
   coinType: string;

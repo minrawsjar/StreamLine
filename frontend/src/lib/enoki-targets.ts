@@ -99,6 +99,11 @@ export function allowedMoveCallTargets(
     targets.push(`${pkg}::shielded_pool::spend`);
     targets.push(`${pkg}::shielded_pool::withdraw`);
     targets.push(`${pkg}::shielded_pool::publish_note`);
+    // Confidential balances (Tier 1: hide amounts) — gasless wrap/unwrap/transfer.
+    targets.push(`${pkg}::confidential_balance::register`);
+    targets.push(`${pkg}::confidential_balance::wrap`);
+    targets.push(`${pkg}::confidential_balance::unwrap`);
+    targets.push(`${pkg}::confidential_balance::confidential_transfer`);
   }
 
   // Test-USDC faucet is only deployed (and only worth sponsoring) on testnet.

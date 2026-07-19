@@ -53,6 +53,18 @@ export const YIELD_VAULT = {
   devnet: "0x0",
 } as const;
 
+/**
+ * Confidential-balance pool (Tier 1: hide amounts) — one shared reserve holding
+ * all hidden USDC balances (owner → Poseidon commitment). Deployed 2026-07-19.
+ */
+export const CONF_BALANCE_POOL = {
+  testnet:
+    process.env.NEXT_PUBLIC_CONF_BALANCE_POOL_TESTNET ??
+    "0x23d0ed9f3a571e640ca1ee4b52b6dcb7ce5a4cdbb190c9c48a3af6af0b346ee5",
+  mainnet: "0x0",
+  devnet: "0x0",
+} as const;
+
 /** Shielded pool (Phase 2) — one shared pool per network for the demo. */
 export const SHIELDED_POOL = {
   testnet:

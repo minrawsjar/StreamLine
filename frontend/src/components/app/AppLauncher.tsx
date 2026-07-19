@@ -36,6 +36,13 @@ const APPS = [
     description: "Deposit, transfer & withdraw privately",
     variant: "default" as const,
   },
+  {
+    href: "/app/confidential",
+    name: "StreamLine",
+    subtitle: "Hidden",
+    description: "Hold USDC with the amount hidden on-chain",
+    variant: "default" as const,
+  },
 ];
 
 function ConnectGate() {
