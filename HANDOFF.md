@@ -271,7 +271,7 @@ Called in the same PTB as `spend`/`deposit`. Seal primitives already exist (`sea
 ## 12. Shielded-pool FRONTEND — BUILT ✅
 
 Full Phase 2 frontend, wired to the live pool
-`0x03048230a55bb4f49cecc36735e55559c94c1d27dcf5e49d2bd28b84ebc7e7d4` (const
+`0x746dc6e668995b336e4a51ddc7c36673177983821dcff875149462014d73eccb` (const
 `SHIELDED_POOL.testnet` in `constants.ts`). Typecheck green.
 - **`frontend/src/lib/shielded.ts`** — note crypto (`pk`/`noteCommit`/`nullifier`),
   Merkle reconstruction (`fetchCommitments` replays events in leaf order →

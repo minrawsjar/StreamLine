@@ -68,7 +68,7 @@ export const CONF_BALANCE_POOL = {
 /** Shielded pool (Phase 2) — one shared pool per network for the demo. */
 export const SHIELDED_POOL = {
   testnet:
-    "0x03048230a55bb4f49cecc36735e55559c94c1d27dcf5e49d2bd28b84ebc7e7d4",
+    "0x746dc6e668995b336e4a51ddc7c36673177983821dcff875149462014d73eccb",
   mainnet: "0x0",
   devnet: "0x0",
 } as const;
