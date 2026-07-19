@@ -18,7 +18,7 @@ import {
   saveProWorkspace,
   emptyWorkspace,
 } from "@/lib/pro-workspace-store";
-import { useStreams, type StreamRecord } from "@/lib/indexer";
+import { useStreams } from "@/lib/indexer";
 import { useGaslessExecute } from "@/lib/use-gasless";
 import { useNetworkVariable } from "@/lib/networks";
 import {
@@ -43,6 +43,7 @@ import {
 } from "@/lib/streamline-tx";
 import {
   findCreatedTreasury,
+  findCreatedStream,
   readStreamTreasuryId,
   useTreasuryState,
 } from "@/lib/treasury";
@@ -580,37 +581,53 @@ export function ProWorkspaceProvider({
       });
 
       let ok = false;
+      let digest: string | null = null;
+      let err: Error | null = null;
       await execute(tx, {
-        onSuccess: () => {
+        onSuccess: ({ digest: d }) => {
           ok = true;
-          mutate((prev) =>
-            pushActivity(
-              {
-                ...prev,
-                workers: prev.workers.map((w) =>
-                  w.id === workerId
-                    ? {
-                        ...w,
-                        status: "dripping" as const,
-                        startedAt: Date.now(),
-                        budget,
-                      }
-                    : w
-                ),
-              },
-              {
-                kind: "resumed",
-                label: `Hired ${worker.alias} from treasury`,
-                amount: budget,
-              }
-            )
-          );
+          digest = d;
         },
-        onError: () => {
-          ok = false;
+        onError: (e) => {
+          err = e;
         },
       });
-      return ok;
+      if (err) {
+        window.alert(
+          `Couldn't start ${worker.alias}'s stream: ${(err as Error).message}`
+        );
+        return false;
+      }
+      if (!ok) return false;
+      // Persist the created stream's id so the worker binds to it exactly —
+      // address matching can't tell two workers on the same payout wallet apart.
+      const newStreamId = digest
+        ? await findCreatedStream(suiClient, digest)
+        : null;
+      mutate((prev) =>
+        pushActivity(
+          {
+            ...prev,
+            workers: prev.workers.map((w) =>
+              w.id === workerId
+                ? {
+                    ...w,
+                    status: "dripping" as const,
+                    startedAt: Date.now(),
+                    budget,
+                    streamId: newStreamId ?? w.streamId,
+                  }
+                : w
+            ),
+          },
+          {
+            kind: "resumed",
+            label: `Hired ${worker.alias} from treasury`,
+            amount: budget,
+          }
+        )
+      );
+      return true;
     },
     [
       address,
@@ -621,6 +638,7 @@ export function ProWorkspaceProvider({
       execute,
       mutate,
       ensureTreasury,
+      suiClient,
     ]
   );
 
@@ -925,12 +943,20 @@ export function ProWorkspaceProvider({
         onSuccess: () => {
           ok = true;
           mutate((prev) =>
-            pushActivity(prev, {
-              kind: "stopped",
-              label: streamTid
-                ? "Canceled stream — refunded to pool"
-                : "Canceled stream — refunded to wallet",
-            })
+            pushActivity(
+              {
+                ...prev,
+                // Drop the local row too — cancel is terminal, and the folded
+                // chain row is already skipped once the stream reads "done".
+                workers: prev.workers.filter((w) => w.streamId !== streamId),
+              },
+              {
+                kind: "stopped",
+                label: streamTid
+                  ? "Canceled stream — refunded to pool"
+                  : "Canceled stream — refunded to wallet",
+              }
+            )
           );
         },
         onError: (e) => {
@@ -991,19 +1017,18 @@ export function ProWorkspaceProvider({
         ...yieldOverride,
       };
     }
-    const byFreelancer = new Map<string, StreamRecord>();
-    for (const s of streams) {
-      const key = s.freelancer.toLowerCase();
-      const cur = byFreelancer.get(key);
-      if (!cur || s.created_at_ms > cur.created_at_ms) byFreelancer.set(key, s);
-    }
-
-    // 1) Fold real state onto existing local workers.
+    // 1) Fold real on-chain state onto local workers, bound *only* by the
+    // streamId persisted when the worker was hired. Address matching was removed
+    // on purpose: many workers can share a payout wallet and stale/done streams
+    // reuse it, so matching by address bound fresh workers to finished streams
+    // (showing "stopped", blocking Start) and risked Delete canceling an
+    // unrelated stream. A worker with no streamId stays local until hired; every
+    // real stream still surfaces as its own row in step 2.
     const claimed = new Set<string>();
     const workers = workspace.workers.map((w) => {
       const s = w.streamId
         ? streams.find((x) => x.id === w.streamId)
-        : byFreelancer.get(w.walletAddress.toLowerCase());
+        : undefined;
       if (!s) return w;
       claimed.add(s.id);
       return {

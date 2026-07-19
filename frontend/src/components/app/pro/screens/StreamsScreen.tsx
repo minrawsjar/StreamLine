@@ -152,9 +152,11 @@ export function StreamActions({
         label="Delete"
         danger
         onClick={() =>
-          worker.streamId
-            ? onCancel(worker.streamId, worker.alias) // cancel on-chain, refund to pool
-            : onDelete(worker.id, worker.alias) // local-only worker: drop the row
+          worker.status === "stopped"
+            ? onDelete(worker.id, worker.alias) // terminal/local-only: just drop the row
+            : worker.streamId
+              ? onCancel(worker.streamId, worker.alias) // live: cancel on-chain, refund
+              : onDelete(worker.id, worker.alias) // local-only worker: drop the row
         }
       >
         <IconTrash />

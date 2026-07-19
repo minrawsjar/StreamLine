@@ -68,6 +68,30 @@ export async function readStreamTreasuryId(
   );
 }
 
+/** Find the shared `Stream` object created by a create/hire tx. */
+export async function findCreatedStream(
+  client: SuiClient,
+  digest: string
+): Promise<string | null> {
+  try {
+    await client.waitForTransaction({ digest });
+    const tb = await client.getTransactionBlock({
+      digest,
+      options: { showObjectChanges: true },
+    });
+    const created = tb.objectChanges?.find(
+      (c) =>
+        c.type === "created" &&
+        "objectType" in c &&
+        typeof c.objectType === "string" &&
+        c.objectType.includes("::stream::Stream<")
+    );
+    return created && "objectId" in created ? created.objectId : null;
+  } catch {
+    return null;
+  }
+}
+
 export type TreasuryState = { idle: number; invested: number; reserve: number };
 
 /** Read live idle + invested + reserve USDC via the treasury's view functions. */
