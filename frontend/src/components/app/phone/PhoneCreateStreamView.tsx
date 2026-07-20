@@ -195,6 +195,7 @@ export function PhoneCreateStreamView({ onClose }: PhoneCreateStreamViewProps) {
         poolId,
         sender: account.address,
         sk,
+        client,
         capBase: totalBase,
         durationSec,
         recipientShielded: shielded,

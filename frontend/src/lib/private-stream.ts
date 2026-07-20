@@ -5,7 +5,7 @@
  * open = shielded deposit + schedule pin; settle = private_settle (spend + vest).
  */
 
-import { Transaction, coinWithBalance } from "@mysten/sui/transactions";
+import { Transaction } from "@mysten/sui/transactions";
 import type { SuiClient } from "@mysten/sui/client";
 
 import {
@@ -86,6 +86,8 @@ export function buildOpenEngagement(a: {
   sender: string;
   /** Public coin amount locked (may be overfunded vs vesting cap). */
   depositBase: bigint;
+  /** Sender's USDC coin ids summing to ≥ depositBase (biggest first). */
+  paymentCoins: string[];
   cm: bigint;
   depositProof: Uint8Array;
   paramsCommitment: bigint;
@@ -93,6 +95,20 @@ export function buildOpenEngagement(a: {
 }): Transaction {
   const tx = new Transaction();
   tx.setSenderIfNotSet(a.sender);
+  // Explicit coin assembly instead of coinWithBalance: merge the selected coins
+  // into the first, then split off EXACTLY depositBase. Under a sponsored
+  // `onlyTransactionKind` build, coinWithBalance can fail to split a coin larger
+  // than the deposit, passing the whole coin → payment.value() ≠ the proven
+  // amount → verify_deposit aborts EProofInvalid. This is deterministic.
+  const [primary, ...rest] = a.paymentCoins;
+  const primaryObj = tx.object(primary);
+  if (rest.length > 0) {
+    tx.mergeCoins(
+      primaryObj,
+      rest.map((c) => tx.object(c))
+    );
+  }
+  const [payment] = tx.splitCoins(primaryObj, [tx.pure.u64(a.depositBase)]);
   tx.moveCall({
     // v2 attaches opener-gated pause control (EngagementControl), so the hire
     // can be frozen on-chain. Identical args to v1.
@@ -100,7 +116,7 @@ export function buildOpenEngagement(a: {
     typeArguments: [a.coinType],
     arguments: [
       tx.object(a.poolId),
-      coinWithBalance({ type: a.coinType, balance: a.depositBase }),
+      payment,
       tx.pure.u256(a.cm),
       u8(tx, a.depositProof),
       tx.pure.u256(a.paramsCommitment),
@@ -108,6 +124,39 @@ export function buildOpenEngagement(a: {
     ],
   });
   return tx;
+}
+
+/**
+ * Pick the fewest USDC coins (biggest first) that cover `needed`. Fetching
+ * biggest-first keeps the merge tiny even when the wallet is fragmented, and
+ * throws a clear balance error instead of a cryptic on-chain abort.
+ */
+async function selectCoins(
+  client: SuiClient,
+  owner: string,
+  coinType: string,
+  needed: bigint
+): Promise<string[]> {
+  const all: { id: string; bal: bigint }[] = [];
+  let cursor: string | null | undefined = null;
+  do {
+    const page = await client.getCoins({ owner, coinType, cursor, limit: 200 });
+    for (const c of page.data)
+      all.push({ id: c.coinObjectId, bal: BigInt(c.balance) });
+    cursor = page.hasNextPage ? page.nextCursor : null;
+  } while (cursor);
+  all.sort((x, y) => (y.bal > x.bal ? 1 : y.bal < x.bal ? -1 : 0));
+  const ids: string[] = [];
+  let sum = 0n;
+  for (const c of all) {
+    ids.push(c.id);
+    sum += c.bal;
+    if (sum >= needed) return ids;
+  }
+  const usd = (b: bigint) => `$${(Number(b) / 1_000_000).toFixed(2)}`;
+  throw new Error(
+    `Not enough USDC to lock: you have ${usd(sum)}, this needs ${usd(needed)}.`
+  );
 }
 
 /** Freeze vesting on a private engagement (opener-gated `pause_engagement`). */
@@ -209,6 +258,8 @@ export async function prepareOpenEngagement(p: {
   poolId: string;
   sender: string;
   sk: bigint;
+  /** Fullnode client — used to select the sender's USDC coins for the deposit. */
+  client: SuiClient;
   /** Vesting / economic cap (private after split). */
   capBase: bigint;
   durationSec: bigint;
@@ -257,6 +308,14 @@ export async function prepareOpenEngagement(p: {
   }
   const changeBase = depositBase - p.capBase;
 
+  // Select the coins up front so a shortfall fails clearly here, before proving.
+  const paymentCoins = await selectCoins(
+    p.client,
+    p.sender,
+    p.coinType,
+    depositBase
+  );
+
   const dep = await proveDeposit(depositBase, pkv, rho);
   const cm = BigInt(dep.publicSignals[0]);
 
@@ -273,6 +332,7 @@ export async function prepareOpenEngagement(p: {
     poolId: p.poolId,
     sender: p.sender,
     depositBase,
+    paymentCoins,
     cm,
     depositProof: dep.proof,
     paramsCommitment,

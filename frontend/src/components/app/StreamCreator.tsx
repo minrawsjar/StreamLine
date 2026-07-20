@@ -265,6 +265,7 @@ export function StreamCreator({
         poolId,
         sender: account.address,
         sk,
+        client,
         capBase: totalBase,
         durationSec,
         recipientShielded: looksLikeShielded(recipient) ? recipient : undefined,

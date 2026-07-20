@@ -860,6 +860,7 @@ export function ProWorkspaceProvider({
             poolId,
             sender: address,
             sk,
+            client: suiClient,
             capBase: totalBase,
             durationSec,
             recipientShielded: shielded,
