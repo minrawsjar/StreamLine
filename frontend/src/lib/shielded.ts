@@ -5,7 +5,10 @@ import type { SuiClient } from "@mysten/sui/client";
 
 import { poseidon, prove, feToLeBytes, type ProofBytes } from "@/lib/confidential";
 import { deriveEnc, decryptNote } from "@/lib/shielded-address";
-import { ORIGINAL_PACKAGE_IDS } from "@/lib/constants";
+import {
+  ORIGINAL_PACKAGE_IDS,
+  PRIVATE_STREAM_DEFINING_PACKAGE_IDS,
+} from "@/lib/constants";
 import { PACKAGE_IDS, type NetworkName } from "@streamline/sdk";
 
 export const SHIELDED_DEPTH = 20;
@@ -72,9 +75,15 @@ export async function merklePath(
 /**
  * Events must be queried by their DEFINING package (type origin): shielded_pool
  * structs originate in ORIGINAL_PACKAGE_IDS, while private_stream::EngagementSettled
- * originates in the latest package that introduced it. The public testnet RPCs
+ * originates in the MIDDLE upgrade that first defined private_stream — NOT the
+ * original (no private_stream) and NOT the latest package. The public testnet RPCs
  * return NOTHING for the `MoveModule` filter against an upgraded package, so we
  * query by `MoveEventType` with the right origin package instead.
+ *
+ * Using latestPkg for `settle` silently drops every EngagementSettled leaf (two
+ * per settle) from the reconstructed tree, so its root stops matching the on-chain
+ * tree the moment any engagement is settled — and every subsequent private split
+ * aborts EUnknownRoot. Query settle events under the private_stream defining id.
  */
 export function eventPkgs(latestPkg: string): { shielded: string; settle: string } {
   let net: NetworkName = "testnet";
@@ -85,7 +94,11 @@ export function eventPkgs(latestPkg: string): { shielded: string; settle: string
     }
   }
   const orig = ORIGINAL_PACKAGE_IDS[net];
-  return { shielded: orig && orig !== "0x0" ? orig : latestPkg, settle: latestPkg };
+  const settleOrig = PRIVATE_STREAM_DEFINING_PACKAGE_IDS[net];
+  return {
+    shielded: orig && orig !== "0x0" ? orig : latestPkg,
+    settle: settleOrig && settleOrig !== "0x0" ? settleOrig : latestPkg,
+  };
 }
 
 type LeafEvent = { ts: bigint; seq: bigint; leaves: bigint[] };

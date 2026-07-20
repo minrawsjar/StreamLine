@@ -43,6 +43,22 @@ export const CONF_DEFINING_PACKAGE_IDS = {
 } as const;
 
 /**
+ * The package version that *defined* `private_stream` (EngagementOpened /
+ * EngagementSettled). private_stream was added in an upgrade AFTER the original
+ * publish, so its event type-origin is this middle version — NOT the original
+ * (0x597f34fe, no private_stream) and NOT the latest package. `EngagementSettled`
+ * inserts two shielded leaves per settle; querying it under the wrong origin
+ * silently drops those leaves, so the client rebuilds a stale tree → wrong root
+ * → every private split aborts EUnknownRoot. Query settle events under THIS id.
+ */
+export const PRIVATE_STREAM_DEFINING_PACKAGE_IDS = {
+  mainnet: process.env.NEXT_PUBLIC_PACKAGE_ID_MAINNET ?? "0x0",
+  testnet:
+    "0xb0110fff0dd7b62e447f16d4ffd0323c0cdf8472aead3eae182711f4e4937897",
+  devnet: "0x0",
+} as const;
+
+/**
  * Scallop-shaped yield vault for the streamed coin (testnet stand-in for
  * Scallop's lending pool). 3% APR, seeded with a mock-USDC interest buffer.
  */
