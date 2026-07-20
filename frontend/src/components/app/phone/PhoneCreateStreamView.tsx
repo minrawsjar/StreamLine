@@ -199,6 +199,7 @@ export function PhoneCreateStreamView({ onClose }: PhoneCreateStreamViewProps) {
         capBase: totalBase,
         durationSec,
         recipientShielded: shielded,
+        label: streamName || undefined,
       });
       setStatus("Awaiting wallet signature…");
       let openDigest = "";

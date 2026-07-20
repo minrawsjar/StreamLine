@@ -269,6 +269,7 @@ export function StreamCreator({
         capBase: totalBase,
         durationSec,
         recipientShielded: looksLikeShielded(recipient) ? recipient : undefined,
+        label: streamName || undefined,
       });
 
       const saveAfterSplit = async (

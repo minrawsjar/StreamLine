@@ -1,7 +1,11 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useCurrentAccount, useSuiClientQuery } from "@mysten/dapp-kit";
+import {
+  useCurrentAccount,
+  useSuiClient,
+  useSuiClientQuery,
+} from "@mysten/dapp-kit";
 import { useQueries } from "@tanstack/react-query";
 
 import {
@@ -47,6 +51,11 @@ import {
   loadEngagements,
   type PrivateEngagementSecret,
 } from "@/lib/private-engagement-store";
+import {
+  scanIncomingEngagements,
+  type IncomingEngagement,
+} from "@/lib/shielded";
+import { getSpendKey } from "@/lib/shielded-store";
 import { HideBalanceCard } from "@/components/app/HideBalanceCard";
 import {
   PhoneDashboardView,
@@ -193,6 +202,57 @@ function EngagementCard({ e }: { e: PrivateEngagementSecret }) {
   );
 }
 
+/** A private engagement addressed TO the connected wallet, discovered by scanning
+ * encrypted announcements. Shows the vesting projection live; funds arrive as the
+ * sender settles. No on-chain party — only the recipient can decrypt this. */
+function IncomingEngagementCard({
+  e,
+  now,
+}: {
+  e: IncomingEngagement;
+  now: number;
+}) {
+  const cap = Number(e.cap);
+  const rate = Number(e.rate); // base units / second
+  const start = Number(e.start); // unix seconds
+  const elapsed = Math.max(0, Math.floor(now / 1000) - start);
+  const vested = Math.min(cap, rate * elapsed);
+  const pct = cap > 0 ? Math.min(100, (vested / cap) * 100) : 0;
+  return (
+    <div className="w-full rounded-2xl border border-[#6c5ce7]/25 bg-white p-3.5 text-left shadow-[0_4px_20px_rgba(0,0,0,0.05)]">
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <p className="truncate text-[11px] font-semibold tracking-tight text-[#111]">
+            {e.label || "Private engagement"}
+          </p>
+          <p className="mt-0.5 text-[9px] font-medium uppercase tracking-[0.12em] text-[#888]">
+            Incoming · to you
+          </p>
+        </div>
+        <span className="shrink-0 rounded-full bg-[#6c5ce7]/12 px-2 py-0.5 text-[8px] font-bold uppercase tracking-[0.08em] text-[#6c5ce7]">
+          🔒 Private
+        </span>
+      </div>
+      <p className="mt-3 text-[18px] font-bold tabular-nums leading-none text-[#111]">
+        {usd(vested, 2)}
+        <span className="ml-1.5 text-[10px] font-medium text-[#888]">
+          vesting to you
+        </span>
+      </p>
+      <div className="mt-2 h-1 w-full overflow-hidden rounded-full bg-[#6c5ce7]/10">
+        <div
+          className="h-full rounded-full bg-[#6c5ce7] transition-[width] duration-200"
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+      <p className="mt-2 text-[9px] leading-snug text-[#999]">
+        Only your wallet can see this — {usd(cap, 0)} cap. Settled privately by the
+        sender; claimable notes arrive as it vests.
+      </p>
+    </div>
+  );
+}
+
 type PhoneHomeViewProps = {
   showAllStreams?: boolean;
   onShowAllStreams?: () => void;
@@ -219,6 +279,7 @@ export function PhoneHomeView({
   onBuy,
 }: PhoneHomeViewProps) {
   const account = useCurrentAccount();
+  const client = useSuiClient();
   const usdcType = useNetworkVariable("usdcType");
   const packageId = useNetworkVariable("packageId");
   // StreamCap types are pinned to the package that defined them — use original id.
@@ -363,6 +424,38 @@ export function PhoneHomeView({
     const t = setInterval(load, 5000);
     return () => clearInterval(t);
   }, [addr]);
+
+  // Receive side of private engagements: ambiently scan encrypted announcements
+  // addressed to this wallet's shielded key. No on-chain party — only we can
+  // decrypt our own. Runs on the home so privacy is ambient, not a separate vault.
+  const [incomingEngagements, setIncomingEngagements] = useState<
+    IncomingEngagement[]
+  >([]);
+  useEffect(() => {
+    if (!addr || !packageId || packageId === "0x0") {
+      setIncomingEngagements([]);
+      return;
+    }
+    let cancelled = false;
+    const scan = async () => {
+      try {
+        const found = await scanIncomingEngagements(
+          client,
+          packageId,
+          getSpendKey(addr)
+        );
+        if (!cancelled) setIncomingEngagements(found);
+      } catch {
+        /* transient RPC hiccup — keep the last scan */
+      }
+    };
+    scan();
+    const t = setInterval(scan, 15000);
+    return () => {
+      cancelled = true;
+      clearInterval(t);
+    };
+  }, [addr, packageId, client]);
 
   const incomingDripping = useMemo(
     () => incoming.filter((s) => effectiveState(s) === "dripping"),
@@ -677,7 +770,8 @@ export function PhoneHomeView({
           </div>
           {activeStreams.length === 0 &&
           privateStreams.length === 0 &&
-          engagements.length === 0 ? (
+          engagements.length === 0 &&
+          incomingEngagements.length === 0 ? (
             <div className="rounded-2xl border border-dashed border-black/10 bg-white px-3 py-6 text-center">
               <p className="text-[12px] font-medium text-[#555]">No streams yet</p>
               <p className="mt-1 text-[11px] text-[#888]">
@@ -818,6 +912,9 @@ export function PhoneHomeView({
             })}
             {engagements.map((e) => (
               <EngagementCard key={e.engagementId} e={e} />
+            ))}
+            {incomingEngagements.map((e) => (
+              <IncomingEngagementCard key={e.id} e={e} now={now} />
             ))}
             </>
           )}

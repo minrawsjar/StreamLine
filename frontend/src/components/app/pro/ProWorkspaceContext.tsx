@@ -864,6 +864,7 @@ export function ProWorkspaceProvider({
             capBase: totalBase,
             durationSec,
             recipientShielded: shielded,
+            label: worker.alias || undefined,
           });
 
           // Funding open is user-signed (Enoki-sponsored gas). The relayer is

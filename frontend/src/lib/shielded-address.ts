@@ -60,8 +60,13 @@ export function parseShieldedAddress(a: string): { pk: bigint; encPub: Uint8Arra
 
 // === sealed box: ephPub(32) ‖ iv(12) ‖ AES-GCM(value32 ‖ rho32) ===
 
-async function aesKey(shared: Uint8Array, ephPub: Uint8Array, recipPub: Uint8Array) {
-  const raw = hkdf(sha256, shared, concat(ephPub, recipPub), utf8("sl-note-v1"), 32);
+async function aesKey(
+  shared: Uint8Array,
+  ephPub: Uint8Array,
+  recipPub: Uint8Array,
+  info = "sl-note-v1"
+) {
+  const raw = hkdf(sha256, shared, concat(ephPub, recipPub), utf8(info), 32);
   return crypto.subtle.importKey("raw", raw as BufferSource, "AES-GCM", false, [
     "encrypt",
     "decrypt",
@@ -105,6 +110,78 @@ export async function decryptNote(
     return { value: leToField(pt.slice(0, 32)), rho: leToField(pt.slice(32, 64)) };
   } catch {
     return null; // AES-GCM tag mismatch ⇒ not addressed to us
+  }
+}
+
+// === engagement announcement ===
+// Same ECIES sealed box, a DISTINCT HKDF domain ("sl-engage-v1"), and a
+// variable-length JSON body. Lets the recipient of a private engagement see it
+// the moment it's opened — cap + vesting schedule — without any on-chain party.
+// The domain separation means decryptNote and decryptEngagement never cross-read
+// each other's ciphertexts (AES-GCM tag mismatch ⇒ null), so a single EncryptedNote
+// scan can sort notes from announcements by which one decrypts.
+
+export type EngagementAnnouncement = {
+  /** Vesting cap (base units). */
+  cap: bigint;
+  /** Base units per second. */
+  rate: bigint;
+  /** Vesting start (unix seconds). */
+  start: bigint;
+  /** Opener's label for the stream (shown to the recipient too). */
+  label?: string;
+};
+
+export async function encryptEngagement(
+  recipientEncPub: Uint8Array,
+  ann: EngagementAnnouncement
+): Promise<Uint8Array> {
+  const eph = x25519.utils.randomPrivateKey();
+  const ephPub = x25519.getPublicKey(eph);
+  const shared = x25519.getSharedSecret(eph, recipientEncPub);
+  const key = await aesKey(shared, ephPub, recipientEncPub, "sl-engage-v1");
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const body = utf8(
+    JSON.stringify({
+      cap: ann.cap.toString(),
+      rate: ann.rate.toString(),
+      start: ann.start.toString(),
+      label: ann.label ?? "",
+    })
+  );
+  const ct = new Uint8Array(
+    await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, body as BufferSource)
+  );
+  return concat(ephPub, iv, ct);
+}
+
+/** Decrypt an EncryptedNote ciphertext as an engagement announcement; null if
+ * it isn't ours or isn't an announcement. */
+export async function decryptEngagement(
+  mySecret: Uint8Array,
+  myPub: Uint8Array,
+  ciphertext: Uint8Array
+): Promise<EngagementAnnouncement | null> {
+  try {
+    if (ciphertext.length < 32 + 12 + 16) return null;
+    const ephPub = ciphertext.slice(0, 32);
+    const iv = ciphertext.slice(32, 44);
+    const body = ciphertext.slice(44);
+    const shared = x25519.getSharedSecret(mySecret, ephPub);
+    const key = await aesKey(shared, ephPub, myPub, "sl-engage-v1");
+    const pt = new Uint8Array(
+      await crypto.subtle.decrypt({ name: "AES-GCM", iv }, key, body as BufferSource)
+    );
+    const o = JSON.parse(new TextDecoder().decode(pt)) as Record<string, string>;
+    if (typeof o.cap !== "string") return null;
+    return {
+      cap: BigInt(o.cap),
+      rate: BigInt(o.rate),
+      start: BigInt(o.start),
+      label: o.label || undefined,
+    };
+  } catch {
+    return null; // wrong domain / not ours / not an announcement
   }
 }
 

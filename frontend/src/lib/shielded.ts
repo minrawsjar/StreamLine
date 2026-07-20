@@ -4,7 +4,11 @@ import { Transaction, coinWithBalance } from "@mysten/sui/transactions";
 import type { SuiClient } from "@mysten/sui/client";
 
 import { poseidon, prove, feToLeBytes, type ProofBytes } from "@/lib/confidential";
-import { deriveEnc, decryptNote } from "@/lib/shielded-address";
+import {
+  deriveEnc,
+  decryptNote,
+  decryptEngagement,
+} from "@/lib/shielded-address";
 import {
   ORIGINAL_PACKAGE_IDS,
   PRIVATE_STREAM_DEFINING_PACKAGE_IDS,
@@ -219,6 +223,62 @@ export async function scanIncoming(
           rho: opening.rho.toString(),
         });
       }
+    }
+    if (!res.hasNextPage) break;
+    cursor = res.nextCursor;
+  }
+  return out;
+}
+
+export type IncomingEngagement = {
+  /** funding_cm (the EncryptedNote's commitment tag) — stable id. */
+  id: string;
+  cap: string;
+  rate: string;
+  start: string;
+  label?: string;
+};
+
+/** Scan EncryptedNote events for engagement announcements addressed to me — the
+ * receive side of a private engagement. Each is a vesting schedule (cap, rate,
+ * start) the opener published at open, encrypted to my shielded address, so my
+ * wallet can show the incoming stream before any payment settles. */
+export async function scanIncomingEngagements(
+  client: SuiClient,
+  packageId: string,
+  sk: bigint
+): Promise<IncomingEngagement[]> {
+  const { secret, pub } = deriveEnc(sk);
+  const out: IncomingEngagement[] = [];
+  const seen = new Set<string>();
+  const encType = `${eventPkgs(packageId).shielded}::shielded_pool::EncryptedNote`;
+  let cursor: Awaited<ReturnType<SuiClient["queryEvents"]>>["nextCursor"] = null;
+  for (let page = 0; page < 20; page++) {
+    const res = await client.queryEvents({
+      query: { MoveEventType: encType },
+      order: "ascending",
+      cursor,
+      limit: 200,
+    });
+    for (const e of res.data) {
+      if (!e.type.endsWith("::EncryptedNote")) continue;
+      const pj = e.parsedJson as { commitment: string; ciphertext: number[] | string };
+      const bytes =
+        typeof pj.ciphertext === "string"
+          ? Uint8Array.from(atob(pj.ciphertext), (c) => c.charCodeAt(0))
+          : Uint8Array.from(pj.ciphertext);
+      const ann = await decryptEngagement(secret, pub, bytes);
+      if (!ann) continue;
+      const id = BigInt(pj.commitment).toString();
+      if (seen.has(id)) continue;
+      seen.add(id);
+      out.push({
+        id,
+        cap: ann.cap.toString(),
+        rate: ann.rate.toString(),
+        start: ann.start.toString(),
+        label: ann.label,
+      });
     }
     if (!res.hasNextPage) break;
     cursor = res.nextCursor;

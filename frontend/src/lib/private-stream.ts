@@ -23,7 +23,11 @@ import {
   signalsBig,
   SHIELDED_DEPTH,
 } from "@/lib/shielded";
-import { encryptNote, parseShieldedAddress } from "@/lib/shielded-address";
+import {
+  encryptNote,
+  encryptEngagement,
+  parseShieldedAddress,
+} from "@/lib/shielded-address";
 import { overfundAmount } from "@/lib/overfund-split";
 
 const CLOCK_ID = "0x6";
@@ -268,6 +272,8 @@ export async function prepareOpenEngagement(p: {
   /** Skip overfund (deposit exactly capBase). */
   exactDeposit?: boolean;
   recipientShielded?: string;
+  /** Opener's stream label — carried in the recipient's announcement. */
+  label?: string;
 }): Promise<{
   tx: Transaction;
   cm: bigint;
@@ -320,10 +326,20 @@ export async function prepareOpenEngagement(p: {
   const cm = BigInt(dep.publicSignals[0]);
 
   let ciphertext: Uint8Array | undefined;
-  // Only publish opening when deposit == work note (no pending split).
-  if (changeBase === 0n && p.recipientShielded?.startsWith("sl1")) {
+  // Publish an encrypted announcement to the recipient's shielded address so
+  // their wallet can discover the engagement the instant it opens — cap +
+  // vesting schedule, no on-chain party. Published under `cm` (funding_cm), so
+  // it joins to the public EngagementOpened event by commitment. Independent of
+  // the overfund split: the recipient sees "incoming, vesting" right away, and
+  // the actual worker notes arrive later via settle_vested.
+  if (p.recipientShielded?.startsWith("sl1")) {
     const recip = parseShieldedAddress(p.recipientShielded);
-    ciphertext = await encryptNote(recip.encPub, p.capBase, rho);
+    ciphertext = await encryptEngagement(recip.encPub, {
+      cap: p.capBase,
+      rate: rateAdj,
+      start,
+      label: p.label,
+    });
   }
 
   const tx = buildOpenEngagement({
