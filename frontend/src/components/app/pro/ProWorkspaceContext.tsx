@@ -1140,7 +1140,14 @@ export function ProWorkspaceProvider({
     async (amount: number): Promise<boolean> => {
       if (amount <= 0) return false;
       if (!workspace.treasuryId) throw new Error("No treasury to withdraw from");
-      const amountBase = toBaseUnits(amount);
+      let amountBase = toBaseUnits(amount);
+      // Clamp to what divest+withdraw can actually deliver on-chain: idle + the
+      // yield vault's redeemable value (invested_value). Guards the interpolated
+      // display max from overshooting real idle → EInsufficientIdle.
+      if (treasury) {
+        const cap = toBaseUnits(treasury.idle + treasury.invested);
+        if (amountBase > cap) amountBase = cap;
+      }
       // treasury::withdraw only spends idle. If the request exceeds liquid but the
       // rest is in the yield vault, redeem the vault back to idle first (same PTB).
       const needsDivest =
@@ -1535,11 +1542,15 @@ export function ProWorkspaceProvider({
       yieldEarned: workspaceView.yieldEarned,
       displayTotal: poolBalance,
       investable: investableIdle(workspaceView),
-      // Everything above the coverage floor is withdrawable — idle now, vault funds
-      // after an automatic divest.
+      // Withdrawable = idle now + yield-vault funds after an automatic divest,
+      // above the coverage floor. The parked reserve is NOT included — divest
+      // only redeems the yield vault, so counting reserve overshoots idle and
+      // aborts (EInsufficientIdle). Reserve must be released via Rebalance first.
       withdrawable: Math.max(
         0,
-        poolTotal(workspaceView.pool) - coverageFloor(workspaceView)
+        poolTotal(workspaceView.pool) -
+          workspaceView.pool.allocation.reserve -
+          coverageFloor(workspaceView)
       ),
       floor: coverageFloor(workspaceView),
     };

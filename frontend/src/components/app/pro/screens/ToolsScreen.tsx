@@ -9,11 +9,8 @@ import { InvoicesScreen } from "./InvoicesScreen";
 import { PosScreen } from "./PosScreen";
 import { SubscriptionsScreen } from "./SubscriptionsScreen";
 import { ProEyebrow } from "../ui";
-import { ShieldedPanel } from "@/components/app/ShieldedPanel";
-import { LazyStreamPanel } from "@/components/app/LazyStreamPanel";
-import { ConfidentialBalancePanel } from "@/components/app/ConfidentialBalancePanel";
 
-type ToolPanel = "hub" | "pos" | "invoices" | "subscriptions" | "private";
+type ToolPanel = "hub" | "pos" | "invoices" | "subscriptions";
 
 export function ToolsScreen() {
   const embedded = usePhoneEmbedded();
@@ -49,14 +46,6 @@ export function ToolsScreen() {
     );
   }
 
-  if (panel === "private") {
-    return (
-      <ToolSubpanel onBack={() => setPanel("hub")}>
-        <PrivateVaultPanel />
-      </ToolSubpanel>
-    );
-  }
-
   const shell = embedded
     ? "flex flex-col gap-2.5 px-0.5 pb-1 pt-0.5"
     : "mx-auto max-w-lg space-y-5";
@@ -88,30 +77,6 @@ export function ToolsScreen() {
       )}
 
       <div className={`grid ${embedded ? "gap-2" : "gap-3"}`}>
-        <ToolCard
-          embedded={embedded}
-          title="Private vault"
-          description="Shielded pool, lazy private streams & confidential balances — amounts, graph and timing hidden."
-          icon={
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden>
-              <path
-                d="M12 3l7 3v5c0 4.4-3 7.6-7 9-4-1.4-7-4.6-7-9V6l7-3z"
-                stroke="currentColor"
-                strokeWidth="1.7"
-                strokeLinejoin="round"
-              />
-              <path
-                d="M9.2 12l1.9 1.9 3.7-3.9"
-                stroke="currentColor"
-                strokeWidth="1.7"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
-          }
-          onClick={() => setPanel("private")}
-        />
-
         <ToolCard
           embedded={embedded}
           title="POS"
@@ -204,75 +169,6 @@ export function ToolsScreen() {
           }
           onClick={openCompliance}
         />
-      </div>
-    </div>
-  );
-}
-
-/** The private trio, folded into Pro. A dark segmented switcher over the three
- * light-themed panels, each rendered on a light "vault" sheet so they keep their
- * original styling while living inside the dark Pro shell. */
-function PrivateVaultPanel() {
-  const [seg, setSeg] = useState<"shielded" | "lazy" | "confidential">(
-    "shielded"
-  );
-  const segs = [
-    {
-      id: "shielded" as const,
-      label: "Shielded",
-      blurb:
-        "Deposit, transfer & withdraw privately — notes + nullifiers hide who pays whom, every op Groth16-verified.",
-    },
-    {
-      id: "lazy" as const,
-      label: "Lazy",
-      blurb:
-        "Confidential streams that vest linearly and settle in one proof — no per-drip timing leak, no keeper.",
-    },
-    {
-      id: "confidential" as const,
-      label: "Balance",
-      blurb:
-        "Hold USDC with the amount hidden behind a Poseidon commitment — every wrap and withdraw is proven.",
-    },
-  ];
-  const active = segs.find((s) => s.id === seg)!;
-
-  return (
-    <div className="flex flex-col gap-2.5 px-0.5 pb-1">
-      <div className="px-0.5">
-        <p className="text-[8px] font-medium uppercase tracking-[0.16em] text-white/40">
-          Private vault
-        </p>
-        <p className="mt-1 text-[15px] font-semibold tracking-tight text-white">
-          Confidential money
-        </p>
-        <p className="mt-0.5 text-[10px] leading-snug text-white/40">
-          {active.blurb}
-        </p>
-      </div>
-
-      <div className="flex gap-1 rounded-full border border-white/10 bg-white/[0.04] p-1">
-        {segs.map((s) => (
-          <button
-            key={s.id}
-            type="button"
-            onClick={() => setSeg(s.id)}
-            className={`flex-1 rounded-full px-2 py-1.5 text-[10px] font-semibold transition-colors ${
-              seg === s.id
-                ? "bg-white text-[#0a0a0a]"
-                : "text-white/50 active:text-white/80"
-            }`}
-          >
-            {s.label}
-          </button>
-        ))}
-      </div>
-
-      <div className="sl-vault">
-        {seg === "shielded" && <ShieldedPanel />}
-        {seg === "lazy" && <LazyStreamPanel />}
-        {seg === "confidential" && <ConfidentialBalancePanel />}
       </div>
     </div>
   );
